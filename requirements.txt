@@ -1,0 +1,14 @@
+newrelic
+redis
+hiredis
+sodapy
+boto3
+matplotlib
+seaborn
+altair
+sodapy
+geoalchemy2
+pandas
+requests
+requests_oauthlib
+-e git+https://github.com/CityofSantaMonica/mds-provider@master#egg=mds_provider
