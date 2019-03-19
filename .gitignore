@@ -1,3 +1,6 @@
+### VSCode ###
+/.vscode/
+
 ### Vim ###
 [._]*.s[a-w][a-z]
 [._]s[a-w][a-z]
@@ -24,3 +27,9 @@ sftp-config.json
 
 # Python
 __pycache__
+
+### Artifacts ###
+/pgdata/
+
+### OS ###
+.DS_Store
