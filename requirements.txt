@@ -1,14 +1,6 @@
-newrelic
-redis
-hiredis
-sodapy
-boto3
-matplotlib
-seaborn
-altair
-sodapy
-geoalchemy2
+geopandas
 pandas
 requests
 requests_oauthlib
+-e /plugins
 -e git+https://github.com/CityofSantaMonica/mds-provider@master#egg=mds_provider
