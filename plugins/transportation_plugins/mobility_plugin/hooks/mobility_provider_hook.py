@@ -7,6 +7,7 @@ from airflow.hooks.base_hook import BaseHook
 
 class MobilityProviderHook(BaseHook):
     def __init__(self,
+                 version="0.3.0",
                  mobility_provider_conn_id='mobility_provider_default',
                  mobility_provider_token_conn_id=None):
         try:
@@ -71,18 +72,18 @@ class MobilityProviderHook(BaseHook):
             providers = self.providers
 
         # convert datetimes to querystring friendly format
-        if start_time is not None:
-            start_time = self._date_format(start_time)
-        if end_time is not None:
-            end_time = self._date_format(end_time)
+        if min_end_time is not None:
+            min_end_time = self._date_format(min_end_time)
+        if max_end_time is not None:
+            max_end_time = self._date_format(max_end_time)
 
         # gather all the params togethers
         params = {
-            **dict(device_id=device_id, vehicle_id=vehicle_id, start_time=start_time, end_time=end_time),
+            **dict(device_id=device_id, vehicle_id=vehicle_id, min_end_time=min_end_time, max_end_time=max_end_time),
         }
 
         # make the request(s)
-        trips = self._request(providers, "trips", params)
+        trips = self.__request("trips", params)
 
         return trips
 
@@ -114,7 +115,6 @@ class MobilityProviderHook(BaseHook):
         }
 
         # make the request(s)
-        status_changes = self._request(
-            providers, "status_changes", params)
+        status_changes = self._request("status_changes", params)
 
         return status_changes
