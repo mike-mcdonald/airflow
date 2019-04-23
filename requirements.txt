@@ -1,6 +1,12 @@
+fiona
 geopandas
+numpy
 pandas
+psycopg2-binary
+pyproj
 requests
 requests_oauthlib
+shapely
+six
 -e /plugins
 -e git+https://github.com/CityofSantaMonica/mds-provider@master#egg=mds_provider
