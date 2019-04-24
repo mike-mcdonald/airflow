@@ -18,7 +18,7 @@ from airflow.operators.mobility_plugin import MobilityTripsToAzureDataLakeOperat
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
-    'start_date': datetime(2018, 10, 30),
+    'start_date':  datetime(2019, 4, 26),
     'email': ['pbotsqldbas@portlandoregon.gov'],
     'email_on_failure': True,
     'email_on_retry': False,
@@ -34,10 +34,11 @@ default_args = {
 dag = DAG(
     dag_id='dockless-provider-to-datalake',
     default_args=default_args,
-    schedule_interval='@hourly'
+    catchup=True,
+    schedule_interval='@hourly',
 )
 
-providers = ['pdx']
+providers = ['lime']
 
 task1 = DummyOperator(
     task_id="provider_dummy",
@@ -45,11 +46,11 @@ task1 = DummyOperator(
 )
 
 for provider in providers:
-    provider_to_datalake_task = MobilityTripsToAzureDataLakeOperator(
+    provider_trip_extract_task = MobilityTripsToAzureDataLakeOperator(
         task_id=f"loading_{provider}_data",
         provide_context=True,
         mobility_provider_conn_id=f"mobility_provider_{provider}",
         mobility_provider_token_conn_id=f"mobility_provider_{provider}_token",
         azure_data_lake_conn_id="azure_data_lake_default",
         dag=dag)
-    provider_to_datalake_task.set_upstream(task1)
+    provider_trip_extract_task.set_upstream(task1)
