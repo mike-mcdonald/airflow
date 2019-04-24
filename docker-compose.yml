@@ -71,3 +71,20 @@ services:
       # - POSTGRES_DB=airflow
       # - REDIS_PASSWORD=redispass
     command: worker
+
+  flower:
+    image: pbotapps.azurecr.io/airflow/base
+    restart: always
+    depends_on:
+      - webserver
+    volumes:
+      - ./dags:/usr/local/airflow/dags
+    ports:
+      - '5555:5555'
+    environment:
+      - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+      # - POSTGRES_USER=airflow
+      # - POSTGRES_PASSWORD=airflow
+      # - POSTGRES_DB=airflow
+      # - REDIS_PASSWORD=redispass
+    command: flower
