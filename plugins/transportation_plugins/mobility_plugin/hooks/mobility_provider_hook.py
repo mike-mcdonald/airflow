@@ -1,5 +1,10 @@
+from datetime import datetime
+from urllib.parse import urljoin, urlparse
+
+import pandas as pd
+import requests
+
 from oauthlib.oauth2 import BackendApplicationClient
-from requests import Session
 from requests_oauthlib import OAuth2Session
 
 from airflow.hooks.base_hook import BaseHook
@@ -8,27 +13,46 @@ from airflow.hooks.base_hook import BaseHook
 class MobilityProviderHook(BaseHook):
     def __init__(self,
                  version="0.3.0",
-                 mobility_provider_conn_id='mobility_provider_default',
+                 mobility_provider_conn_id="mobility_provider_default",
                  mobility_provider_token_conn_id=None):
         try:
             self.connection = self.get_connection(mobility_provider_conn_id)
-            self.token_connection = self.get_connection(
-                mobility_provider_token_conn_id)
         except:
-            self.log.error(f"Failed to find connections for mobility provider")
+            self.log.error(
+                f"Failed to find connection for mobility provider: {mobility_provider_conn_id}")
+
+        self.session = requests.Session()
 
         if mobility_provider_token_conn_id is not None:
-            client = BackendApplicationClient(
-                client_id=self.token_connection.login)
-            oauth = OAuth2Session(client=client)
-            token = oauth.fetch_token(token_url=self.token_connection.host, client_id=self.token_connection.login,
-                                      client_secret=self.token_connection.password)
-            self.session = OAuth2Session(client_id=self.token_connection.login,
-                                         scope=self.token_connection.extra_dejson["scope"])
-        else:
-            self.session = Session()
+            try:
+                self.token_connection = self.get_connection(
+                    mobility_provider_token_conn_id)
+            except:
+                self.log.error(
+                    f"Failed to find token connection for mobility provider: {mobility_provider_token_conn_id}")
 
-    def __request(self, url, params, results=[]):
+            grant_type = self.token_connection.extra_dejson["grant_type"] or "client_credentials"
+            login_key = self.token_connection.extra_dejson["login_key"] or "client_id"
+            password_key = self.token_connection.extra_dejson["password_key"] or "client_secret"
+            auth_type = self.token_connection.extra_dejson["auth_type"] or "Bearer"
+            token_key = self.token_connection.extra_dejson["token_key"] or "access_token"
+
+            payload = {
+                f"{login_key}": self.token_connection.login,
+                f"{password_key}": self.token_connection.password,
+                "grant_type": grant_type
+            }
+            r = requests.post(self.token_connection.host, params=payload)
+            token = r.json()[token_key]
+            self.session.headers.update(
+                {"Authorization": f"{auth_type} {token}"})
+
+        self.session.headers.update(self.connection.extra_dejson["headers"])
+
+    def _date_format(self, dt):
+        return int(dt.timestamp()) if isinstance(dt, datetime) else int(dt)
+
+    def __request(self, url, endpoint, params, results=[]):
         """
         Internal helper for sending requests.
 
@@ -43,18 +67,19 @@ class MobilityProviderHook(BaseHook):
         page = res.json()
 
         if page["data"] is not None:
-            results.append(page["data"])
+            results.append(page["data"][endpoint])
 
         if "links" in page:
             next_page = page["links"].get("next")
             if next_page is not None:
-                self.__request(url=next_page, params=None, results=results)
+                self.__request(url=next_page, endpoint=endpoint,
+                               params=None, results=results)
 
         return results
 
     def get_trips(self, device_id=None, vehicle_id=None, min_end_time=None, max_end_time=None):
         """
-        Request Trips data. Returns a dict of provider => list of trips payload(s).
+        Request Trips data. Returns a DataFrame of trips payload(s).
 
         Supported keyword args:
 
@@ -62,15 +87,12 @@ class MobilityProviderHook(BaseHook):
 
             - `vehicle_id`: Filters for trips taken by the given vehicle.
 
-            - `start_time`: Filters for trips where `start_time` occurs at or after the given time
+            - `min_end_time`: Filters for trips where `end_time` occurs at or after the given time
                             Should be a datetime object or numeric representation of UNIX seconds
 
-            - `end_time`: Filters for trips where `end_time` occurs at or before the given time
+            - `max_end_time`: Filters for trips where `end_time` occurs before the given time
                           Should be a datetime object or numeric representation of UNIX seconds
         """
-        if providers is None:
-            providers = self.providers
-
         # convert datetimes to querystring friendly format
         if min_end_time is not None:
             min_end_time = self._date_format(min_end_time)
@@ -83,13 +105,14 @@ class MobilityProviderHook(BaseHook):
         }
 
         # make the request(s)
-        trips = self.__request("trips", params)
+        trips = self.__request(
+            urljoin(self.connection.host, "trips"), "trips", params)
 
-        return trips
+        return pd.DataFrame.from_records(trips)
 
     def get_events(self, start_time=None, end_time=None):
         """
-        Request Status Changes data. Returns a dict of provider => list of status_changes payload(s)
+        Request Status Changes data. Returns a DataFrame of status_changes payload(s)
 
         Supported keyword args:
 
@@ -115,6 +138,7 @@ class MobilityProviderHook(BaseHook):
         }
 
         # make the request(s)
-        status_changes = self._request("status_changes", params)
+        status_changes = self.__request(
+            urljoin(self.connection.host, "status_changes"), "status_changes", params)
 
-        return status_changes
+        return pd.DataFrame.from_records(status_changes)
