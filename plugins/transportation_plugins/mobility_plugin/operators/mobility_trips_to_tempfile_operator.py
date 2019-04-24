@@ -11,8 +11,8 @@ from airflow.utils.file import TemporaryDirectory
 
 from airflow.contrib.hooks.azure_data_lake_hook import AzureDataLakeHook
 
-from plugins.transportation_plugins.mobility_plugin.hooks.mobility_provider_hook import MobilityProviderHook
-from plugins.transportation_plugins.mobility_plugin.hooks.areas_of_interest_hook import AreasOfInterestHook
+from transportation_plugins.mobility_plugin.hooks.mobility_provider_hook import MobilityProviderHook
+from transportation_plugins.mobility_plugin.hooks.areas_of_interest_hook import AreasOfInterestHook
 
 
 class MobilityTripsToTempFileOperator(BaseOperator):
@@ -26,8 +26,6 @@ class MobilityTripsToTempFileOperator(BaseOperator):
                  azure_data_lake_conn_id="azure_data_lake_default",
                  temp_path="",
                  * args, **kwargs):
-        super(MobilityTripsToTempFileOperator,
-              self).__init__(*args, **kwargs)
         self.azure_data_lake_conn_id = azure_data_lake_conn_id
         self.mobility_provider_conn_id = mobility_provider_conn_id,
         self.mobility_provider_token_conn_id = mobility_provider_token_conn_id
