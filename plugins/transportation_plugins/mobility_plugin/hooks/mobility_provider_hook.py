@@ -42,6 +42,10 @@ class MobilityProviderHook(BaseHook):
 
         self.session.headers.update(self.connection.extra_dejson["headers"])
 
+        self.session.headers.update({
+            "Accept": "application/vnd.mds.provider+jsonversion=0.3"
+        })
+
     def _date_format(self, dt):
         return int(dt.timestamp()) if isinstance(dt, datetime) else int(dt)
 
@@ -56,6 +60,11 @@ class MobilityProviderHook(BaseHook):
         if res.status_code is not 200:
             self.log.warning(res)
             return results
+        if "Content-Type" in res.headers:
+            if res.headers["Content-Type"] != "application/vnd.mds.provider+json;version=0.3":
+                self.log.warning(f"Incorrect content-type returned: {res.headers["Content-Type"]}")
+        else:
+            self.log.warning(f"Missing 0.3.0 content-type header.")
 
         page = res.json()
 
