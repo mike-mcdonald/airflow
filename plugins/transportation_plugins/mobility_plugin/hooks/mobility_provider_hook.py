@@ -31,17 +31,10 @@ class MobilityProviderHook(BaseHook):
                 self.log.error(
                     f"Failed to find token connection for mobility provider: {mobility_provider_token_conn_id}")
 
-            grant_type = self.token_connection.extra_dejson["grant_type"] or "client_credentials"
-            login_key = self.token_connection.extra_dejson["login_key"] or "client_id"
-            password_key = self.token_connection.extra_dejson["password_key"] or "client_secret"
             auth_type = self.token_connection.extra_dejson["auth_type"] or "Bearer"
             token_key = self.token_connection.extra_dejson["token_key"] or "access_token"
 
-            payload = {
-                f"{login_key}": self.token_connection.login,
-                f"{password_key}": self.token_connection.password,
-                "grant_type": grant_type
-            }
+            payload = self.token_connection.extra_dejson["payload"]
             r = requests.post(self.token_connection.host, params=payload)
             token = r.json()[token_key]
             self.session.headers.update(
