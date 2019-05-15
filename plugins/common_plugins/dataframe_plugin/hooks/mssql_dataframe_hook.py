@@ -4,18 +4,20 @@ import sqlalchemy
 from airflow.hooks.base_hook import BaseHook
 
 
-class AzureSqlDataFrameHook(BaseHook):
+class MSSqlDataFrameHook(BaseHook):
     def __init__(self,
                  sql_conn_id="azure_sql_server_default",
-                 *args, **kwargs
-                 ):
+                 *args, **kwargs):
         self.conn_id = sql_conn_id
         self.connection = self.get_conn()
 
     def get_conn(self):
         connection = self.get_connection(self.conn_id)
-        connection_string = f"mssql+pyodbc://{connection.login}@{connection.host}:{connection.password}@{connection.host}.database.windows.net:1433/{connection.database}?driver=ODBC+Driver+13+for+SQL+Server"
-        engine = sqlalchemy.engine.create_engine(connection_string)
+        connection_string = f"mssql+pyodbc://{connection.login}@{connection.host}:{connection.password}@{connection.host}:{connection.port}/{connection.database}?driver=ODBC+Driver+13+for+SQL+Server"
+        engine = sqlalchemy.engine.create_engine(
+            connection_string,
+            # Following avoids error about transaction on connect
+            isolation_level='AUTOCOMMIT')
         engine.connect()
         return engine
 
@@ -42,4 +44,6 @@ class AzureSqlDataFrameHook(BaseHook):
     def read_dataframe(self,
                        table_name,
                        schema=None):
-        return pd.read_sql_table(table_name=table_name, con=self.connection, schema=schema)
+        return pd.read_sql_table(table_name=table_name,
+                                 con=self.connection,
+                                 schema=schema)
