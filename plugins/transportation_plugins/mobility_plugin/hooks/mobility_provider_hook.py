@@ -98,8 +98,8 @@ class MobilityProviderHook(BaseHook):
         }
 
         # make the request(s)
-        trips = self.__request(
-            urljoin(self.connection.host, "trips"), "trips", params)
+        trips = self._request(
+            self.connection.host.replace(":endpoint", "trips"), params)
 
         return pd.DataFrame.from_records(trips)
 
@@ -131,7 +131,7 @@ class MobilityProviderHook(BaseHook):
         }
 
         # make the request(s)
-        status_changes = self.__request(
-            urljoin(self.connection.host, "status_changes"), "status_changes", params)
+        status_changes = self._request(
+            self.connection.host.replace(":endpoint", "status_changes"), "status_changes", params)
 
         return pd.DataFrame.from_records(status_changes)
