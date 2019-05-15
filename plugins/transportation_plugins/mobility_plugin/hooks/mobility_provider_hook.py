@@ -45,7 +45,7 @@ class MobilityProviderHook(BaseHook):
     def _date_format(self, dt):
         return int(dt.timestamp()) if isinstance(dt, datetime) else int(dt)
 
-    def __request(self, url, endpoint, params, results=[]):
+    def _request(self, url, payload_key, params=None, results=[]):
         """
         Internal helper for sending requests.
 
@@ -60,13 +60,13 @@ class MobilityProviderHook(BaseHook):
         page = res.json()
 
         if page["data"] is not None:
-            results.append(page["data"][endpoint])
+            results.append(page["data"][payload_key])
 
         if "links" in page:
             next_page = page["links"].get("next")
             if next_page is not None:
-                self.__request(url=next_page, endpoint=endpoint,
-                               params=None, results=results)
+                results = self._request(url=next_page, payload_key=payload_key,
+                                        results=results)
 
         return results
 
