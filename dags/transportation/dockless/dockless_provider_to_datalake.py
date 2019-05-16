@@ -13,7 +13,7 @@ import os
 import logging
 import json
 
-from airflow.operators.mobility_plugin import MobilityTripsToAzureDataLakeOperator
+from airflow.operators.mobility_plugin import MobilityTripsToAzureDataLakeOperator, MobilityEventsToSqlTableOperator
 
 default_args = {
     'owner': 'airflow',
@@ -47,10 +47,20 @@ task1 = DummyOperator(
 
 for provider in providers:
     provider_trip_extract_task = MobilityTripsToAzureDataLakeOperator(
-        task_id=f"loading_{provider}_data",
+        task_id=f"loading_{provider}_trips",
         provide_context=True,
         mobility_provider_conn_id=f"mobility_provider_{provider}",
         mobility_provider_token_conn_id=f"mobility_provider_{provider}_token",
         azure_data_lake_conn_id="azure_data_lake_default",
         dag=dag)
+
+    provider_event_extract_task = MobilityEventsToSqlTableOperator(
+        task_id=f"loading_{provider}_events",
+        provide_context=True,
+        mobility_provider_conn_id=f"mobility_provider_{provider}",
+        mobility_provider_token_conn_id=f"mobility_provider_{provider}_token",
+        azure_data_lake_conn_id="azure_data_lake_default",
+        dag=dag)
+
     provider_trip_extract_task.set_upstream(task1)
+    provider_event_extract_task.set_upstream(task1)
