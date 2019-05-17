@@ -83,7 +83,7 @@ class MobilityTripsToSqlTablesOperator(BaseOperator):
 
         hook.write_dataframe(
             trips,
-            table_name='stage_trip',
+            table_name='extract_trip',
             schema='etl'
         )
 
@@ -111,7 +111,7 @@ class MobilityTripsToSqlTablesOperator(BaseOperator):
 
         hook.write_dataframe(
             route_df,
-            table_name='stage_segmenthit',
+            table_name='extract_segmenthit',
             schema='etl'
         )
 

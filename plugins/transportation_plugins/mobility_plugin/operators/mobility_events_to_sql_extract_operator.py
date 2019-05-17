@@ -57,6 +57,6 @@ class MobilityEventsToSqlTableOperator(BaseOperator):
         events['event_location'] = gpd.sjoin(
             events.set_geometry('event_location'), cells, how="left", op="intersects")['index_right']
 
-        hook.write_dataframe(events, table_name="stage_events", schema="etl")
+        hook.write_dataframe(events, table_name="extract_events", schema="etl")
 
         return
