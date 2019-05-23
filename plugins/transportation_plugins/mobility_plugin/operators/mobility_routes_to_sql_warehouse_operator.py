@@ -11,7 +11,7 @@ from airflow.models import BaseOperator
 
 from transportation_plugins.mobility_plugin.hooks.mobility_provider_hook import MobilityProviderHook
 from common_plugins.dataframe_plugin.hooks.mssql_dataframe_hook import MSSqlDataFrameHook
-from common_plugins.calendar_plugin.operators.mssql_operator import MsSqlOperator
+from common_plugins.mssql_plugin.operators.mssql_operator import MsSqlOperator
 
 
 class MobilityEventsToSqlWarehouseOperator(MsSqlOperator):

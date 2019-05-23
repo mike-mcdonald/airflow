@@ -9,7 +9,7 @@ from shapely.wkt import loads
 from airflow.hooks.mssql_hook import MsSqlHook
 from airflow.models import BaseOperator
 
-from common_plugins.calendar_plugin.operators.mssql_operator import MsSqlOperator
+from common_plugins.mssql_plugin.operators.mssql_operator import MsSqlOperator
 
 
 class MobilityEventsToSqlStageOperator(MsSqlOperator):
