@@ -13,10 +13,10 @@ from airflow.plugins_manager import AirflowPlugin
 from airflow.utils.file import TemporaryDirectory
 
 from transportation_plugins.mobility_plugin.hooks.mobility_provider_hook import MobilityProviderHook
-from common_plugins.dataframe_plugin.hooks.azure_sql_dataframe_hook import AzureSqlDataFrameHook
+from common_plugins.dataframe_plugin.hooks.mssql_dataframe_hook import MsSqlDataFrameHook
 
 
-class MobilityEventsToSqlTableOperator(BaseOperator):
+class MobilityEventsToSqlExtractOperator(BaseOperator):
     """
 
     """
@@ -46,7 +46,7 @@ class MobilityEventsToSqlTableOperator(BaseOperator):
         events = hook.get_events(
             start_time=start_time, end_time=end_time)
 
-        hook = AzureSqlDataFrameHook(
+        hook = MsSqlDataFrameHook(
             sql_conn_id=self.sql_conn_id)
 
         # Aggregate the location to a cell
@@ -56,6 +56,8 @@ class MobilityEventsToSqlTableOperator(BaseOperator):
 
         events['event_location'] = gpd.sjoin(
             events.set_geometry('event_location'), cells, how="left", op="intersects")['index_right']
+
+        del cells
 
         hook.write_dataframe(events, table_name="extract_events", schema="etl")
 
