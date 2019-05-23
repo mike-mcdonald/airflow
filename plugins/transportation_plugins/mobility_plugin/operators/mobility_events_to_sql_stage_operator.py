@@ -9,27 +9,46 @@ from shapely.wkt import loads
 from airflow.hooks.mssql_hook import MsSqlHook
 from airflow.models import BaseOperator
 
-from transportation_plugins.mobility_plugin.hooks.mobility_provider_hook import MobilityProviderHook
-from common_plugins.dataframe_plugin.hooks.mssql_dataframe_hook import MSSqlDataFrameHook
+from common_plugins.calendar_plugin.operators.mssql_operator import MsSqlOperator
 
 
-class MobilityEventsToSqlStageOperator(BaseOperator):
+class MobilityEventsToSqlStageOperator(MsSqlOperator):
     """
 
     """
 
     def __init__(self,
-                 sql_conn_id="sql_server_default",
                  * args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.sql_conn_id = sql_conn_id
         self.sql = """
-        SELECT
-        """
-
-    def execute(self, context):
-        hook = MsSqlHook(
-            mssql_conn_id=self.sql_conn_id
+        INSERT INTO etl.stage_state (
+            provider_key
+            ,vehicle_id
+            ,vehicle_type
+            ,propulsion_type_key
+            ,start_state
+            ,start_event
+            ,start_time
+            ,start_cell_key
+            ,start_battery_pct
+            ,end_state
+            ,end_event
+            ,end_time
+            ,end_cell_key
+            ,end_battery_pct
         )
+        SELECT
+        ,provider_id
+        ,provider_name
+        ,device_id
+        ,vehicle_id
+        ,vehicle_type
+        ,propulsion_type
+        ,event_type
+        ,event_type_reason
+        ,event_time
+        ,event_location
+        ,battery_pct
+        ,associated_trip
 
-        return
+        """
