@@ -4,7 +4,7 @@ import sqlalchemy
 from airflow.hooks.base_hook import BaseHook
 
 
-class MSSqlDataFrameHook(BaseHook):
+class MsSqlDataFrameHook(BaseHook):
     def __init__(self,
                  sql_conn_id="azure_sql_server_default",
                  *args, **kwargs):
