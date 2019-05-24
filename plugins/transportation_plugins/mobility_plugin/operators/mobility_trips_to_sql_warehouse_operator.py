@@ -21,8 +21,7 @@ class MobilityTripsToSqlWarehouseOperator(MsSqlOperator):
 
     def __init__(self,
                  *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.sql = """
+        sql = """
         MERGE fact.trip AS target  
         USING (
             SELECT
@@ -109,3 +108,4 @@ class MobilityTripsToSqlWarehouseOperator(MsSqlOperator):
                 ,source.seen
             )
         """
+        super().__init__(sql, *args, **kwargs)

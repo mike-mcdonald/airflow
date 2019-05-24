@@ -19,8 +19,7 @@ class MobilityEventsToSqlStageOperator(MsSqlOperator):
 
     def __init__(self,
                  * args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.sql = """
+        sql = """
         INSERT INTO etl.stage_state (
             provider_key
             ,vehicle_id
@@ -52,3 +51,4 @@ class MobilityEventsToSqlStageOperator(MsSqlOperator):
         ,associated_trip
 
         """
+        super().__init__(sql, *args, **kwargs)
