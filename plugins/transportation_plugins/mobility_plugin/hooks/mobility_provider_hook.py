@@ -62,7 +62,7 @@ class MobilityProviderHook(BaseHook):
             return results
         if "Content-Type" in res.headers:
             if res.headers["Content-Type"] != "application/vnd.mds.provider+json;version=0.3":
-                self.log.warning(f"Incorrect content-type returned: {res.headers["Content-Type"]}")
+                self.log.warning(f"Incorrect content-type returned: {res.headers['Content-Type']}")
         else:
             self.log.warning(f"Missing 0.3.0 content-type header.")
 

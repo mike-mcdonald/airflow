@@ -125,7 +125,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             dlng = lng2 - lng1
 
             x = cos(lat2) * sin(dlng)
-            y = cos(lat1) * sin(lat2) – sin(lat1) * cos(lat2) * cos(dlng)
+            y = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dlng)
 
             return atan2(x, y)
 
