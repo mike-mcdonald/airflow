@@ -13,10 +13,10 @@ class MsSqlDataFrameHook(BaseHook):
 
     def get_conn(self):
         connection = self.get_connection(self.conn_id)
-        connection_string = f"mssql+pyodbc://{connection.login}@{connection.host}:{connection.password}@{connection.host}:{connection.port}/{connection.database}?driver=ODBC+Driver+13+for+SQL+Server"
+        connection_string = f"mssql+pyodbc://{connection.login}@{connection.host}:{connection.password}@{connection.host}:{connection.port}/{connection.database}?driver=ODBC+Driver+17+for+SQL+Server"
         engine = sqlalchemy.engine.create_engine(
             connection_string,
-            # Following avoids error about transaction on connect
+            # Following avoids error about transaction on connect with Azure SQL Warehouse
             isolation_level='AUTOCOMMIT')
         engine.connect()
         return engine
