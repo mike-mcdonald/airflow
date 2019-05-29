@@ -30,13 +30,13 @@ class MsSqlOperator(BaseOperator):
     @apply_defaults
     def __init__(
             self, sql, mssql_conn_id='mssql_default', parameters=None,
-            autocommit=False, database=None, *args, **kwargs):
-    super().__init__(*args, **kwargs)
-    self.mssql_conn_id = mssql_conn_id
-    self.sql = sql
-    self.autocommit = autocommit
-    self.parameters = parameters
-    self.database = database
+            autocommit=True, database=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.mssql_conn_id = mssql_conn_id
+        self.sql = sql
+        self.autocommit = autocommit
+        self.parameters = parameters
+        self.database = database
 
     def execute(self, context):
         self.log.info('Executing: %s', self.sql)
