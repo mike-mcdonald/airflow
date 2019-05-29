@@ -27,8 +27,8 @@ ENV LC_MESSAGES en_US.UTF-8
 
 # Install general requirements
 RUN set -ex \
-    && buildDeps=' \
-    curl \
+    && buildDeps='\
+    apt-transport-https \
     freetds-dev \
     gnupg2 \
     libkrb5-dev \
@@ -37,7 +37,7 @@ RUN set -ex \
     libffi-dev \
     libpq-dev \
     ' \
-    && runDeps="\
+    && runDeps='\
     apt-utils \
     build-essential \
     curl \
@@ -48,20 +48,19 @@ RUN set -ex \
     libgdal-dev \
     libspatialindex-dev \
     netcat \
-    openssl1.0 \
     rsync \
-    " \
+    ' \
     && apt-get update -yqq \
     && apt-get upgrade -yqq \
     && apt-get install -yqq --no-install-recommends \
     $buildDeps \
-    &runDeps \
+    $runDeps \
     && sed -i 's/^# en_US.UTF-8 UTF-8$/en_US.UTF-8 UTF-8/g' /etc/locale.gen \
     && locale-gen \
     && update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 \
     # Install Microsoft ODBC driver
     && curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
-    && curl https://packages.microsoft.com/config/ubuntu/18.04/prod.list > /etc/apt/sources.list.d/mssql-release.list \
+    && curl https://packages.microsoft.com/config/debian/9/prod.list > /etc/apt/sources.list.d/mssql-release.list \
     && apt-get update \ 
     && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql17 \
     && useradd -ms /bin/bash -d ${AIRFLOW_HOME} airflow \
