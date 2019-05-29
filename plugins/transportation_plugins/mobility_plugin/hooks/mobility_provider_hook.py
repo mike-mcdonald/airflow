@@ -14,7 +14,7 @@ class MobilityProviderHook(BaseHook):
     def __init__(self,
                  version="0.3.0",
                  mobility_provider_conn_id="mobility_provider_default",
-                 mobility_provider_token_conn_id=None):
+                 mobility_provider_token_conn_id="mobility_provider_token_default"):
         try:
             self.connection = self.get_connection(mobility_provider_conn_id)
         except:
@@ -23,22 +23,21 @@ class MobilityProviderHook(BaseHook):
 
         self.session = requests.Session()
 
-        if mobility_provider_token_conn_id is not None:
             try:
                 self.token_connection = self.get_connection(
                     mobility_provider_token_conn_id)
-            except:
-                self.log.error(
-                    f"Failed to find token connection for mobility provider: {mobility_provider_token_conn_id}")
 
             auth_type = self.token_connection.extra_dejson["auth_type"] or "Bearer"
             token_key = self.token_connection.extra_dejson["token_key"] or "access_token"
 
-            payload = self.token_connection.extra_dejson["payload"]
+            payload = self.connection.extra_dejson["auth_payload"]
             r = requests.post(self.token_connection.host, params=payload)
             token = r.json()[token_key]
             self.session.headers.update(
                 {"Authorization": f"{auth_type} {token}"})
+        except:
+            self.log.info(
+                f"Failed to authorize token connection for mobility provider: {mobility_provider_token_conn_id}")
 
         self.session.headers.update(self.connection.extra_dejson["headers"])
 
