@@ -23,9 +23,9 @@ class MobilityProviderHook(BaseHook):
 
         self.session = requests.Session()
 
-            try:
-                self.token_connection = self.get_connection(
-                    mobility_provider_token_conn_id)
+        try:
+            self.token_connection = self.get_connection(
+                mobility_provider_token_conn_id)
 
             auth_type = self.token_connection.extra_dejson["auth_type"] or "Bearer"
             token_key = self.token_connection.extra_dejson["token_key"] or "access_token"
@@ -68,7 +68,7 @@ class MobilityProviderHook(BaseHook):
                 if ct.strip().startswith("charset"):
                     pass
                 if not ct.strip().startswith("version=0.3"):
-                self.log.warning(f"Incorrect content-type returned: {res.headers["Content-Type"]}")
+                    self.log.warning(f"Incorrect content-type returned: {res.headers["Content-Type"]}")
         else:
             self.log.warning(f"Missing 0.3.0 content-type header.")
 
@@ -114,7 +114,7 @@ class MobilityProviderHook(BaseHook):
 
         # make the request(s)
         trips = self._request(
-            self.connection.host.replace(":endpoint", "trips"), params)
+            self.connection.host.replace(":endpoint", "trips"), "trips", params)
 
         return pd.DataFrame.from_records(trips)
 
