@@ -42,7 +42,7 @@ class MobilityProviderHook(BaseHook):
         self.session.headers.update(self.connection.extra_dejson["headers"])
 
         self.session.headers.update({
-            "Accept": "application/vnd.mds.provider+jsonversion=0.3"
+            "Accept": "application/vnd.mds.provider+json;version=0.3"
         })
 
     def _date_format(self, dt):
