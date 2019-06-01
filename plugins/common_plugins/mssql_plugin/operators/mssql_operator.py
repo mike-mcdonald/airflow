@@ -6,7 +6,7 @@ from airflow.utils.decorators import apply_defaults
 
 class MsSqlOperator(BaseOperator):
     """
-    Executes sql code in a specific MySQL database
+    Executes sql code in a specific Microsoft SQL database
     :param sql: the sql code to be executed. Can receive a str representing a
         sql statement, a list of str (sql statements), or reference to a template file.
         Template reference are recognized by str ending in '.sql'
@@ -27,7 +27,7 @@ class MsSqlOperator(BaseOperator):
     template_ext = ('.sql',)
     ui_color = '#ededed'
 
-    @apply_defaults
+    # @apply_defaults
     def __init__(
             self, sql, mssql_conn_id='mssql_default', parameters=None,
             autocommit=True, database=None, *args, **kwargs):

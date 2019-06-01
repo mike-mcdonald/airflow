@@ -12,7 +12,7 @@ services:
       - POSTGRES_DB=airflow
       - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
-      - ./pgdata:/var/lib/postgresql/data/pgdata
+      - pgdata:/var/lib/postgresql/data/pgdata
 
   webserver:
     image: pbotapps.azurecr.io/airflow/base
@@ -88,3 +88,5 @@ services:
       # - POSTGRES_DB=airflow
       # - REDIS_PASSWORD=redispass
     command: flower
+volumes:
+  pgdata:

@@ -1,6 +1,6 @@
 from airflow.plugins_manager import AirflowPlugin
 
-from common_plugins.dataframe_plugin.hooks.mssql_dataframe_hook import MSSqlDataFrameHook
+from common_plugins.dataframe_plugin.hooks.mssql_dataframe_hook import MsSqlDataFrameHook
 
 # Defining the plugin class
 
@@ -8,7 +8,7 @@ from common_plugins.dataframe_plugin.hooks.mssql_dataframe_hook import MSSqlData
 class DataFramePlugin(AirflowPlugin):
     name = "dataframe_plugin"
     operators = []
-    hooks = [MSSqlDataFrameHook]
+    hooks = [MsSqlDataFrameHook]
     executors = []
     macros = []
     admin_views = []

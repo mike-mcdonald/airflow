@@ -9,8 +9,6 @@ from shapely.wkt import loads
 from airflow.hooks.mssql_hook import MsSqlHook
 from airflow.models import BaseOperator
 
-from transportation_plugins.mobility_plugin.hooks.mobility_provider_hook import MobilityProviderHook
-from common_plugins.dataframe_plugin.hooks.mssql_dataframe_hook import MSSqlDataFrameHook
 from common_plugins.mssql_plugin.operators.mssql_operator import MsSqlOperator
 
 
@@ -21,8 +19,7 @@ class MobilityEventsToSqlWarehouseOperator(MsSqlOperator):
 
     def __init__(self,
                  *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.sql = """
+        sql = """
         MERGE fact.segmenthit AS target  
         USING (
             SELECT
@@ -70,3 +67,4 @@ class MobilityEventsToSqlWarehouseOperator(MsSqlOperator):
                 ,source.speed
             )
         """
+        super().__init__(sql, *args, **kwargs)
