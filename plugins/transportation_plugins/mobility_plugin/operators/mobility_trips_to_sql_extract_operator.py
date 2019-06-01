@@ -1,7 +1,8 @@
 import hashlib
 import json
 from datetime import datetime,  timedelta
-from math import atan2, cos, pow, sin, sqrt
+from math import atan2, pi, pow, sqrt
+from numpy import nan
 from tempfile import NamedTemporaryFile
 
 import geopandas as gpd
@@ -90,6 +91,8 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         segments = hook.read_dataframe(table_name="segments", schema="dim")
         segments['geometry'] = segments.wkt.map(lambda g: loads(g))
         segments = gpd.GeoDataFrame(segments)
+        segments.crs = {'init': 'epsg:4326'}
+        segments = segments.to_crs({'init': 'epsg:3857'})
 
         def parse_route(trip):
             frame = trip.route
@@ -103,61 +106,59 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         route_df = trips.apply(parse_route, axis=1).sort_values(
             by=['timestamp'], ascending=True
         )
+        # Switch to mercator to measure in meters
+        route_df.to_crs({'init': 'epsg:3857'})
 
         route_df['segment'] = gpd.sjoin(
             route_df, segments, how="left", op="intersects")['index_right']
 
         del segments
-
-        # Generate a hash to aid in merge operations
-        route_df['hash'] = trips.apply(lambda x: hashlib.md5((
-            x.trip_id + x.provider_id + x.timestamp.strftime('%d%m%Y%H%M%S%f')
-        ).encode('utf-8')))
-
         del trips
 
-        def find_bearing(trip):
-            lat1 = trip.geometry.y
-            lng1 = trip.geometry.x
-            lat2 = trip.next_geometry.y
-            lng2 = trip.next_geometry.x
+        route_df['next_geometry'] = route_df.groupby(
+            'trip_id').geometry.shift(-1)
+        route_df['next_timestamp'] = route_df.groupby(
+            'trip_id').timestamp.shift(-1)
 
-            dlng = lng2 - lng1
+        # drop destination
+        route_df.dropna()
 
-            x = cos(lat2) * sin(dlng)
-            y = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dlng)
-
-            return atan2(x, y)
-
-        def find_speed(trip):
-            y1 = trip.geometry.y
-            x1 = trip.geometry.x
-            y2 = trip.next_geometry.y
-            x2 = trip.next_geometry.x
-
-            d = sqrt(pow((x2 - x1), 2) + pow((y2 - y1), 2))
-            # timestamp is in milliseconds
-            dt = (trip.next_timestamp - trip.timestamp) / 1000
-
-            return d / dt
-
-        route_df['next_geometry'] = route_df.geometry.shift(1)
-
-        reoute_df['heading'] = route_df.apply(find_bearing, axis=1)
-
-        # Swtich to mercator to measure in meters
-        route_df.geometry.crs = {'init': 'epsg:3857'}
-        route_df.next_geometry.crs = {'init': 'epsg:3857'}
-
-        route_df['next_timestamp'] = route_df.timestamp.shift(1)
-
-        route_df['speed'] = route_df.apply(find_speed, axis=1)
+        route_df['dx'] = route_df.apply(
+            lambda x: x.next_geometry.x - x.geometry.x, axis=1)
+        route_df['dy'] = route_df.apply(
+            lambda x: x.next_geometry.y - x.geometry.y, axis=1)
+        route_df['dt'] = route_df.apply(
+            lambda x: (x.next_timestamp - x.timestamp) / 1000, axis=1)  # timestamp is in milliseconds
 
         del route_df['geometry']
         del route_df['next_geometry']
         del route_df['next_timestamp']
 
-        route_df = route_df.drop_duplicates(subset=['segment', 'trip_id'])
+        def find_heading(hit):
+            deg = atan2(hit.dx, hit.dy) / pi * 180
+            if deg < 0:
+                deg = deg + 360
+            return deg
+
+        def find_speed(hit):
+            d = sqrt(pow((hit.dx), 2) + pow((hit.dy), 2))
+
+            return d / hit.dt
+
+        route_df['heading'] = route_df.apply(find_heading, axis=1)
+        route_df['speed'] = route_df.apply(find_speed, axis=1)
+
+        del route_df['dx']
+        del route_df['dy']
+        del route_df['dt']
+
+        route_df = route_df.drop_duplicates(
+            subset=['segment', 'trip_id'], keep='last')
+
+        # Generate a hash to aid in merge operations
+        route_df['hash'] = trips.apply(lambda x: hashlib.md5((
+            x.trip_id + x.provider_id + x.timestamp.strftime('%d%m%Y%H%M%S%f')
+        ).encode('utf-8').hexdigest()))
 
         del route_df['trip_id']
 
