@@ -92,7 +92,6 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         segments['geometry'] = segments.wkt.map(lambda g: loads(g))
         segments = gpd.GeoDataFrame(segments)
         segments.crs = {'init': 'epsg:4326'}
-        segments = segments.to_crs({'init': 'epsg:3857'})
 
         def parse_route(trip):
             frame = trip.route
@@ -106,8 +105,10 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         route_df = trips.apply(parse_route, axis=1).sort_values(
             by=['timestamp'], ascending=True
         )
-        # Switch to mercator to measure in meters
-        route_df.to_crs({'init': 'epsg:3857'})
+
+        # Swtich to mercator to measure in meters
+        route_df.crs = {'init': 'epsg:4326'}
+        route_df = route_df.to_crs(epsg=3857)
 
         route_df['segment'] = gpd.sjoin(
             route_df, segments, how="left", op="intersects")['index_right']
@@ -115,24 +116,30 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         del segments
         del trips
 
-        route_df['next_geometry'] = route_df.groupby(
-            'trip_id').geometry.shift(-1)
         route_df['next_timestamp'] = route_df.groupby(
             'trip_id').timestamp.shift(-1)
+
+        route_df['x'] = route_df.geometry.map(lambda g: g.x)
+        route_df['y'] = route_df.geometry.map(lambda g: g.y)
+        route_df['nx'] = route_df.groupby(['trip_id']).x.shift(-1)
+        route_df['ny'] = route_df.groupby(['trip_id']).y.shift(-1)
+
+        del route_df['geometry']
 
         # drop destination
         route_df.dropna()
 
         route_df['dx'] = route_df.apply(
-            lambda x: x.next_geometry.x - x.geometry.x, axis=1)
+            lambda x: x.nx - x.x, axis=1)
         route_df['dy'] = route_df.apply(
-            lambda x: x.next_geometry.y - x.geometry.y, axis=1)
+            lambda x: x.ny - x.y, axis=1)
         route_df['dt'] = route_df.apply(
-            lambda x: (x.next_timestamp - x.timestamp) / 1000, axis=1)  # timestamp is in milliseconds
+            lambda x: (x.next_timestamp - x.timestamp).seconds, axis=1)  # timestamp is in milliseconds
 
-        del route_df['geometry']
-        del route_df['next_geometry']
-        del route_df['next_timestamp']
+        del route_df['x']
+        del route_df['y']
+        del route_df['nx']
+        del route_df['ny']
 
         def find_heading(hit):
             deg = atan2(hit.dx, hit.dy) / pi * 180
@@ -141,9 +148,12 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             return deg
 
         def find_speed(hit):
+            if hit['dt'] <= 0:
+                return 0
+
             d = sqrt(pow((hit.dx), 2) + pow((hit.dy), 2))
 
-            return d / hit.dt
+            return d / hit['dt']
 
         route_df['heading'] = route_df.apply(find_heading, axis=1)
         route_df['speed'] = route_df.apply(find_speed, axis=1)
