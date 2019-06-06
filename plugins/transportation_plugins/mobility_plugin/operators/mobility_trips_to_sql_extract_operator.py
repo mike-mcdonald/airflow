@@ -75,9 +75,9 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         cells = gpd.GeoDataFrame(cells)
 
         trips['origin'] = gpd.sjoin(
-            trips.set_geometry('origin'), cells, how="left", op="intersects")['index_right']
+            trips.set_geometry('origin'), cells, how="left", op="intersects")['key']
         trips['destination'] = gpd.sjoin(
-            trips.set_geometry('destination'), cells, how="left", op="intersects")['index_right']
+            trips.set_geometry('destination'), cells, how="left", op="intersects")['key']
 
         del cells
 
@@ -111,7 +111,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         route_df = route_df.to_crs(epsg=3857)
 
         route_df['segment'] = gpd.sjoin(
-            route_df, segments, how="left", op="intersects")['index_right']
+            route_df, segments, how="left", op="intersects")['key']
 
         del segments
         del trips
