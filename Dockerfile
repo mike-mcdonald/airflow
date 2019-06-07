@@ -18,10 +18,13 @@ ENV LC_ALL en_US.UTF-8
 ENV LC_CTYPE en_US.UTF-8
 ENV LC_MESSAGES en_US.UTF-8
 
+COPY script/entrypoint.sh /entrypoint.sh
+
 # Install general requirements
 RUN set -ex \
     && buildDeps='\
     apt-transport-https \
+    dos2unix \
     freetds-dev \
     gnupg2 \
     libkrb5-dev \
@@ -57,6 +60,8 @@ RUN set -ex \
     && apt-get update \
     && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql17 \
     && useradd -ms /bin/bash -d ${AIRFLOW_HOME} airflow \
+    # Clean up any bad line endings
+    && dos2unix /entrypoint.sh \
     # Install Airflow python dependencies
     && pip install -U pip setuptools wheel \
     && pip install pytz \
@@ -81,7 +86,6 @@ COPY plugins /usr/local/plugins
 COPY ./requirements.txt /requirements.txt
 RUN pip install -r /requirements.txt
 
-COPY script/entrypoint.sh /entrypoint.sh
 COPY config/airflow.cfg ${AIRFLOW_HOME}/airflow.cfg
 
 RUN chown -R airflow: ${AIRFLOW_HOME}
