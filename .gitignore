@@ -29,6 +29,7 @@ sftp-config.json
 __pycache__
 
 ### Artifacts ###
+/artifacts/
 /pgdata/
 /.output/
 

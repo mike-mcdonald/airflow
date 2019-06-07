@@ -13,6 +13,7 @@ services:
       - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
       - pgdata:/var/lib/postgresql/data/pgdata
+      - ./artifacts:/docker-entrypoint-initdb.d
 
   webserver:
     image: pbotapps.azurecr.io/airflow/base
