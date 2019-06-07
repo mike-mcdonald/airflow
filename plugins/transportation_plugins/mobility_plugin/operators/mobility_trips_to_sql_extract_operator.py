@@ -12,7 +12,7 @@ from shapely.wkt import loads
 from airflow.models import BaseOperator
 
 from transportation_plugins.mobility_plugin.hooks.mobility_provider_hook import MobilityProviderHook
-from common_plugins.dataframe_plugin.hooks.mssql_dataframe_hook import MsSqlDataFrameHook
+from common_plugins.dataframe_plugin.hooks.azure_mssql_dataframe_hook import AzureMsSqlDataFrameHook
 
 
 class MobilityTripsToSqlExtractOperator(BaseOperator):
@@ -23,7 +23,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
     def __init__(self,
                  mobility_provider_conn_id="mobility_provider_default",
                  mobility_provider_token_conn_id=None,
-                 sql_conn_id="sql_server_default",
+                 sql_conn_id="azure_sql_server_default",
                  remote_path="",
                  * args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -65,7 +65,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         trips['destination'] = trips.route.map(get_destination)
         trips.destination.crs = {'init': 'epsg:4326'}
 
-        hook = MsSqlDataFrameHook(
+        hook = AzureMsSqlDataFrameHook(
             sql_conn_id=self.sql_conn_id
         )
         # Map to cells

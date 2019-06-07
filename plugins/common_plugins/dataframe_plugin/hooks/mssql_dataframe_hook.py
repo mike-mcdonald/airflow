@@ -1,49 +1,11 @@
-import pandas as pd
-import sqlalchemy
-
-from airflow.hooks.base_hook import BaseHook
+from common_plugins.dataframe_plugin.hooks.sql_dataframe_hook import SqlDataFrameHook
 
 
-class MsSqlDataFrameHook(BaseHook):
+class MsSqlDataFrameHook(SqlDataFrameHook):
     def __init__(self,
-                 sql_conn_id="azure_sql_server_default",
+                 mssql_conn_id="sql_server_default",
                  *args, **kwargs):
-        self.conn_id = sql_conn_id
-        self.connection = self.get_conn()
+        super().__init__(sql_conn_id=mssql_conn_id, *args, **kwargs)
 
-    def get_conn(self):
-        connection = self.get_connection(self.conn_id)
-        connection_string = f"mssql+pyodbc://{connection.login}@{connection.host}:{connection.password}@{connection.host}:{connection.port}/{connection.database}?driver=ODBC+Driver+17+for+SQL+Server"
-        engine = sqlalchemy.engine.create_engine(
-            connection_string,
-            # Following avoids error about transaction on connect with Azure SQL Warehouse
-            isolation_level='AUTOCOMMIT')
-        engine.connect()
-        return engine
-
-    def write_dataframe(self,
-                        dataframe,
-                        table_name,
-                        schema=None,
-                        if_exists='append',
-                        index=False,
-                        index_label=None,
-                        chunksize=None,
-                        dtype=None,
-                        method=None):
-        dataframe.to_sql(name=table_name,
-                         con=self.connection,
-                         schema=schema,
-                         if_exists=if_exists,
-                         index=index,
-                         index_label=index_label,
-                         chunksize=chunksize,
-                         dtype=dtype,
-                         method=method)
-
-    def read_dataframe(self,
-                       table_name,
-                       schema=None):
-        return pd.read_sql_table(table_name=table_name,
-                                 con=self.connection,
-                                 schema=schema)
+    def get_connection_string(self, connection):
+        return f"mssql+pyodbc://{connection.login}@{connection.host}:{connection.password}@{connection.host}:{connection.port}/{connection.database}?driver=ODBC+Driver+17+for+SQL+Server"

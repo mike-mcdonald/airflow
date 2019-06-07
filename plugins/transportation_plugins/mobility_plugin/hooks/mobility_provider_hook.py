@@ -12,7 +12,7 @@ from airflow.hooks.base_hook import BaseHook
 
 class MobilityProviderHook(BaseHook):
     def __init__(self,
-                 version="0.3.0",
+                 version="0.3",
                  mobility_provider_conn_id="mobility_provider_default",
                  mobility_provider_token_conn_id="mobility_provider_token_default"):
         try:
@@ -42,7 +42,7 @@ class MobilityProviderHook(BaseHook):
         self.session.headers.update(self.connection.extra_dejson["headers"])
 
         self.session.headers.update({
-            "Accept": "application/vnd.mds.provider+json;version=0.3"
+            "Accept": f"application/vnd.mds.provider+json;version={version}"
         })
 
     def _date_format(self, dt):
@@ -70,7 +70,7 @@ class MobilityProviderHook(BaseHook):
                 if not ct.strip().startswith("version=0.3"):
                     self.log.warning(f"Incorrect content-type returned: {res.headers["Content-Type"]}")
         else:
-            self.log.warning(f"Missing 0.3.0 content-type header.")
+            self.log.warning(f"Missing 0.3 content-type header.")
 
         page = res.json()
 
