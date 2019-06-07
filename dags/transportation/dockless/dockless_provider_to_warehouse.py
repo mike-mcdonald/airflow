@@ -24,7 +24,7 @@ default_args = {
     "email_on_retry": False,
     "retries": 1,
     "retry_delay": timedelta(minutes=2),
-    "concurrency": 50
+    "concurrency": 1
     # "queue": "bash_queue",
     # "pool": "backfill",
     # "priority_weight": 10,
@@ -38,7 +38,7 @@ dag = DAG(
     schedule_interval="@hourly",
 )
 
-providers = ["lime", "clevr", "spin", "jump", "razor", "shared", "bolt"]
+providers = ["lime", "spin", "bolt"]
 
 task1 = DummyOperator(
     task_id="provider_extract_start",
@@ -88,7 +88,6 @@ event_stage_task = MobilityEventsToSqlStageOperator(
     dag=dag)
 
 event_stage_task.set_upstream(task2)
-
 event_stage_task.set_downstream(task3)
 
 # Run SQL scripts to load staged data to warehouse
@@ -97,3 +96,6 @@ trip_load_task = MobilityTripsToSqlWarehouseOperator(
     provide_context=True,
     sql_conn_id="azure_sql_server_default",
     dag=dag)
+
+trip_load_task.set_upstream(task2)
+trip_load_task.set_downstream(task3)
