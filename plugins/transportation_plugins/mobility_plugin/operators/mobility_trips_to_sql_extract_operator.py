@@ -9,10 +9,7 @@ import geopandas as gpd
 import pandas as pd
 from shapely.wkt import loads
 
-from airflow.hooks.base_hook import BaseHook
 from airflow.models import BaseOperator
-from airflow.plugins_manager import AirflowPlugin
-from airflow.utils.file import TemporaryDirectory
 
 from transportation_plugins.mobility_plugin.hooks.mobility_provider_hook import MobilityProviderHook
 from common_plugins.dataframe_plugin.hooks.mssql_dataframe_hook import MsSqlDataFrameHook
@@ -64,7 +61,9 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
 
         # Pull out the origin and destination
         trips['origin'] = trips.route.map(get_origin)
+        trips.origin.crs = {'init': 'epsg:4326'}
         trips['destination'] = trips.route.map(get_destination)
+        trips.destination.crs = {'init': 'epsg:4326'}
 
         hook = MsSqlDataFrameHook(
             sql_conn_id=self.sql_conn_id
@@ -73,6 +72,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         cells = hook.read_dataframe(table_name="cells", schema="dim")
         cells['geometry'] = cells.wkt.map(lambda g: loads(g))
         cells = gpd.GeoDataFrame(cells)
+        segments.crs = {'init': 'epsg:4326'}
 
         trips['origin'] = gpd.sjoin(
             trips.set_geometry('origin'), cells, how="left", op="intersects")['key']
@@ -103,7 +103,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             return frame
 
         route_df = trips.apply(parse_route, axis=1).sort_values(
-            by=['timestamp'], ascending=True
+            by=['trip_id', 'timestamp'], ascending=True
         )
 
         # Swtich to mercator to measure in meters
