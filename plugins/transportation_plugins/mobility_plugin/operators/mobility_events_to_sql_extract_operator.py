@@ -34,7 +34,7 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
         self.mobility_provider_token_conn_id = mobility_provider_token_conn_id
 
     def execute(self, context):
-        end_time = context.execution_date
+        end_time = context.get("execution_date")
         start_time = end_time - timedelta(hours=12)
 
         # Create the hook

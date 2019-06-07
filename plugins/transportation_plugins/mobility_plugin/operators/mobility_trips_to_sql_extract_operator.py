@@ -33,7 +33,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         self.remote_path = remote_path
 
     def execute(self, context):
-        end_time = context.execution_date
+        end_time = context.get("execution_date")
         start_time = end_time - timedelta(hours=12)
 
         # Create the hook
