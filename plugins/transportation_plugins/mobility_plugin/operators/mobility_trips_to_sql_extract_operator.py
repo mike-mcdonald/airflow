@@ -72,7 +72,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         cells = hook.read_dataframe(table_name="cells", schema="dim")
         cells['geometry'] = cells.wkt.map(lambda g: loads(g))
         cells = gpd.GeoDataFrame(cells)
-        segments.crs = {'init': 'epsg:4326'}
+        cells.crs = {'init': 'epsg:4326'}
 
         trips['origin'] = gpd.sjoin(
             trips.set_geometry('origin'), cells, how="left", op="intersects")['key']
