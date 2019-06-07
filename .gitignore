@@ -30,6 +30,7 @@ __pycache__
 
 ### Artifacts ###
 /pgdata/
+/.output/
 
 ### OS ###
 .DS_Store

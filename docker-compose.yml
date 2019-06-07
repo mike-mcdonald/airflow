@@ -30,6 +30,7 @@ services:
       # - REDIS_PASSWORD=redispass
     volumes:
       - ./dags:/usr/local/airflow/dags
+      - ./.output:/usr/local/output
     ports:
       - '8080:8080'
     command: webserver
@@ -46,6 +47,7 @@ services:
       - webserver
     volumes:
       - ./dags:/usr/local/airflow/dags
+      - ./.output:/usr/local/output
     environment:
       - LOAD_EX=n
       - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
@@ -63,6 +65,7 @@ services:
       - scheduler
     volumes:
       - ./dags:/usr/local/airflow/dags
+      - ./.output:/usr/local/output
     environment:
       - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
       - EXECUTOR=Celery
@@ -79,6 +82,7 @@ services:
       - webserver
     volumes:
       - ./dags:/usr/local/airflow/dags
+      - ./.output:/usr/local/output
     ports:
       - '5555:5555'
     environment:
