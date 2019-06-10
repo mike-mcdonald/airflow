@@ -45,6 +45,8 @@ RUN set -ex \
     libspatialindex-dev \
     netcat \
     rsync \
+    unixodbc \
+    unixodbc-dev \
     ' \
     && apt-get update -yqq \
     && apt-get upgrade -yqq \

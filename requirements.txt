@@ -3,6 +3,7 @@ geopandas
 numpy
 pandas
 psycopg2-binary
+pyodbc
 pyproj
 pytz
 redis>3.2.0
