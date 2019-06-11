@@ -65,7 +65,8 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
             lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
         events['event_hash'] = events.apply(
             lambda x: hashlib.md5(
-                f"{x.provider_id}{x.device_id}{x.event_time.strptime("")}"
+                f"{x.provider_id}{x.device_id}{x.event_time.strftime('%d%m%Y%H%M%S%f')}".encode(
+                    'utf-8')
             ).hexdigest(), axis=1)
 
         hook = AzureMsSqlDataFrameHook(
@@ -87,6 +88,7 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
             'event_type_reason': 'event'
         })
 
-        hook.write_dataframe(events, table_name="extract_events", schema="etl")
+        hook.write_dataframe(
+            events, table_name="extract_events", schema="etl")
 
         return
