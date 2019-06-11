@@ -75,7 +75,7 @@ class MobilityProviderHook(BaseHook):
         page = res.json()
 
         if page["data"] is not None:
-            results.append(page["data"][payload_key])
+            results.extend(page["data"][payload_key])
 
         if "links" in page:
             next_page = page["links"].get("next")
