@@ -27,7 +27,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
                  * args, **kwargs):
         super().__init__(*args, **kwargs)
         self.sql_conn_id = sql_conn_id
-        self.mobility_provider_conn_id = mobility_provider_conn_id,
+        self.mobility_provider_conn_id = mobility_provider_conn_id
         self.mobility_provider_token_conn_id = mobility_provider_token_conn_id
 
     def execute(self, context):
