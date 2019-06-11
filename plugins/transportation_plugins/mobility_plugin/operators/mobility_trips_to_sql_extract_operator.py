@@ -39,13 +39,22 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             mobility_provider_conn_id=self.mobility_provider_conn_id,
             mobility_provider_token_conn_id=self.mobility_provider_token_conn_id)
 
-        # Get trips as a DataFrame
-        trips = hook.get_trips(
-            min_end_time=start_time, max_end_time=end_time)
+        # Get trips as a GeoDataFrame
+        trips = gpd.GeoDataFrame(hook.get_trips(
+            min_end_time=start_time, max_end_time=end_time))
+
+        if len(trips) <= 0:
+            self.log.warning(
+                f"Received no trips for time period {start_time} to {end_time}")
+            return
 
         trips['seen'] = datetime.now()
         trips['propulsion_type'] = trips.propulsion_type.map(
             lambda x: ','.join(x))
+        trips['start_time'] = trips.start_time.map(
+            lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
+        trips['end_time'] = trips.end_time.map(
+            lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
 
         # Convert the route to a DataFrame now to make mapping easier
         trips['route'] = trips.route.map(
@@ -64,10 +73,10 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         trips.destination.crs = {'init': 'epsg:4326'}
 
         hook = AzureMsSqlDataFrameHook(
-            sql_conn_id=self.sql_conn_id
+            azure_mssql_conn_id=self.sql_conn_id
         )
         # Map to cells
-        cells = hook.read_dataframe(table_name="cells", schema="dim")
+        cells = hook.read_dataframe(table_name="cell", schema="dim")
         cells['geometry'] = cells.wkt.map(lambda g: loads(g))
         cells = gpd.GeoDataFrame(cells)
         cells.crs = {'init': 'epsg:4326'}
