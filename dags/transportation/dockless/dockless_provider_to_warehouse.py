@@ -52,19 +52,22 @@ task2 = DummyOperator(
 
 # Extract data from providers and stage in tables
 for provider in providers:
+    mobility_provider_conn_id = f"mobility_provider_{provider}"
+    mobility_provider_token_conn_id = f"mobility_provider_{provider}_token"
+
     trip_extract_task = MobilityTripsToSqlExtractOperator(
         task_id=f"loading_{provider}_trips",
         provide_context=True,
-        mobility_provider_conn_id=f"mobility_provider_{provider}",
-        mobility_provider_token_conn_id=f"mobility_provider_{provider}_token",
+        mobility_provider_conn_id=mobility_provider_conn_id,
+        mobility_provider_token_conn_id=mobility_provider_token_conn_id,
         sql_conn_id="azure_sql_server_default",
         dag=dag)
 
     event_extract_task = MobilityEventsToSqlExtractOperator(
         task_id=f"loading_{provider}_events",
         provide_context=True,
-        mobility_provider_conn_id=f"mobility_provider_{provider}",
-        mobility_provider_token_conn_id=f"mobility_provider_{provider}_token",
+        mobility_provider_conn_id=mobility_provider_conn_id,
+        mobility_provider_token_conn_id=mobility_provider_token_conn_id,
         sql_conn_id="azure_sql_server_default",
         dag=dag)
 
