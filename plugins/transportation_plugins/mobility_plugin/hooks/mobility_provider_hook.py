@@ -46,7 +46,7 @@ class MobilityProviderHook(BaseHook):
         })
 
     def _date_format(self, dt):
-        return int(dt.timestamp()) if isinstance(dt, datetime) else int(dt)
+        return int(dt.timestamp()) * 1000 if isinstance(dt, datetime) else int(dt)
 
     def _request(self, url, payload_key, params=None, results=[]):
         """
