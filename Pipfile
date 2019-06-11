@@ -5,6 +5,7 @@ verify_ssl = true
 
 [dev-packages]
 pylint = "*"
+autopep8 = "*"
 
 [packages]
 sqlalchemy = "*"
@@ -18,6 +19,8 @@ requests = "*"
 requests-oauthlib = "*"
 shapely = "*"
 apache-airflow = "*"
+pyodbc = "*"
+rtree = "*"
 
 [requires]
 python_version = "3.7"
