@@ -24,13 +24,11 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
                  mobility_provider_conn_id="mobility_provider_default",
                  mobility_provider_token_conn_id=None,
                  sql_conn_id="azure_sql_server_default",
-                 remote_path="",
                  * args, **kwargs):
         super().__init__(*args, **kwargs)
         self.sql_conn_id = sql_conn_id
         self.mobility_provider_conn_id = mobility_provider_conn_id,
         self.mobility_provider_token_conn_id = mobility_provider_token_conn_id
-        self.remote_path = remote_path
 
     def execute(self, context):
         end_time = context.get("execution_date")
