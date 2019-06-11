@@ -82,6 +82,11 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
 
         del cells
 
+        events = events.rename(index=str, columns={
+            'event_type': 'state',
+            'event_type_reason': 'event'
+        })
+
         hook.write_dataframe(events, table_name="extract_events", schema="etl")
 
         return
