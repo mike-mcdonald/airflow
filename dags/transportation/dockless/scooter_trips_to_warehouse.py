@@ -32,7 +32,7 @@ default_args = {
 }
 
 dag = DAG(
-    dag_id="dockless-provider-to-datalake",
+    dag_id="scooter_trips_to_warehouse",
     default_args=default_args,
     catchup=True,
     schedule_interval="@hourly",
@@ -63,35 +63,13 @@ for provider in providers:
         sql_conn_id="azure_sql_server_default",
         dag=dag)
 
-    event_extract_task = MobilityEventsToSqlExtractOperator(
-        task_id=f"loading_{provider}_events",
-        provide_context=True,
-        mobility_provider_conn_id=mobility_provider_conn_id,
-        mobility_provider_token_conn_id=mobility_provider_token_conn_id,
-        sql_conn_id="azure_sql_server_default",
-        dag=dag)
-
     trip_extract_task.set_upstream(task1)
-    event_extract_task.set_upstream(task1)
-
     trip_extract_task.set_downstream(task2)
-    event_extract_task.set_downstream(task2)
 
 task3 = DummyOperator(
     task_id="provider_staging_complete",
     dag=dag
 )
-
-# Run SQL scripts to transform extract data into staged facts
-
-event_stage_task = MobilityEventsToSqlStageOperator(
-    task_id=f"staging_states",
-    provide_context=True,
-    sql_conn_id="azure_sql_server_default",
-    dag=dag)
-
-event_stage_task.set_upstream(task2)
-event_stage_task.set_downstream(task3)
 
 # Run SQL scripts to load staged data to warehouse
 trip_load_task = MobilityTripsToSqlWarehouseOperator(
