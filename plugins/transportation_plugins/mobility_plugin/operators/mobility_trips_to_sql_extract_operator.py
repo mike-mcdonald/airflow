@@ -95,7 +95,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         )
 
         # Break out segment hits
-        segments = hook.read_dataframe(table_name="segments", schema="dim")
+        segments = hook.read_dataframe(table_name="segment", schema="dim")
         segments['geometry'] = segments.wkt.map(lambda g: loads(g))
         segments = gpd.GeoDataFrame(segments)
         segments.crs = {'init': 'epsg:4326'}
