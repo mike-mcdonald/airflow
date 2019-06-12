@@ -40,7 +40,9 @@ class MobilityProviderHook(BaseHook):
             self.log.info(
                 f"Failed to authorize token connection for mobility provider: {mobility_provider_token_conn_id}")
 
-        self.session.headers.update(self.connection.extra_dejson["headers"])
+        if self.connection.extra_dejson is not None:
+            if "headers" in self.connection.extra_dejson:
+                self.session.headers.update(self.connection.extra_dejson["headers"])
 
         self.session.headers.update({
             "Accept": f"application/vnd.mds.provider+json;version={version}"
@@ -56,7 +58,7 @@ class MobilityProviderHook(BaseHook):
         Returns payload(s).
         """
         self.log.debug(f"Making request to: {url}")
-        res = self.session.get(url, params=params)
+        res = self.session.get(url, params=params, verify=False)
         self.log.debug(f"Received response from {url}")
 
         if res.status_code is not 200:
