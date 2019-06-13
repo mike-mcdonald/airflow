@@ -3,7 +3,6 @@ import json
 from datetime import datetime,  timedelta
 from math import atan2, pi, pow, sqrt
 from numpy import nan
-from tempfile import NamedTemporaryFile
 
 import geopandas as gpd
 import pandas as pd
@@ -48,6 +47,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
                 f"Received no trips for time period {start_time} to {end_time}")
             return
 
+        trips['batch'] = end_time.strftime("%Y-%m-%d %H:%M:%S")
         trips['seen'] = datetime.now()
         trips['propulsion_type'] = trips.propulsion_type.map(
             lambda x: ','.join(x))
@@ -112,9 +112,9 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         route_df = trips.apply(parse_route, axis=1).sort_values(
             by=['trip_id', 'timestamp'], ascending=True
         )
+        route_df.crs = {'init': 'epsg:4326'}
 
         # Swtich to mercator to measure in meters
-        route_df.crs = {'init': 'epsg:4326'}
         route_df = route_df.to_crs(epsg=3857)
 
         route_df['segment'] = gpd.sjoin(
@@ -141,7 +141,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         route_df['dy'] = route_df.apply(
             lambda x: x.ny - x.y, axis=1)
         route_df['dt'] = route_df.apply(
-            lambda x: (x.next_timestamp - x.timestamp).seconds, axis=1)  # timestamp is in milliseconds
+            lambda x: (x.next_timestamp - x.timestamp).seconds, axis=1)
 
         del route_df['x']
         del route_df['y']

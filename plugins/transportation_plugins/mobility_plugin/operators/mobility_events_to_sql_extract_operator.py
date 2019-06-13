@@ -1,5 +1,6 @@
 import hashlib
 import json
+
 from datetime import datetime, timedelta
 from tempfile import NamedTemporaryFile
 
@@ -10,10 +11,7 @@ from pytz import timezone
 from shapely.geometry import Point
 from shapely.wkt import loads
 
-from airflow.hooks.base_hook import BaseHook
 from airflow.models import BaseOperator
-from airflow.plugins_manager import AirflowPlugin
-from airflow.utils.file import TemporaryDirectory
 
 from transportation_plugins.mobility_plugin.hooks.mobility_provider_hook import MobilityProviderHook
 from common_plugins.dataframe_plugin.hooks.azure_mssql_dataframe_hook import AzureMsSqlDataFrameHook
@@ -54,6 +52,7 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
                 f"Received no events for time period {start_time} to {end_time}")
             return
 
+        events['batch'] = end_time.strftime("%Y-%m-%d %H:%M:%S")
         # Get the GeoDataFrame configured correctly
         events['event_location'] = events.event_location.map(
             lambda x: x['geometry']['coordinates'])
