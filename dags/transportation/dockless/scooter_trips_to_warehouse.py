@@ -12,7 +12,9 @@ from airflow.operators.mobility_plugin import (
     MobilityTripsToSqlWarehouseOperator,
     MobilityEventsToSqlExtractOperator,
     MobilityEventsToSqlStageOperator,
-    MobilityEventsToSqlWarehouseOperator
+    MobilityEventsToSqlWarehouseOperator,
+    MobilityProviderSyncOperator,
+    MobilityVehicleSyncOperator
 )
 
 default_args = {
@@ -78,5 +80,21 @@ trip_load_task = MobilityTripsToSqlWarehouseOperator(
     sql_conn_id="azure_sql_server_default",
     dag=dag)
 
-trip_load_task.set_upstream(task2)
+provider_sync_task = MobilityProviderSyncOperator(
+    task_id="provider_sync",
+    source_table="etl.extract_trip",
+    dag=dag
+)
+provider_sync_task.set_upstream(task2)
+provider_sync_task.set_downstream(trip_load_task)
+
+vehicle_sync_task = MobilityVehicleSyncOperator(
+    task_id="vehicle_sync",
+    source_table="etl.extract_trip",
+    dag=dag
+)
+vehicle_sync_task.set_upstream(task2)
+vehicle_sync_task.set_downstream(trip_load_task)
+
+
 trip_load_task.set_downstream(task3)

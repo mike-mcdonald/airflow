@@ -12,7 +12,9 @@ from airflow.operators.mobility_plugin import (
     MobilityTripsToSqlWarehouseOperator,
     MobilityEventsToSqlExtractOperator,
     MobilityEventsToSqlStageOperator,
-    MobilityEventsToSqlWarehouseOperator
+    MobilityEventsToSqlWarehouseOperator,
+    MobilityProviderSyncOperator,
+    MobilityVehicleSyncOperator
 )
 
 default_args = {
@@ -66,11 +68,6 @@ for provider in providers:
     event_extract_task.set_upstream(task1)
     event_extract_task.set_downstream(task2)
 
-task3 = DummyOperator(
-    task_id="provider_staging_complete",
-    dag=dag
-)
-
 # Run SQL scripts to transform extract data into staged facts
 event_stage_task = MobilityEventsToSqlStageOperator(
     task_id=f"staging_states",
@@ -78,5 +75,25 @@ event_stage_task = MobilityEventsToSqlStageOperator(
     sql_conn_id="azure_sql_server_default",
     dag=dag)
 
-event_stage_task.set_upstream(task2)
+provider_sync_task = MobilityProviderSyncOperator(
+    task_id="provider_sync",
+    source_table="etl.extract_event",
+    dag=dag
+)
+provider_sync_task.set_upstream(task2)
+provider_sync_task.set_downstream(event_stage_task)
+
+vehicle_sync_task = MobilityVehicleSyncOperator(
+    task_id="vehicle_sync",
+    source_table="etl.extract_event",
+    dag=dag
+)
+vehicle_sync_task.set_upstream(task2)
+vehicle_sync_task.set_downstream(event_stage_task)
+
+task3 = DummyOperator(
+    task_id="provider_staging_complete",
+    dag=dag
+)
+
 event_stage_task.set_downstream(task3)
