@@ -1,11 +1,10 @@
+import time
+
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
 
 import pandas as pd
 import requests
-
-from oauthlib.oauth2 import BackendApplicationClient
-from requests_oauthlib import OAuth2Session
 
 from airflow.hooks.base_hook import BaseHook
 from airflow.exceptions import AirflowException
@@ -14,8 +13,12 @@ from airflow.exceptions import AirflowException
 class MobilityProviderHook(BaseHook):
     def __init__(self,
                  version="0.3",
+                 max_retries=3,
                  mobility_provider_conn_id="mobility_provider_default",
                  mobility_provider_token_conn_id="mobility_provider_token_default"):
+        self.version = version
+        self.max_retries = max_retries
+
         try:
             self.connection = self.get_connection(mobility_provider_conn_id)
         except AirflowException as err:
@@ -27,25 +30,30 @@ class MobilityProviderHook(BaseHook):
         try:
             self.token_connection = self.get_connection(
                 mobility_provider_token_conn_id)
+        except AirflowException as err:
+            self.log.warning(
+                f"Failed to find token connection for mobility provider: {mobility_provider_token_conn_id}. Error: {err}")
 
-            auth_type = self.token_connection.extra_dejson["auth_type"] or "Bearer"
-            token_key = self.token_connection.extra_dejson["token_key"] or "access_token"
+        if self.token_connection is not None:
+            try:
+                auth_type = self.token_connection.extra_dejson["auth_type"] or "Bearer"
+                token_key = self.token_connection.extra_dejson["token_key"] or "access_token"
 
-            payload = self.connection.extra_dejson["auth_payload"]
-            r = requests.post(self.token_connection.host, params=payload)
-            token = r.json()[token_key]
-            self.session.headers.update(
-                {"Authorization": f"{auth_type} {token}"})
-        except:
-            self.log.info(
-                f"Failed to authorize token connection for mobility provider: {mobility_provider_token_conn_id}")
+                payload = self.connection.extra_dejson["auth_payload"]
+                res = requests.post(self.token_connection.host, data=payload)
+                token = res.json()[token_key]
+                self.session.headers.update(
+                    {"Authorization": f"{auth_type} {token}"})
+            except Exception as err:
+                self.log.error(
+                    f"Failed to authorize token connection for mobility provider: {mobility_provider_token_conn_id}. Error: {err}")
 
         if self.connection.extra_dejson is not None:
             if "headers" in self.connection.extra_dejson:
                 self.session.headers.update(self.connection.extra_dejson["headers"])
 
         self.session.headers.update({
-            "Accept": f"application/vnd.mds.provider+json;version={version}"
+            "Accept": f"application/vnd.mds.provider+json;version={self.version}"
         })
 
     def _date_format(self, dt):
@@ -57,13 +65,26 @@ class MobilityProviderHook(BaseHook):
 
         Returns payload(s).
         """
+        retries = 0
+        res = None
+
         self.log.debug(f"Making request to: {url}")
-        res = self.session.get(url, params=params, verify=False)
+
+        while res is None:
+            try:
+                res = session.get(url, params=params, verify=False)
+                res.raise_for_status()
+            except Exception as err:
+                res = None
+                retries = retries + 1
+                if retries > self.max_retries:
+                    raise AirflowException(f"Unable to retrieve response from {url} after {MAX_RETRIES}.  Aborting...")
+
+                self.log.warning(f"Error while retrieving {url}?{params}: {err}. Retrying in 10 seconds... (retry {retries}/{MAX_RETRIES})")
+                time.sleep(10)
+
         self.log.debug(f"Received response from {url}")
 
-        if res.status_code is not 200:
-            self.log.warning(res)
-            return results
         if "Content-Type" in res.headers:
             cts = res.headers["Content-Type"].split(";")
             if "application/vnd.mds.provider+json" not in cts:
@@ -73,11 +94,11 @@ class MobilityProviderHook(BaseHook):
             for ct in cts:
                 if ct.strip().startswith("charset"):
                     pass
-                if not ct.strip().startswith("version=0.3"):
+                if not ct.strip().startswith(f"version={self.version}"):
                     self.log.warning(
                         f"Incorrect content-type returned: {res.headers['Content-Type']}")
         else:
-            self.log.error(f"Missing 0.3 content-type header.")
+            self.log.error(f"Missing {self.version} content-type header.")
 
         page = res.json()
 
