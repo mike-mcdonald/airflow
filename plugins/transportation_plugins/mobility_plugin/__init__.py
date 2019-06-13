@@ -6,7 +6,8 @@ from transportation_plugins.mobility_plugin.operators.mobility_trips_to_sql_ware
 from transportation_plugins.mobility_plugin.operators.mobility_events_to_sql_extract_operator import MobilityEventsToSqlExtractOperator
 from transportation_plugins.mobility_plugin.operators.mobility_events_to_sql_stage_operator import MobilityEventsToSqlStageOperator
 from transportation_plugins.mobility_plugin.operators.mobility_routes_to_sql_warehouse_operator import MobilityEventsToSqlWarehouseOperator
-
+from transportation_plugins.mobility_plugin.operators.mobility_provider_sync_operator import MobilityProviderSyncOperator
+from transportation_plugins.mobility_plugin.operators.mobility_vehicle_sync_operator import MobilityVehicleSyncOperator
 # Defining the plugin class
 
 
@@ -16,7 +17,9 @@ class MobilityPlugin(AirflowPlugin):
                  MobilityTripsToSqlWarehouseOperator,
                  MobilityEventsToSqlExtractOperator,
                  MobilityEventsToSqlStageOperator,
-                 MobilityEventsToSqlWarehouseOperator]
+                 MobilityEventsToSqlWarehouseOperator,
+                 MobilityProviderSyncOperator,
+                 MobilityVehicleSyncOperator]
     hooks = [MobilityProviderHook]
     executors = []
     macros = []
