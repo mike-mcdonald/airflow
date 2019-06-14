@@ -72,7 +72,7 @@ class MobilityProviderHook(BaseHook):
 
         while res is None:
             try:
-                res = session.get(url, params=params, verify=False)
+                res = self.session.get(url, params=params, verify=False)
                 res.raise_for_status()
             except Exception as err:
                 res = None
