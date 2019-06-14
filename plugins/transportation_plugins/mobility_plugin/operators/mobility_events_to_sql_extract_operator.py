@@ -91,6 +91,6 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
         })
 
         hook.write_dataframe(
-            events, table_name="extract_events", schema="etl")
+            events, table_name="extract_event", schema="etl")
 
         return
