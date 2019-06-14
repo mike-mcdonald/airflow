@@ -7,14 +7,14 @@ class MobilityProviderSyncOperator(MsSqlOperator):
     """
 
     def __init__(self,
-                source_table=None,
+                 source_table=None,
                  * args, **kwargs):
         sql = f"""
         INSERT INTO dim.provider (
             provider_id
             ,provider_name
         )
-        SELECT
+        SELECT DISTINCT
         provider_id
         ,provider_name
         FROM {source_table}

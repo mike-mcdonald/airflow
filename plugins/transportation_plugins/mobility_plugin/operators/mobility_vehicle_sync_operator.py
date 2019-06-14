@@ -7,16 +7,18 @@ class MobilityVehicleSyncOperator(MsSqlOperator):
     """
 
     def __init__(self,
-                source_table=None,
+                 source_table=None,
                  * args, **kwargs):
         sql = f"""
         INSERT INTO dim.vehicle (
             device_id
             ,vehicle_id
+            ,vehicle_type
         )
-        SELECT
+        SELECT DISTINCT
         device_id
         ,vehicle_id
+        ,vehicle_type
         FROM {source_table}
         WHERE NOT EXISTS (
             SELECT 1
