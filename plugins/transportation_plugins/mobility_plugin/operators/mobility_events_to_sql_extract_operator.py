@@ -52,7 +52,7 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
                 f"Received no events for time period {start_time} to {end_time}")
             return
 
-        events['batch'] = end_time.strftime("%Y-%m-%d %H:%M:%S")
+        events['batch'] = context.get("ts_nodash")
         events['seen'] = datetime.now()
         # Get the GeoDataFrame configured correctly
         events['event_location'] = events.event_location.map(

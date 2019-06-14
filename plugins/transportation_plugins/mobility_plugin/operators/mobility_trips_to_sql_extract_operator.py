@@ -49,7 +49,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
                 f"Received no trips for time period {start_time} to {end_time}")
             return
 
-        trips['batch'] = end_time.strftime("%Y-%m-%d %H:%M:%S")
+        trips['batch'] = context.get("ts_nodash")
         trips['seen'] = datetime.now()
         trips['propulsion_type'] = trips.propulsion_type.map(
             lambda x: ','.join(sorted(x)))
