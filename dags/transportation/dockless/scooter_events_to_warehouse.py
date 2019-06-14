@@ -7,6 +7,7 @@ import airflow
 from airflow import DAG
 from airflow.operators.dummy_operator import DummyOperator
 
+from airflow.operators.mssql_plugin import MsSqlOperator
 from airflow.operators.mobility_plugin import (
     MobilityTripsToSqlExtractOperator,
     MobilityTripsToSqlWarehouseOperator,
@@ -48,6 +49,17 @@ task1 = DummyOperator(
     dag=dag
 )
 
+clean_extract_task = MsSqlOperator(
+    task_id="clean_extract_table",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    DELETE FROM etl.extract_event WHERE batch = '{{ ts_nodash }}'
+    """
+)
+clean_extract_task.set_downstream(task1)
+
+
 task2 = DummyOperator(
     task_id="provider_extract_complete",
     dag=dag
@@ -73,12 +85,13 @@ for provider in providers:
 event_stage_task = MobilityEventsToSqlStageOperator(
     task_id=f"staging_states",
     provide_context=True,
-    mssql_conn_id="azure_sql_server_default",
+    mssql_conn_id="azure_sql_server_full",
     dag=dag)
 
 provider_sync_task = MobilityProviderSyncOperator(
     task_id="provider_sync",
     source_table="etl.extract_event",
+    mssql_conn_id="azure_sql_server_full",
     dag=dag
 )
 provider_sync_task.set_upstream(task2)
@@ -87,7 +100,7 @@ provider_sync_task.set_downstream(event_stage_task)
 vehicle_sync_task = MobilityVehicleSyncOperator(
     task_id="vehicle_sync",
     source_table="etl.extract_event",
-    mssql_conn_id="azure_sql_server_default",
+    mssql_conn_id="azure_sql_server_full",
     dag=dag
 )
 vehicle_sync_task.set_upstream(task2)
@@ -95,7 +108,6 @@ vehicle_sync_task.set_downstream(event_stage_task)
 
 task3 = DummyOperator(
     task_id="provider_staging_complete",
-    mssql_conn_id="azure_sql_server_default",
     dag=dag
 )
 
