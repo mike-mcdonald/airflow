@@ -30,6 +30,7 @@ services:
       # - POSTGRES_DB=airflow
       # - REDIS_PASSWORD=redispass
     volumes:
+      - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
       - ./dags:/usr/local/airflow/dags
       - ./logs:/usr/local/airflow/logs
       - ./.output:/usr/local/output
@@ -48,6 +49,7 @@ services:
     depends_on:
       - webserver
     volumes:
+      - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
       - ./dags:/usr/local/airflow/dags
       - ./logs:/usr/local/airflow/logs
       - ./.output:/usr/local/output
@@ -67,6 +69,7 @@ services:
     depends_on:
       - scheduler
     volumes:
+      - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
       - ./dags:/usr/local/airflow/dags
       - ./logs:/usr/local/airflow/logs
       - ./.output:/usr/local/output
@@ -85,6 +88,7 @@ services:
     depends_on:
       - webserver
     volumes:
+      - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
       - ./dags:/usr/local/airflow/dags
       - ./logs:/usr/local/airflow/logs
       - ./.output:/usr/local/output
