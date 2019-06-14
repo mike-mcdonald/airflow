@@ -72,7 +72,7 @@ for provider in providers:
 event_stage_task = MobilityEventsToSqlStageOperator(
     task_id=f"staging_states",
     provide_context=True,
-    sql_conn_id="azure_sql_server_default",
+    mssql_conn_id="azure_sql_server_default",
     dag=dag)
 
 provider_sync_task = MobilityProviderSyncOperator(
