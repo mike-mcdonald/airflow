@@ -53,6 +53,7 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
             return
 
         events['batch'] = end_time.strftime("%Y-%m-%d %H:%M:%S")
+        events['seen'] = datetime.now()
         # Get the GeoDataFrame configured correctly
         events['event_location'] = events.event_location.map(
             lambda x: x['geometry']['coordinates'])
@@ -60,6 +61,8 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
         events = events.set_geometry('event_location')
         events.crs = {'init': 'epsg:4326'}
 
+        events['propulsion_type'] = events.propulsion_type.map(
+            lambda x: ','.join(x.sort()))
         events['event_time'] = events.event_time.map(
             lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
         events['event_hash'] = events.apply(
