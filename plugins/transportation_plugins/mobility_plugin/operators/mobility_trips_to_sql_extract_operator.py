@@ -6,6 +6,8 @@ from numpy import nan
 
 import geopandas as gpd
 import pandas as pd
+
+from pytz import timezone
 from shapely.wkt import loads
 
 from airflow.models import BaseOperator
@@ -50,7 +52,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         trips['batch'] = end_time.strftime("%Y-%m-%d %H:%M:%S")
         trips['seen'] = datetime.now()
         trips['propulsion_type'] = trips.propulsion_type.map(
-            lambda x: ','.join(x))
+            lambda x: ','.join(sorted(x)))
         trips['start_time'] = trips.start_time.map(
             lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
         trips['end_time'] = trips.end_time.map(

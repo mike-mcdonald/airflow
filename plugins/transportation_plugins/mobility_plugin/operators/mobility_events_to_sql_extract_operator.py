@@ -62,7 +62,7 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
         events.crs = {'init': 'epsg:4326'}
 
         events['propulsion_type'] = events.propulsion_type.map(
-            lambda x: ','.join(x.sort()))
+            lambda x: ','.join(sorted(x)))
         events['event_time'] = events.event_time.map(
             lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
         events['event_hash'] = events.apply(
