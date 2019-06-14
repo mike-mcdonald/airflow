@@ -87,6 +87,7 @@ provider_sync_task.set_downstream(event_stage_task)
 vehicle_sync_task = MobilityVehicleSyncOperator(
     task_id="vehicle_sync",
     source_table="etl.extract_event",
+    mssql_conn_id="azure_sql_server_default",
     dag=dag
 )
 vehicle_sync_task.set_upstream(task2)
@@ -94,6 +95,7 @@ vehicle_sync_task.set_downstream(event_stage_task)
 
 task3 = DummyOperator(
     task_id="provider_staging_complete",
+    mssql_conn_id="azure_sql_server_default",
     dag=dag
 )
 
