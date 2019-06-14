@@ -12,4 +12,3 @@ requests_oauthlib
 rtree
 shapely
 six
--e /usr/local/plugins

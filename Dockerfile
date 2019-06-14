@@ -84,9 +84,11 @@ RUN set -ex \
     /usr/share/doc-base
 
 # Install specific airflow dependencies
-COPY plugins /usr/local/plugins
 COPY ./requirements.txt /requirements.txt
 RUN pip install -r /requirements.txt
+
+COPY plugins /usr/local/plugins
+RUN pip install -e /usr/local/plugins
 
 COPY config/airflow.cfg ${AIRFLOW_HOME}/airflow.cfg
 
