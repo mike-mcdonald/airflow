@@ -34,21 +34,27 @@ class MobilityProviderHook(BaseHook):
             self.log.warning(
                 f"Failed to find token connection for mobility provider: {mobility_provider_token_conn_id}. Error: {err}")
 
-        if self.token_connection is not None:
+        if hasattr(self, 'token_connection'):
             try:
-                auth_type = self.token_connection.extra_dejson["auth_type"] or "Bearer"
-                token_key = self.token_connection.extra_dejson["token_key"] or "access_token"
+                auth_type = self.token_connection.extra_dejson[
+                    "auth_type"] if "auth_type" in self.token_connection.extra_dejson else "Bearer"
+                token_key = self.token_connection.extra_dejson[
+                    "token_key"] if "token_key" in self.token_connection.extra_dejson else "access_token"
 
                 payload = self.connection.extra_dejson["auth_payload"]
-                res = requests.post(self.token_connection.host, data=payload)
+                res = requests.post(self.token_connection.host,
+                                    data=payload, verify=False)
+                self.log.debug(
+                    f"Received token endpoint response from: {mobility_provider_token_conn_id}, response: {res.json()} ")
                 token = res.json()[token_key]
+
                 self.session.headers.update(
                     {"Authorization": f"{auth_type} {token}"})
             except Exception as err:
                 self.log.error(
                     f"Failed to authorize token connection for mobility provider: {mobility_provider_token_conn_id}. Error: {err}")
 
-        if self.connection.extra_dejson is not None:
+        if hasattr(self.connection, 'extra_dejson'):
             if "headers" in self.connection.extra_dejson:
                 self.session.headers.update(
                     self.connection.extra_dejson["headers"])
@@ -83,7 +89,7 @@ class MobilityProviderHook(BaseHook):
                         f"Unable to retrieve response from {url} after {self.max_retries}.  Aborting...")
 
                 self.log.warning(
-                    f"Error while retrieving {url}?{params}: {err}. Retrying in 10 seconds... (retry {retries}/{MAX_RETRIES})")
+                    f"Error while retrieving {url}?{params}: {err}. Retrying in 10 seconds... (retry {retries}/{self.max_retries})")
                 time.sleep(10)
 
         self.log.debug(f"Received response from {url}")
