@@ -1,14 +1,3 @@
-import json
-from datetime import datetime,  timedelta
-from tempfile import NamedTemporaryFile
-
-import geopandas as gpd
-import pandas as pd
-from shapely.wkt import loads
-
-from airflow.hooks.mssql_hook import MsSqlHook
-from airflow.models import BaseOperator
-
 from common_plugins.mssql_plugin.operators.mssql_operator import MsSqlOperator
 
 
@@ -22,33 +11,38 @@ class MobilityEventsToSqlStageOperator(MsSqlOperator):
         sql = """
         INSERT INTO etl.stage_state (
             provider_key
-            ,vehicle_id
-            ,vehicle_type
-            ,propulsion_type_key
+            ,vehicle_key
+            ,propulsion_type
             ,start_state
             ,start_event
             ,start_time
-            ,start_cell_key
+            ,start_location
             ,start_battery_pct
             ,end_state
             ,end_event
             ,end_time
-            ,end_cell_key
+            ,end_location
             ,end_battery_pct
+            ,associated_trip
         )
         SELECT
-        ,provider_id
-        ,provider_name
-        ,device_id
-        ,vehicle_id
-        ,vehicle_type
+        p.key
+        ,v.key
         ,propulsion_type
-        ,event_type
-        ,event_type_reason
-        ,event_time
-        ,event_location
+        ,state
+        ,event
+        ,time
+        ,location
         ,battery_pct
-        ,associated_trip
-
+        ,LEAD(state) OVER(PARTITION BY device_id ORDER BY time)
+        ,LEAD(event) OVER(PARTITION BY device_id ORDER BY time)
+        ,LEAD(time) OVER(PARTITION BY device_id ORDER BY time)
+        ,LEAD(location) OVER(PARTITION BY device_id ORDER BY time)
+        ,LEAD(battery_pct) OVER(PARTITION BY device_id ORDER BY time)
+        ,COALESCE(associated_trip, LEAD(battery_pct) OVER(PARTITION BY device_id ORDER BY time))
+        FROM etl.extract_event AS e
+        LEFT JOIN dim.provider AS p ON p.provider_id = e.provider_id
+        LEFT JOIN dim.vehicle AS v ON v.device_id = e.device_id
+        WHERE e.batch = {{ execution_date }}
         """
         super().__init__(sql, *args, **kwargs)
