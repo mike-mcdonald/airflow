@@ -50,7 +50,8 @@ class MobilityProviderHook(BaseHook):
 
         if self.connection.extra_dejson is not None:
             if "headers" in self.connection.extra_dejson:
-                self.session.headers.update(self.connection.extra_dejson["headers"])
+                self.session.headers.update(
+                    self.connection.extra_dejson["headers"])
 
         self.session.headers.update({
             "Accept": f"application/vnd.mds.provider+json;version={self.version}"
@@ -78,9 +79,11 @@ class MobilityProviderHook(BaseHook):
                 res = None
                 retries = retries + 1
                 if retries > self.max_retries:
-                    raise AirflowException(f"Unable to retrieve response from {url} after {MAX_RETRIES}.  Aborting...")
+                    raise AirflowException(
+                        f"Unable to retrieve response from {url} after {self.max_retries}.  Aborting...")
 
-                self.log.warning(f"Error while retrieving {url}?{params}: {err}. Retrying in 10 seconds... (retry {retries}/{MAX_RETRIES})")
+                self.log.warning(
+                    f"Error while retrieving {url}?{params}: {err}. Retrying in 10 seconds... (retry {retries}/{MAX_RETRIES})")
                 time.sleep(10)
 
         self.log.debug(f"Received response from {url}")
