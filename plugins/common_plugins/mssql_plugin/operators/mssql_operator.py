@@ -1,8 +1,8 @@
 
-from airflow.hooks.mssql_hook import MsSqlHook
 from airflow.models import BaseOperator
 from airflow.utils.decorators import apply_defaults
 
+from common_plugins.mssql_plugin.hooks.mssql_hook import MsSqlHook
 
 class MsSqlOperator(BaseOperator):
     """
