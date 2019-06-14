@@ -8,7 +8,7 @@ class MobilityEventsToSqlStageOperator(MsSqlOperator):
 
     def __init__(self,
                  * args, **kwargs):
-        sql = """
+        sql = """\
         INSERT INTO etl.stage_state (
             provider_key
             ,vehicle_key
@@ -26,23 +26,23 @@ class MobilityEventsToSqlStageOperator(MsSqlOperator):
             ,associated_trip
         )
         SELECT
-        p.key
-        ,v.key
+        p.[key]
+        ,v.[key]
         ,propulsion_type
         ,state
         ,event
-        ,time
-        ,location
+        ,event_time
+        ,event_location
         ,battery_pct
-        ,LEAD(state) OVER(PARTITION BY device_id ORDER BY time)
-        ,LEAD(event) OVER(PARTITION BY device_id ORDER BY time)
-        ,LEAD(time) OVER(PARTITION BY device_id ORDER BY time)
-        ,LEAD(location) OVER(PARTITION BY device_id ORDER BY time)
-        ,LEAD(battery_pct) OVER(PARTITION BY device_id ORDER BY time)
-        ,COALESCE(associated_trip, LEAD(battery_pct) OVER(PARTITION BY device_id ORDER BY time))
+        ,LEAD(state) OVER(PARTITION BY e.device_id ORDER BY event_time)
+        ,LEAD(event) OVER(PARTITION BY e.device_id ORDER BY event_time)
+        ,LEAD(event_time) OVER(PARTITION BY e.device_id ORDER BY event_time)
+        ,LEAD(event_location) OVER(PARTITION BY e.device_id ORDER BY event_time)
+        ,LEAD(battery_pct) OVER(PARTITION BY e.device_id ORDER BY event_time)
+        ,COALESCE(associated_trip, LEAD(associated_trip) OVER(PARTITION BY e.device_id ORDER BY event_time))
         FROM etl.extract_event AS e
         LEFT JOIN dim.provider AS p ON p.provider_id = e.provider_id
         LEFT JOIN dim.vehicle AS v ON v.device_id = e.device_id
-        WHERE e.batch = {{ execution_date }}
+        WHERE e.batch = '{{ ts_nodash }}'
         """
         super().__init__(sql, *args, **kwargs)
