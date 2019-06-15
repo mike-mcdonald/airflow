@@ -17,11 +17,11 @@ class MobilityProviderSyncOperator(MsSqlOperator):
         SELECT DISTINCT
         provider_id
         ,provider_name
-        FROM {source_table}
+        FROM {source_table} AS e
         WHERE NOT EXISTS (
             SELECT 1
             FROM dim.provider AS p
-            WHERE p.provider_id = provider_id
+            WHERE p.provider_id = e.provider_id
         )
         """
         super().__init__(sql, *args, **kwargs)

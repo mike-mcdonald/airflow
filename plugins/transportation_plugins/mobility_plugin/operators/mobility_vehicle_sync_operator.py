@@ -19,12 +19,12 @@ class MobilityVehicleSyncOperator(MsSqlOperator):
         device_id
         ,vehicle_id
         ,vehicle_type
-        FROM {source_table}
+        FROM {source_table} AS e
         WHERE NOT EXISTS (
             SELECT 1
             FROM dim.vehicle AS v
-            WHERE v.device_id = device_id
-            AND v.vehicle_id = vehicle_id
+            WHERE v.device_id = e.device_id
+            AND v.vehicle_id = e.vehicle_id
         )
         """
         super().__init__(sql, *args, **kwargs)
