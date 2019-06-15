@@ -5,7 +5,7 @@ from airflow.hooks.dbapi_hook import DbApiHook
 
 class MsSqlHook(DbApiHook):
     """
-    Interact with Microsoft SQL Server.
+    Interact with Microsoft SQL Server.  Uses pyodbc to manage connections.
     """
 
     conn_name_attr = 'mssql_conn_id'
@@ -24,12 +24,12 @@ class MsSqlHook(DbApiHook):
         conn = pyodbc.connect(
             "DRIVER={0};SERVER={1};PORT={2};DATABASE={3};UID={4};PWD={5};Encrypt=yes"
             .format(
-                '{ODBC Driver 17 for SQL Server}'
-                , conn.host
-                , conn.port
-                , self.schema or conn.schema
-                , conn.login
-                , conn.password
+                '{ODBC Driver 17 for SQL Server}',
+                conn.host,
+                conn.port,
+                self.schema or conn.schema,
+                conn.login,
+                conn.password
             )
         )
 
