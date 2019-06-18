@@ -44,9 +44,18 @@ class SqlDataFrameHook(BaseHook):
                          dtype=dtype,
                          method=method)
 
-    def read_dataframe(self,
-                       table_name,
-                       schema=None):
+    def read_table_dataframe(self,
+                             table_name,
+                             schema=None):
         return pd.read_sql_table(table_name=table_name,
                                  con=self.connection,
                                  schema=schema)
+
+    def read_sql_dataframe(self,
+                           sql,
+                           table_name,
+                           schema=None):
+        return pd.read_sql(sql=sql,
+                           table_name=table_name,
+                           con=self.connection,
+                           schema=schema)
