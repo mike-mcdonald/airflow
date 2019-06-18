@@ -22,7 +22,7 @@ class MsSqlHook(DbApiHook):
         """
         conn = self.get_connection(self.mssql_conn_id)
         conn = pyodbc.connect(
-            "DRIVER={0};SERVER={1};PORT={2};DATABASE={3};UID={4};PWD={5};Encrypt=yes"
+            "DRIVER={0};SERVER={1};PORT={2};DATABASE={3};UID={4};PWD={5}"
             .format(
                 '{ODBC Driver 17 for SQL Server}',
                 conn.host,
