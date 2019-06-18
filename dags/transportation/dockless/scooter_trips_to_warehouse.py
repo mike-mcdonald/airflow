@@ -7,12 +7,10 @@ import airflow
 from airflow import DAG
 from airflow.operators.dummy_operator import DummyOperator
 
+from airflow.operators.mssql_plugin import MsSqlOperator
 from airflow.operators.mobility_plugin import (
     MobilityTripsToSqlExtractOperator,
     MobilityTripsToSqlWarehouseOperator,
-    MobilityEventsToSqlExtractOperator,
-    MobilityEventsToSqlStageOperator,
-    MobilityEventsToSqlWarehouseOperator,
     MobilityProviderSyncOperator,
     MobilityVehicleSyncOperator
 )
@@ -51,6 +49,19 @@ task2 = DummyOperator(
     task_id="provider_extract_complete",
     dag=dag
 )
+
+clean_extract_task = MsSqlOperator(
+    task_id="clean_extract_table",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    DELETE FROM etl.extract_trip WHERE batch = '{{ ts_nodash }}'
+    GO
+    DELETE FROM etl.extract_segment_hit WHERE batch = '{{ ts_nodash }}'
+    GO
+    """
+)
+clean_extract_task.set_downstream(task1)
 
 # Extract data from providers and stage in tables
 for provider in providers:
