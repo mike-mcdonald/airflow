@@ -78,7 +78,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             azure_mssql_conn_id=self.sql_conn_id
         )
         # Map to cells
-        cells = hook.read_dataframe(table_name="cell", schema="dim")
+        cells = hook.read_table_dataframe(table_name="cell", schema="dim")
         cells['geometry'] = cells.wkt.map(lambda g: loads(g))
         cells = gpd.GeoDataFrame(cells)
         cells.crs = {'init': 'epsg:4326'}
@@ -87,6 +87,11 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             trips.set_geometry('origin'), cells, how="left", op="intersects")['key']
         trips['destination'] = gpd.sjoin(
             trips.set_geometry('destination'), cells, how="left", op="intersects")['key']
+
+        trips = trips.rename(index=str, columns={
+            'trip_duration': 'duration',
+            'trip_distance': 'distance'
+        })
 
         del cells
 
@@ -97,13 +102,15 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         )
 
         # Break out segment hits
-        segments = hook.read_dataframe(table_name="segment", schema="dim")
+        segments = hook.read_table_dataframe(
+            table_name="segment", schema="dim")
         segments['geometry'] = segments.wkt.map(lambda g: loads(g))
         segments = gpd.GeoDataFrame(segments)
         segments.crs = {'init': 'epsg:4326'}
 
         def parse_route(trip):
             frame = trip.route
+            frame['batch'] = trip.batch
             frame['trip_id'] = trip.trip_id
             frame['provider_id'] = trip.provider_id
             frame['provider_name'] = trip.provider_name
@@ -116,10 +123,13 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         )
         route_df.crs = {'init': 'epsg:4326'}
 
+        route_df['date_key'] = route_df.timestamp.map(
+            lambda x: int(x.strftime('%Y%m%d')))
+
         # Swtich to mercator to measure in meters
         route_df = route_df.to_crs(epsg=3857)
 
-        route_df['segment'] = gpd.sjoin(
+        route_df['segment_key'] = gpd.sjoin(
             route_df, segments, how="left", op="intersects")['key']
 
         del segments
@@ -136,7 +146,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         del route_df['geometry']
 
         # drop destination
-        route_df.dropna()
+        route_df = route_df.dropna()
 
         route_df['dx'] = route_df.apply(
             lambda x: x.nx - x.x, axis=1)
@@ -183,7 +193,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
 
         hook.write_dataframe(
             route_df,
-            table_name='extract_segmenthit',
+            table_name='extract_segment_hit',
             schema='etl'
         )
 
