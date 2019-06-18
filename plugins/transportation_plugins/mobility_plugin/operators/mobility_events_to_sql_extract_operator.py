@@ -54,6 +54,7 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
 
         events['batch'] = context.get("ts_nodash")
         events['seen'] = datetime.now()
+
         # Get the GeoDataFrame configured correctly
         events['event_location'] = events.event_location.map(
             lambda x: x['geometry']['coordinates'])
@@ -65,17 +66,23 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
             lambda x: ','.join(sorted(x)))
         events['event_time'] = events.event_time.map(
             lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
+        events['event_time'] = events.event_time.map(
+            lambda x: datetime.replace(x, tzinfo=None))  # Remove timezone info after shifting
+        events['date_key'] = events.event_time.map(
+            lambda x: int(x.strftime('%Y%m%d')))
         events['event_hash'] = events.apply(
             lambda x: hashlib.md5(
-                f"{x.provider_id}{x.device_id}{x.event_time.strftime('%d%m%Y%H%M%S%f')}".encode(
+                f"{x.device_id}{x.event_type_reason}{x.event_time.strftime('%d%m%Y%H%M%S%f')}".encode(
                     'utf-8')
             ).hexdigest(), axis=1)
+
+        events = events.drop_duplicates(subset='event_hash')
 
         hook = AzureMsSqlDataFrameHook(
             azure_mssql_conn_id=self.sql_conn_id)
 
         # Aggregate the location to a cell
-        cells = hook.read_dataframe(table_name="cell", schema="dim")
+        cells = hook.read_table_dataframe(table_name="cell", schema="dim")
         cells['geometry'] = cells.wkt.map(lambda g: loads(g))
         cells = gpd.GeoDataFrame(cells)
         cells.crs = {'init': 'epsg:4326'}
