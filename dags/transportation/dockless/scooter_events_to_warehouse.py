@@ -9,13 +9,11 @@ from airflow.operators.dummy_operator import DummyOperator
 
 from airflow.operators.mssql_plugin import MsSqlOperator
 from airflow.operators.mobility_plugin import (
-    MobilityTripsToSqlExtractOperator,
-    MobilityTripsToSqlWarehouseOperator,
     MobilityEventsToSqlExtractOperator,
     MobilityEventsToSqlStageOperator,
-    MobilityEventsToSqlWarehouseOperator,
+    MobilityStatesToSqlWarehouseOperator,
     MobilityProviderSyncOperator,
-    MobilityVehicleSyncOperator
+    MobilityVehicleSyncOperator,
 )
 
 default_args = {
@@ -106,9 +104,28 @@ vehicle_sync_task = MobilityVehicleSyncOperator(
 vehicle_sync_task.set_upstream(task2)
 vehicle_sync_task.set_downstream(event_stage_task)
 
+clean_stage_task = MsSqlOperator(
+    task_id="clean_stage_table",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    DELETE FROM etl.stage_state WHERE batch = '{{ ts_nodash }}'
+    """
+)
+clean_stage_task.set_upstream(task2)
+clean_stage_task.set_downstream(event_stage_task)
+
 task3 = DummyOperator(
     task_id="provider_staging_complete",
     dag=dag
 )
 
 event_stage_task.set_downstream(task3)
+
+mobility_states_warehouse_task = MobilityStatesToSqlWarehouseOperator(
+    task_id=f"warehousing_states",
+    provide_context=True,
+    mssql_conn_id="azure_sql_server_full",
+    dag=dag
+)
+mobility_states_warehouse_task.set_upstream(task3)
