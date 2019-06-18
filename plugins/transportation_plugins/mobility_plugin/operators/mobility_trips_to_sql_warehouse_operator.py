@@ -9,35 +9,17 @@ class MobilityTripsToSqlWarehouseOperator(MsSqlOperator):
     def __init__(self,
                  *args, **kwargs):
         sql = """
-        MERGE fact.trip AS target  
-        USING (
-            SELECT
-            p.key AS provider_key 
-            ,device_id
-            ,vehicle_id
-            ,vehicle_type
-            ,pt.key AS propulsion_type_key
-            ,id
-            ,duration
-            ,distance
-            ,accuracy
-            ,start_time
-            ,end_time
-            ,parking_verification_url
-            ,standard_cost
-            ,actual_cost
-            ,origin
-            ,destination
-            FROM etl.extract_trip AS et
-            LEFT JOIN dim.provider as p ON p.guid = et.provider_id
-            LEFT JOIN dim.propulsion_type AS pt ON pt.name = et.plopusion_type
-        ) AS source (
+        UPDATE fact.trip
+        SET last_seen = source.seen
+        FROM etl.extract_trip AS source 
+        WHERE source.trip_id = fact.state.trip_id
+        AND source.batch = '{{ ts_nodash }}'
+
+        INSERT (
             provider_key
-            ,device_id
-            ,vehicle_id
-            ,vehicle_type
-            ,propulsion_type_key
-            ,id
+            ,vehicle_key
+            ,propulsion_type
+            ,trip_id
             ,duration
             ,distance
             ,accuracy
@@ -48,51 +30,33 @@ class MobilityTripsToSqlWarehouseOperator(MsSqlOperator):
             ,actual_cost
             ,origin
             ,destination
-            ,seen
+            ,first_seen
+            ,last_seen
         )  
-        ON (
-            target.id = source.id
-        )  
-        WHEN MATCHED THEN   
-            UPDATE SET last_seen = source.seen  
-        WHEN NOT MATCHED THEN  
-            INSERT (
-                provider_key
-                ,device_id
-                ,vehicle_id
-                ,vehicle_type
-                ,propulsion_type_key
-                ,id
-                ,duration
-                ,distance
-                ,accuracy
-                ,start_time
-                ,end_time
-                ,parking_verification_url
-                ,standard_cost
-                ,actual_cost
-                ,origin
-                ,destination
-                ,first_seen
-            )  
-            VALUES (
-                 source.provider_key
-                ,source.device_id
-                ,source.vehicle_id
-                ,source.vehicle_type
-                ,source.propulsion_type_key
-                ,source.id
-                ,source.duration
-                ,source.distance
-                ,source.accuracy
-                ,source.start_time
-                ,source.end_time
-                ,source.parking_verification_url
-                ,source.standard_cost
-                ,source.actual_cost
-                ,source.origin
-                ,source.destination
-                ,source.seen
-            )
+        SELECT
+        source.provider_key
+        ,source.vehicle_key
+        ,source.propulsion_type
+        ,source.trip_id
+        ,source.duration
+        ,source.distance
+        ,source.accuracy
+        ,source.start_time
+        ,source.end_time
+        ,source.parking_verification_url
+        ,source.standard_cost
+        ,source.actual_cost
+        ,source.origin
+        ,source.destination
+        ,source.seen
+        ,source.seen
+        FROM etl.stage_trip AS source 
+        WHERE source.batch = '{{ ts_nodash }}'
+        AND NOT EXISTS
+        (
+            SELECT 1
+            FROM fact.trip AS target
+            WHERE target.trip_id = source.trip_id
+        )
         """
         super().__init__(sql, *args, **kwargs)
