@@ -93,7 +93,7 @@ trip_load_task = MobilityTripsToSqlWarehouseOperator(
 provider_sync_task = MobilityProviderSyncOperator(
     task_id="provider_sync",
     source_table="etl.extract_trip",
-    mssql_conn_id="azure_sql_server_default",
+    mssql_conn_id="azure_sql_server_full",
     dag=dag
 )
 provider_sync_task.set_upstream(task2)
@@ -102,7 +102,7 @@ provider_sync_task.set_downstream(trip_load_task)
 vehicle_sync_task = MobilityVehicleSyncOperator(
     task_id="vehicle_sync",
     source_table="etl.extract_trip",
-    mssql_conn_id="azure_sql_server_default",
+    mssql_conn_id="azure_sql_server_full",
     dag=dag
 )
 vehicle_sync_task.set_upstream(task2)
