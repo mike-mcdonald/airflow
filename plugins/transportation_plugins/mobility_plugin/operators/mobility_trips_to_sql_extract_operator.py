@@ -64,50 +64,10 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         trips['end_time'] = trips.end_time.map(
             lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
 
+        self.log.debug("Converting route to a GeoDataFrame...")
         # Convert the route to a DataFrame now to make mapping easier
         trips['route'] = trips.route.map(
             lambda r: gpd.GeoDataFrame.from_features(r['features']))
-
-        def get_origin(route):
-            return route.loc[route['timestamp'].idxmin()].geometry
-
-        def get_destination(route):
-            return route.loc[route['timestamp'].idxmax()].geometry
-
-        # Pull out the origin and destination
-        trips['origin'] = trips.route.map(get_origin)
-        trips.origin.crs = {'init': 'epsg:4326'}
-        trips['destination'] = trips.route.map(get_destination)
-        trips.destination.crs = {'init': 'epsg:4326'}
-
-        hook = AzureMsSqlDataFrameHook(
-            azure_mssql_conn_id=self.sql_conn_id
-        )
-        # Map to cells
-        cells = hook.read_table_dataframe(table_name="cell", schema="dim")
-        cells['geometry'] = cells.wkt.map(lambda g: loads(g))
-        cells = gpd.GeoDataFrame(cells)
-        cells.crs = {'init': 'epsg:4326'}
-
-        trips['origin'] = gpd.sjoin(
-            trips.set_geometry('origin'), cells, how="left", op="within")['key']
-        trips['destination'] = gpd.sjoin(
-            trips.set_geometry('destination'), cells, how="left", op="within")['key']
-
-        del cells
-
-        hook.write_dataframe(
-            trips,
-            table_name='extract_trip',
-            schema='etl'
-        )
-
-        # Break out segment hits
-        segments = hook.read_table_dataframe(
-            table_name="segment", schema="dim")
-        segments['geometry'] = segments.wkt.map(lambda g: loads(g))
-        segments = gpd.GeoDataFrame(segments)
-        segments.crs = {'init': 'epsg:4326'}
 
         def parse_route(trip):
             frame = trip.route
@@ -119,19 +79,79 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             frame['propulsion_type'] = ','.join(trip.propulsion_type)
             return frame
 
-        route_df = trips.apply(parse_route, axis=1).sort_values(
+        trips["route"] = trips.apply(parse_route, axis=1).sort_values(
+            by=['trip_id', 'timestamp'], ascending=True
+        ) # convert to GeoDataFrame
+
+        self.log.debug("Retrieving origin and destination...")
+
+        def get_origin(route):
+            return route.loc[route['timestamp'].idxmin()].geometry
+
+        def get_destination(route):
+            return route.loc[route['timestamp'].idxmax()].geometry
+
+        # Pull out the origin and destination
+        trips['origin'] = trips.route.map(get_origin)
+        trips['destination'] = trips.route.map(get_destination)
+
+        self.log.debug("Extracting route dataframe...")
+
+        route_df = pd.concat(trips_df.route.values).sort_values(
             by=['trip_id', 'timestamp'], ascending=True
         )
         route_df.crs = {'init': 'epsg:4326'}
 
+        del trips["route"]
+
+        hook = AzureMsSqlDataFrameHook(
+            azure_mssql_conn_id=self.sql_conn_id
+        )
+
+        self.log.debug("Reading cells from data warehouse...")
+
+        # Map to cells
+        cells = hook.read_table_dataframe(table_name="cell", schema="dim")
+        cells['geometry'] = cells.wkt.map(loads)
+        cells = gpd.GeoDataFrame(cells)
+        cells.crs = {'init': 'epsg:4326'}
+
+        self.log.debug("Mapping trip O/D to cells...")
+
+        trips['origin'] = gpd.sjoin(
+            trips.set_geometry('origin'), cells, how="left", op="within")['key']
+        trips['destination'] = gpd.sjoin(
+            trips.set_geometry('destination'), cells, how="left", op="within")['key']
+
+        self.log.debug("Writing trips extract to data warehouse...")
+
+        hook.write_dataframe(
+            trips,
+            table_name='extract_trip',
+            schema='etl'
+        )
+
+        del cells
+
+        self.log.debug("Reading segments from data warehouse...")
+
+        # Break out segment hits
+        segments = hook.read_table_dataframe(
+            table_name="segment", schema="dim")
+        segments['geometry'] = segments.wkt.map(lambda g: loads(g))
+        segments = gpd.GeoDataFrame(segments)
+        segments.crs = {'init': 'epsg:4326'}
+
+        self.log.debug("Mapping routes to segments...")
+
         route_df['date_key'] = route_df.timestamp.map(
             lambda x: int(x.strftime('%Y%m%d')))
 
-        # Swtich to mercator to measure in meters
-        route_df = route_df.to_crs(epsg=3857)
-
         route_df['segment_key'] = gpd.sjoin(
             route_df, segments, how="left", op="intersects")['key']
+
+        # Swtich to mercator to measure in meters
+        route_df = route_df.to_crs(epsg=3857)
 
         del segments
         del trips
