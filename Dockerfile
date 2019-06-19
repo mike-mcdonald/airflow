@@ -39,11 +39,17 @@ RUN set -ex \
     curl \
     default-libmysqlclient-dev \
     freetds-bin \
+    gdal-bin \
     git \
     locales \
     libgdal-dev \
+    libgeos-dev \
+    libproj-dev \
     libspatialindex-dev \
     netcat \
+    proj-bin \
+    proj-data \
+    python-gdal \
     rsync \
     unixodbc \
     unixodbc-dev \
