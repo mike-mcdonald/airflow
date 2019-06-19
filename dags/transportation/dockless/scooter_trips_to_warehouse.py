@@ -78,17 +78,18 @@ for provider in providers:
     trip_extract_task.set_upstream(task1)
     trip_extract_task.set_downstream(task2)
 
-task3 = DummyOperator(
-    task_id="provider_staging_complete",
-    dag=dag
+
+clean_stage_task = MsSqlOperator(
+    task_id="clean_stage_table",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    DELETE FROM etl.stage_trip WHERE batch = '{{ ts_nodash }}'
+    DELETE FROM etl.stage_segment_hit WHERE batch = '{{ ts_nodash }}'
+    """
 )
 
-# Run SQL scripts to load staged data to warehouse
-trip_load_task = MobilityTripsToSqlWarehouseOperator(
-    task_id=f"staging_trips",
-    provide_context=True,
-    sql_conn_id="azure_sql_server_default",
-    dag=dag)
+task2 >> clean_stage_task
 
 provider_sync_task = MobilityProviderSyncOperator(
     task_id="provider_sync",
@@ -96,8 +97,8 @@ provider_sync_task = MobilityProviderSyncOperator(
     mssql_conn_id="azure_sql_server_full",
     dag=dag
 )
-provider_sync_task.set_upstream(task2)
-provider_sync_task.set_downstream(trip_load_task)
+
+task2 >> provider_sync_task
 
 vehicle_sync_task = MobilityVehicleSyncOperator(
     task_id="vehicle_sync",
@@ -105,8 +106,8 @@ vehicle_sync_task = MobilityVehicleSyncOperator(
     mssql_conn_id="azure_sql_server_full",
     dag=dag
 )
-vehicle_sync_task.set_upstream(task2)
-vehicle_sync_task.set_downstream(trip_load_task)
+
+task2 >> vehicle_sync_task
 
 
 trip_load_task.set_downstream(task3)
