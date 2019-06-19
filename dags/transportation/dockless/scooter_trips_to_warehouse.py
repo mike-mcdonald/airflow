@@ -109,5 +109,229 @@ vehicle_sync_task = MobilityVehicleSyncOperator(
 
 task2 >> vehicle_sync_task
 
+trip_stage_task = MsSqlOperator(
+    task_id="stage_trips",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    INSERT INTO [etl].[stage_trip] (
+        [provider_key]
+        ,[vehicle_key]
+        ,[propulsion_type]
+        ,[trip_id]
+        ,[origin]
+        ,[destination]
+        ,[start_time]
+        ,[start_date_key]
+        ,[end_time]
+        ,[end_date_key]
+        ,[distance]
+        ,[duration]
+        ,[accuracy]
+        ,[standard_cost]
+        ,[actual_cost]
+        ,[parking_verification_url]
+        ,[seen]
+        ,[batch]
+    )
+    SELECT
+    p.[key]
+    ,v.[key]
+    ,[propulsion_type]
+    ,[trip_id]
+    ,[origin]
+    ,[destination]
+    ,[start_time]
+    ,[start_date_key]
+    ,[end_time]
+    ,[end_date_key]
+    ,[distance]
+    ,[duration]
+    ,[accuracy]
+    ,[standard_cost]
+    ,[actual_cost]
+    ,[parking_verification_url]
+    ,[seen]
+    ,[batch]
+    FROM etl.extract_trip AS source
+    LEFT JOIN dim.provider AS p ON p.provider_id = source.provider_id
+    LEFT JOIN dim.vehicle as v ON (
+        v.vehicle_id = source.vehicle_id
+        AND v.device_id = source.device_id
+    )
+    WHERE batch = '{{ ts_nodash }}'
+    """
+)
 
-trip_load_task.set_downstream(task3)
+clean_stage_task >> trip_stage_task
+provider_sync_task >> trip_stage_task
+vehicle_sync_task >> trip_stage_task
+
+trip_warehouse_update_task = MsSqlOperator(
+    task_id="warehouse_update_trip",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    UPDATE fact.trip
+    SET last_seen = source.seen
+    FROM etl.stage_trip AS source
+    WHERE source.trip_id = fact.trip.trip_id
+    AND source.batch = '{{ ts_nodash }}'
+    """
+)
+
+trip_stage_task >> trip_warehouse_update_task
+
+trip_warehouse_insert_task = MsSqlOperator(
+    task_id="warehouse_insert_trip",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    INSERT INTO [fact].[trip] (
+        [trip_id]
+        ,[provider_key]
+        ,[vehicle_key]
+        ,[propulsion_type]
+        ,[origin]
+        ,[destination]
+        ,[start_time]
+        ,[start_date_key]
+        ,[end_time]
+        ,[end_date_key]
+        ,[distance]
+        ,[duration]
+        ,[accuracy]
+        ,[standard_cost]
+        ,[actual_cost]
+        ,[parking_verification_url]
+    )
+    SELECT
+    [trip_id]
+    ,[provider_key]
+    ,[vehicle_key]
+    ,[propulsion_type]
+    ,[origin]
+    ,[destination]
+    ,[start_time]
+    ,[start_date_key]
+    ,[end_time]
+    ,[end_date_key]
+    ,[distance]
+    ,[duration]
+    ,[accuracy]
+    ,[standard_cost]
+    ,[actual_cost]
+    ,[parking_verification_url]
+    FROM [etl].[stage_trip] AS source
+    WHERE batch = '{{ ts_nodash }}'
+    AND NOT EXISTS (
+        SELECT 1
+        FROM fact.trip AS AS target
+        WHERE target.trip_id = source.trip_id
+    )
+    """
+)
+
+trip_stage_task >> trip_warehouse_insert_task
+
+route_stage_task = MsSqlOperator(
+    task_id="stage_route",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    INSERT INTO etl.stage_segment_hit (
+        provider_key
+        ,[date_key]
+        ,[segment_key]
+        ,[hash]
+        ,[datetime]
+        ,[vehicle_type]
+        ,[propulsion_type]
+        ,[heading]
+        ,[speed]
+        ,[seen]
+        ,[batch]
+    )
+    SELECT p.[key]
+        ,[date_key]
+        ,[segment_key]
+        ,[hash]
+        ,[datetime]
+        ,[vehicle_type]
+        ,[propulsion_type]
+        ,[heading]
+        ,[speed]
+        ,[seen]
+        ,[batch]
+    FROM [etl].[extract_segment_hit] AS e
+    LEFT JOIN dim.provider AS p ON p.[provider_id] = e.[provider_id]
+    LEFT JOIN dim.vehicle as v ON (
+        v.vehicle_id = source.vehicle_id
+        AND v.device_id = source.device_id
+    )
+    WHERE batch = '{{ ts_nodash }}'
+    """
+)
+clean_stage_task >> route_stage_task
+provider_sync_task >> route_stage_task
+vehicle_sync_task >> route_stage_task
+
+
+route_warehouse_update_task = MsSqlOperator(
+    task_id="warehouse_update_route",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    UPDATE fact.segment_hit
+    SET last_seen = source.seen
+    FROM etl.stage_segment_hit AS source
+    WHERE source.hash = fact.segment_hit.hash
+    AND source.batch = '{{ ts_nodash }}'
+    """
+)
+
+route_stage_task >> route_warehouse_update_task
+
+route_warehouse_insert_task = MsSqlOperator(
+    task_id="warehouse_insert_route",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    INSERT INTO fact.segment_hit
+    (
+        provider_key
+        ,[date_key]
+        ,[segment_key]
+        ,[hash]
+        ,[datetime]
+        ,[vehicle_type]
+        ,[propulsion_type]
+        ,[heading]
+        ,[speed]
+        ,[first_seen]
+        ,[last_seen]
+    )
+    SELECT p.[key]
+        ,[date_key]
+        ,[segment_key]
+        ,[hash]
+        ,[datetime]
+        ,[vehicle_type]
+        ,[propulsion_type]
+        ,[heading]
+        ,[speed]
+        ,[seen]
+        ,[seen]
+    FROM [etl].[extract_segment_hit] AS e
+    LEFT JOIN dim.provider AS p ON p.[provider_id] = e.[provider_id]
+    WHERE batch = '{{ ts_nodash }}'
+    AND NOT EXISTS (
+        SELECT 1
+        FROM fact.segment_hit AS AS target
+        WHERE target.hash = source.hash
+    )
+    """
+)
+
+route_stage_task >> route_warehouse_insert_task
+
