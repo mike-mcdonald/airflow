@@ -210,14 +210,9 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         del route_df['dt']
 
         route_df = route_df.drop_duplicates(
-            subset=['segment', 'trip_id'], keep='last')
+            subset=['segment_key', 'trip_id'], keep='last')
 
-        # Generate a hash to aid in merge operations
-        route_df['hash'] = trips.apply(lambda x: hashlib.md5((
-            x.trip_id + x.provider_id + x.timestamp.strftime('%d%m%Y%H%M%S%f')
-        ).encode('utf-8')).hexdigest())
-
-        del route_df['trip_id']
+        del route_df["trip_id"]
 
         hook.write_dataframe(
             route_df,
