@@ -74,9 +74,9 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             frame['batch'] = trip.batch
             frame['trip_id'] = trip.trip_id
             frame['provider_id'] = trip.provider_id
-            frame['provider_name'] = trip.provider_name
             frame['vehicle_type'] = trip.vehicle_type
-            frame['propulsion_type'] = ','.join(trip.propulsion_type)
+            frame['propulsion_type'] = trip.propulsion_type
+            frame['seen'] = trip.seen
             return frame
 
         trips["route"] = trips.apply(parse_route, axis=1)
