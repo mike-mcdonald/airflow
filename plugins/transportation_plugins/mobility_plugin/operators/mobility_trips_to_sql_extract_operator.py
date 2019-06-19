@@ -99,6 +99,13 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             by=['trip_id', 'timestamp'], ascending=True
         ))
         route_df.crs = {'init': 'epsg:4326'}
+        route_df['datetime'] = route_df.timestamp.map(lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
+        route_df['date_key'] = route_df.datetime.map(
+            lambda x: int(x.strftime('%Y%m%d')))
+        # Generate a hash to aid in merge operations
+        route_df['hash'] = route_df.apply(lambda x: hashlib.md5((
+            x.trip_id + x.provider_id + x.datetime.strftime('%d%m%Y%H%M%S%f')
+        ).encode('utf-8')).hexdigest(), axis=1)
 
         del trips["route"] # delete before passing to dataframe write, segmentation fault otherwise
 
