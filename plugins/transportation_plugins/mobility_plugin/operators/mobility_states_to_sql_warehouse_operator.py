@@ -12,13 +12,14 @@ class MobilityStatesToSqlWarehouseOperator(MsSqlOperator):
         UPDATE fact.state
         SET last_seen = source.seen,
         end_hash = source.end_hash,
+        end_date_key = source.end_date_key,
         end_state = source.end_state,
         end_event = source.end_event,
         end_time = source.end_time,
         end_location = source.end_location,
         end_battery_pct = source.end_battery_pct,
         duration = source.duration
-        FROM etl.stage_state AS source 
+        FROM etl.stage_state AS source
         WHERE source.start_hash = fact.state.start_hash
         AND source.batch = '{{ ts_nodash }}'
 
@@ -67,7 +68,7 @@ class MobilityStatesToSqlWarehouseOperator(MsSqlOperator):
         ,source.duration
         ,source.seen
         ,source.seen
-        FROM etl.stage_state AS source 
+        FROM etl.stage_state AS source
         WHERE source.batch = '{{ ts_nodash }}'
         AND NOT EXISTS
         (
