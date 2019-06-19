@@ -128,6 +128,8 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         trips['destination'] = gpd.sjoin(
             trips.set_geometry('destination'), cells, how="left", op="within")['key']
 
+        del cells
+
         self.log.debug("Writing trips extract to data warehouse...")
 
         hook.write_dataframe(
@@ -135,8 +137,6 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             table_name='extract_trip',
             schema='etl'
         )
-
-        del cells
 
         self.log.debug("Reading segments from data warehouse...")
 
@@ -148,9 +148,6 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         segments.crs = {'init': 'epsg:4326'}
 
         self.log.debug("Mapping routes to segments...")
-
-        route_df['date_key'] = route_df.timestamp.map(
-            lambda x: int(x.strftime('%Y%m%d')))
 
         route_df['segment_key'] = gpd.sjoin(
             route_df, segments, how="left", op="intersects")['key']
