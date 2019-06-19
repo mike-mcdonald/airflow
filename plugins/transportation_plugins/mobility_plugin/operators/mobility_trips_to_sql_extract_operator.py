@@ -79,9 +79,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             frame['propulsion_type'] = ','.join(trip.propulsion_type)
             return frame
 
-        trips["route"] = trips.apply(parse_route, axis=1).sort_values(
-            by=['trip_id', 'timestamp'], ascending=True
-        ) # convert to GeoDataFrame
+        trips["route"] = trips.apply(parse_route, axis=1)
 
         self.log.debug("Retrieving origin and destination...")
 
@@ -97,12 +95,12 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
 
         self.log.debug("Extracting route dataframe...")
 
-        route_df = pd.concat(trips_df.route.values).sort_values(
+        route_df = gpd.GeoDataFrame(pd.concat(trips.route.values, sort=False).sort_values(
             by=['trip_id', 'timestamp'], ascending=True
-        )
+        ))
         route_df.crs = {'init': 'epsg:4326'}
 
-        del trips["route"]
+        del trips["route"] # delete before passing to dataframe write, segmentation fault otherwise
 
         hook = AzureMsSqlDataFrameHook(
             azure_mssql_conn_id=self.sql_conn_id
