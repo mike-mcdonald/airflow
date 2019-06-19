@@ -61,8 +61,12 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             lambda x: ','.join(sorted(x)))
         trips['start_time'] = trips.start_time.map(
             lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
+        trips['start_date_key'] = trips.start_time.map(
+            lambda x: int(x.strftime('%Y%m%d')))
         trips['end_time'] = trips.end_time.map(
             lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
+        trips['end_date_key'] = trips.end_time.map(
+            lambda x: int(x.strftime('%Y%m%d')))
 
         self.log.debug("Converting route to a GeoDataFrame...")
         # Convert the route to a DataFrame now to make mapping easier
