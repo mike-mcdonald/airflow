@@ -88,7 +88,7 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
         cells.crs = {'init': 'epsg:4326'}
 
         events['event_location'] = gpd.sjoin(
-            events, cells, how="left", op="intersects")['key']
+            events, cells, how="left", op="within")['key']
 
         del cells
 

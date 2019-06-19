@@ -43,11 +43,17 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         # Get trips as a GeoDataFrame
         trips = gpd.GeoDataFrame(hook.get_trips(
             min_end_time=start_time, max_end_time=end_time))
+        trips.crs = {'init': 'epsg:4326'}
 
         if len(trips) <= 0:
             self.log.warning(
                 f"Received no trips for time period {start_time} to {end_time}")
             return
+
+        trips = trips.rename(index=str, columns={
+            'trip_duration': 'duration',
+            'trip_distance': 'distance'
+        })
 
         trips['batch'] = context.get("ts_nodash")
         trips['seen'] = datetime.now()
@@ -84,14 +90,9 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         cells.crs = {'init': 'epsg:4326'}
 
         trips['origin'] = gpd.sjoin(
-            trips.set_geometry('origin'), cells, how="left", op="intersects")['key']
+            trips.set_geometry('origin'), cells, how="left", op="within")['key']
         trips['destination'] = gpd.sjoin(
-            trips.set_geometry('destination'), cells, how="left", op="intersects")['key']
-
-        trips = trips.rename(index=str, columns={
-            'trip_duration': 'duration',
-            'trip_distance': 'distance'
-        })
+            trips.set_geometry('destination'), cells, how="left", op="within")['key']
 
         del cells
 
