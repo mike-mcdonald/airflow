@@ -179,12 +179,14 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         route_df['dy'] = route_df.apply(
             lambda x: x.ny - x.y, axis=1)
         route_df['dt'] = route_df.apply(
-            lambda x: (x.next_timestamp - x.timestamp).seconds, axis=1)
+            lambda x: (x.next_timestamp - x.timestamp) / 1000, axis=1)
 
         del route_df['x']
         del route_df['y']
         del route_df['nx']
         del route_df['ny']
+        del route_df["timestamp"]
+        del route_df["next_timestamp"]
 
         def find_heading(hit):
             deg = atan2(hit.dx, hit.dy) / pi * 180
