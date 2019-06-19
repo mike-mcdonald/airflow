@@ -56,9 +56,7 @@ clean_extract_task = MsSqlOperator(
     mssql_conn_id="azure_sql_server_full",
     sql="""
     DELETE FROM etl.extract_trip WHERE batch = '{{ ts_nodash }}'
-    GO
     DELETE FROM etl.extract_segment_hit WHERE batch = '{{ ts_nodash }}'
-    GO
     """
 )
 clean_extract_task.set_downstream(task1)
