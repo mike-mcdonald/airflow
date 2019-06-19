@@ -22,9 +22,10 @@ default_args = {
     "email": ["pbotsqldbas@portlandoregon.gov"],
     "email_on_failure": True,
     "email_on_retry": False,
-    "retries": 1,
+    "retries": 9,
     "retry_delay": timedelta(minutes=2),
-    "concurrency": 1
+    "concurrency": 1,
+    "max_active_runs": 1,
     # "queue": "bash_queue",
     # "pool": "backfill",
     # "priority_weight": 10,
