@@ -93,9 +93,11 @@ RUN set -ex \
 COPY ./requirements.txt /requirements.txt
 RUN pip install -r /requirements.txt
 
+# Install custom plugins as package
 COPY plugins /usr/local/plugins
 RUN pip install -e /usr/local/plugins
 
+COPY ./dags /usr/local/airflow/dags
 COPY config/airflow.cfg ${AIRFLOW_HOME}/airflow.cfg
 
 RUN chown -R airflow: ${AIRFLOW_HOME}
