@@ -99,11 +99,14 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
 
         self.log.debug("Extracting route dataframe...")
 
-        route_df = gpd.GeoDataFrame(pd.concat(trips.route.values, sort=False).sort_values(
+        route_df = gpd.GeoDataFrame(
+            pd.concat(trips.route.values, sort=False).sort_values(
             by=['trip_id', 'timestamp'], ascending=True
-        ))
+            )
+        ).reset_index(drop=True)
         route_df.crs = {'init': 'epsg:4326'}
-        route_df['datetime'] = route_df.timestamp.map(lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
+        route_df['datetime'] = route_df.timestamp.map(
+            lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
         route_df['date_key'] = route_df.datetime.map(
             lambda x: int(x.strftime('%Y%m%d')))
         # Generate a hash to aid in merge operations
@@ -111,7 +114,8 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             x.trip_id + x.provider_id + x.datetime.strftime('%d%m%Y%H%M%S%f')
         ).encode('utf-8')).hexdigest(), axis=1)
 
-        del trips["route"] # delete before passing to dataframe write, segmentation fault otherwise
+        # delete before passing to dataframe write, segmentation fault otherwise
+        del trips["route"]
 
         hook = AzureMsSqlDataFrameHook(
             azure_mssql_conn_id=self.sql_conn_id
@@ -154,8 +158,10 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         self.log.debug("Mapping routes to segments...")
 
         route_df['segment_key'] = gpd.sjoin(
-            route_df, segments, how="left", op="intersects")['key']
+            route_df, segments, how="left", op="within"
+        )[['hash', 'key']].drop_duplicates(subset='hash')['key']
 
+        self.log.debug("Measuring route characteristics...")
         # Swtich to mercator to measure in meters
         route_df = route_df.to_crs(epsg=3857)
 
@@ -209,6 +215,8 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         del route_df['dx']
         del route_df['dy']
         del route_df['dt']
+
+        self.log.debug("Writing route extract...")
 
         route_df = route_df.drop_duplicates(
             subset=['segment_key', 'trip_id'], keep='last')
