@@ -155,7 +155,7 @@ trip_stage_task = MsSqlOperator(
     ,[batch]
     FROM etl.extract_trip AS source
     LEFT JOIN dim.provider AS p ON p.provider_id = source.provider_id
-    LEFT JOIN dim.vehicle as v ON (
+    LEFT JOIN dim.vehicle AS v ON (
         v.vehicle_id = source.vehicle_id
         AND v.device_id = source.device_id
     )
@@ -204,6 +204,8 @@ trip_warehouse_insert_task = MsSqlOperator(
         ,[standard_cost]
         ,[actual_cost]
         ,[parking_verification_url]
+        ,[first_seen]
+        ,[last_seen]
     )
     SELECT
     [trip_id]
@@ -222,11 +224,13 @@ trip_warehouse_insert_task = MsSqlOperator(
     ,[standard_cost]
     ,[actual_cost]
     ,[parking_verification_url]
+    ,[seen]
+    ,[seen]
     FROM [etl].[stage_trip] AS source
     WHERE batch = '{{ ts_nodash }}'
     AND NOT EXISTS (
         SELECT 1
-        FROM fact.trip AS AS target
+        FROM fact.trip AS target
         WHERE target.trip_id = source.trip_id
     )
     """
@@ -265,10 +269,6 @@ route_stage_task = MsSqlOperator(
         ,[batch]
     FROM [etl].[extract_segment_hit] AS e
     LEFT JOIN dim.provider AS p ON p.[provider_id] = e.[provider_id]
-    LEFT JOIN dim.vehicle as v ON (
-        v.vehicle_id = source.vehicle_id
-        AND v.device_id = source.device_id
-    )
     WHERE batch = '{{ ts_nodash }}'
     """
 )
@@ -311,7 +311,7 @@ route_warehouse_insert_task = MsSqlOperator(
         ,[first_seen]
         ,[last_seen]
     )
-    SELECT p.[key]
+    SELECT [provider_key]
         ,[date_key]
         ,[segment_key]
         ,[hash]
@@ -322,12 +322,11 @@ route_warehouse_insert_task = MsSqlOperator(
         ,[speed]
         ,[seen]
         ,[seen]
-    FROM [etl].[extract_segment_hit] AS e
-    LEFT JOIN dim.provider AS p ON p.[provider_id] = e.[provider_id]
+    FROM [etl].[stage_segment_hit] AS source
     WHERE batch = '{{ ts_nodash }}'
     AND NOT EXISTS (
         SELECT 1
-        FROM fact.segment_hit AS AS target
+        FROM fact.segment_hit AS target
         WHERE target.hash = source.hash
     )
     """
