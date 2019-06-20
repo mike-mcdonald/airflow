@@ -335,3 +335,19 @@ route_warehouse_insert_task = MsSqlOperator(
 
 route_stage_task >> route_warehouse_insert_task
 
+final_cleanup_task = MsSqlOperator(
+    task_id="final_clean",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    DELETE FROM etl.extract_trip WHERE batch = '{{ ts_nodash }}'
+    DELETE FROM etl.stage_trip WHERE batch = '{{ ts_nodash }}'
+    DELETE FROM etl.extract_segment_hit WHERE batch = '{{ ts_nodash }}'
+    DELETE FROM etl.stage_segment_hit WHERE batch = '{{ ts_nodash }}'
+    """
+)
+
+route_warehouse_insert_task >> final_cleanup_task
+route_warehouse_update_task >> final_cleanup_task
+trip_warehouse_insert_task >> final_cleanup_task
+trip_warehouse_update_task >> final_cleanup_task

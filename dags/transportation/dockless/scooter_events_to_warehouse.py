@@ -129,3 +129,15 @@ mobility_states_warehouse_task = MobilityStatesToSqlWarehouseOperator(
     dag=dag
 )
 mobility_states_warehouse_task.set_upstream(task3)
+
+final_cleanup_task = MsSqlOperator(
+    task_id="final_clean",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    DELETE FROM etl.extract_event WHERE batch = '{{ ts_nodash }}'
+    DELETE FROM etl.stage_state WHERE batch = '{{ ts_nodash }}'
+    """
+)
+
+mobility_states_warehouse_task >> final_cleanup_task
