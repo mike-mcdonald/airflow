@@ -43,7 +43,7 @@ class MobilityProviderHook(BaseHook):
 
                 payload = self.connection.extra_dejson["auth_payload"]
                 res = requests.post(self.token_connection.host,
-                                    data=payload, verify=False)
+                                    data=payload)
                 self.log.debug(
                     f"Received token endpoint response from: {mobility_provider_token_conn_id}, response: {res.json()} ")
                 token = res.json()[token_key]
@@ -79,7 +79,7 @@ class MobilityProviderHook(BaseHook):
 
         while res is None:
             try:
-                res = self.session.get(url, params=params, verify=False)
+                res = self.session.get(url, params=params)
                 res.raise_for_status()
             except Exception as err:
                 res = None
