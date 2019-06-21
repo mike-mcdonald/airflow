@@ -36,3 +36,6 @@ __pycache__
 
 ### OS ###
 .DS_Store
+
+### Private ###
+/.certs/
