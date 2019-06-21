@@ -10,7 +10,6 @@ from airflow.operators.dummy_operator import DummyOperator
 from airflow.operators.mssql_plugin import MsSqlOperator
 from airflow.operators.mobility_plugin import (
     MobilityTripsToSqlExtractOperator,
-    MobilityTripsToSqlWarehouseOperator,
     MobilityProviderSyncOperator,
     MobilityVehicleSyncOperator
 )
@@ -39,7 +38,7 @@ dag = DAG(
     schedule_interval="@hourly",
 )
 
-providers = ["lime", "spin", "bolt"]
+providers = ["lime", "spin", "bolt", "shared", "razor"]
 
 task1 = DummyOperator(
     task_id="provider_extract_start",
