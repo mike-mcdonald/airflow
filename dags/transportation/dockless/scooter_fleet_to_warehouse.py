@@ -48,7 +48,7 @@ fleet_extract_task = MobilityFleetToSqlExtractOperator(
 fleet_stage_task = MsSqlOperator(
     task_id="stage_fleet_extract",
     dag=dag,
-    mssql_conn_id="azure_sq_server_full",
+    mssql_conn_id="azure_sql_server_full",
     sql="""
     INSERT INTO etl.stage_fleet_count (
         date_key
@@ -58,6 +58,7 @@ fleet_stage_task = MsSqlOperator(
         ,reserved
         ,unavailable
         ,removed
+        ,seen
         ,batch
     )
     SELECT
@@ -68,43 +69,44 @@ fleet_stage_task = MsSqlOperator(
     ,r.count
     ,u.count
     ,x.count
+    ,seen
     ,batch
     FROM etl.extract_fleet_count AS e
     OUTER APPLY (
         SELECT COUNT(start_hash) AS count
         FROM fact.state AS f
-        WHERE f.date_key = e.date_key
+        WHERE f.start_date_key = e.date_key
         AND f.provider_key = e.provider_key
         AND f.start_time <= e.time
         AND COALESCE(f.end_time, cast('12/31/9999 23:59:59.9999' as datetime2)) >= e.time
-        AND state = 'available'
+        AND start_state = 'available'
     ) AS a
     OUTER APPLY (
         SELECT COUNT(start_hash) AS count
         FROM fact.state AS f
-        WHERE f.date_key = e.date_key
+        WHERE f.start_date_key = e.date_key
         AND f.provider_key = e.provider_key
         AND f.start_time <= e.time
         AND COALESCE(f.end_time, cast('12/31/9999 23:59:59.9999' as datetime2)) >= e.time
-        AND state = 'reserved'
+        AND start_state = 'reserved'
     ) AS r
     OUTER APPLY (
         SELECT COUNT(start_hash) AS count
         FROM fact.state AS f
-        WHERE f.date_key = e.date_key
+        WHERE f.start_date_key = e.date_key
         AND f.provider_key = e.provider_key
         AND f.start_time <= e.time
         AND COALESCE(f.end_time, cast('12/31/9999 23:59:59.9999' as datetime2)) >= e.time
-        AND state = 'unavailable'
+        AND start_state = 'unavailable'
     ) AS u
     OUTER APPLY (
         SELECT COUNT(start_hash) AS count
         FROM fact.state AS f
-        WHERE f.date_key = e.date_key
+        WHERE f.start_date_key = e.date_key
         AND f.provider_key = e.provider_key
         AND f.start_time <= e.time
         AND COALESCE(f.end_time, cast('12/31/9999 23:59:59.9999' as datetime2)) >= e.time
-        AND state = 'removed'
+        AND start_state = 'removed'
     ) AS x
     WHERE e.batch = '{{ ts_nodash }}'
     """
@@ -115,15 +117,16 @@ fleet_extract_task >> fleet_stage_task
 fleet_warehouse_update_task = MsSqlOperator(
     task_id="warehouse_update_fleet",
     dag=dag,
-    mssql_conn_id="azure_sq_server_full",
+    mssql_conn_id="azure_sql_server_full",
     sql="""
     UPDATE fact.fleet_count
     SET available = source.available,
     reserved = source.reserved,
     unavailable = source.unavailable,
-    removed = source.removed
+    removed = source.removed,
+    last_seen = source.seen
     FROM etl.stage_fleet_count AS source
-    WHERE source.batch = '{{ ts_nodash }}
+    WHERE source.batch = '{{ ts_nodash }}'
     AND source.provider_key = fact.fleet_count.provider_key
     AND source.time = fact.fleet_count.time
     """
@@ -131,7 +134,7 @@ fleet_warehouse_update_task = MsSqlOperator(
 fleet_warehouse_insert_task = MsSqlOperator(
     task_id="warehouse_insert_fleet",
     dag=dag,
-    mssql_conn_id="azure_sq_server_full",
+    mssql_conn_id="azure_sql_server_full",
     sql="""
     INSERT fact.fleet_count (
         date_key
@@ -141,6 +144,8 @@ fleet_warehouse_insert_task = MsSqlOperator(
         ,reserved
         ,unavailable
         ,removed
+        ,first_seen
+        ,last_seen
     )  
     SELECT source.date_key
     ,source.provider_key
@@ -149,8 +154,10 @@ fleet_warehouse_insert_task = MsSqlOperator(
     ,source.reserved
     ,source.unavailable
     ,source.removed
+    ,source.seen
+    ,source.seen
     FROM etl.stage_fleet_count AS source
-    WHERE source.batch = '{{ ts_nodash }}
+    WHERE source.batch = '{{ ts_nodash }}'
     AND NOT EXISTS
     (
         SELECT 1
