@@ -10,8 +10,6 @@ from transportation_plugins.mobility_plugin.operators.mobility_routes_to_sql_war
 from transportation_plugins.mobility_plugin.operators.mobility_provider_sync_operator import MobilityProviderSyncOperator
 from transportation_plugins.mobility_plugin.operators.mobility_vehicle_sync_operator import MobilityVehicleSyncOperator
 from transportation_plugins.mobility_plugin.operators.mobility_fleet_to_sql_extract_operator import MobilityFleetToSqlExtractOperator
-from transportation_plugins.mobility_plugin.operators.mobility_fleet_to_sql_stage_operator import MobilityFleetToSqlStageOperator
-from transportation_plugins.mobility_plugin.operators.mobility_fleet_to_sql_warehouse_operator import MobilityFleetToSqlWarehouseOperator
 # Defining the plugin class
 
 
@@ -24,9 +22,7 @@ class MobilityPlugin(AirflowPlugin):
                  MobilityStatesToSqlWarehouseOperator,
                  MobilityProviderSyncOperator,
                  MobilityVehicleSyncOperator,
-                 MobilityFleetToSqlExtractOperator,
-                 MobilityFleetToSqlStageOperator,
-                 MobilityFleetToSqlWarehouseOperator]
+                 MobilityFleetToSqlExtractOperator]
     hooks = [MobilityProviderHook]
     executors = []
     macros = []

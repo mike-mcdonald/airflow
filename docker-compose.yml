@@ -30,10 +30,10 @@ services:
       # - POSTGRES_DB=airflow
       # - REDIS_PASSWORD=redispass
     volumes:
+      - ./.output:/usr/local/airflow/tmp
       - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
       - ./dags:/usr/local/airflow/dags
       - ./logs:/usr/local/airflow/logs
-      - ./.output:/usr/local/output
     ports:
       - '8080:8080'
     command: webserver
@@ -49,10 +49,10 @@ services:
     depends_on:
       - webserver
     volumes:
+      - ./.output:/usr/local/airflow/tmp
       - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
       - ./dags:/usr/local/airflow/dags
       - ./logs:/usr/local/airflow/logs
-      - ./.output:/usr/local/output
     environment:
       - LOAD_EX=n
       - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
@@ -69,10 +69,10 @@ services:
     depends_on:
       - scheduler
     volumes:
+      - ./.output:/usr/local/airflow/tmp
       - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
       - ./dags:/usr/local/airflow/dags
       - ./logs:/usr/local/airflow/logs
-      - ./.output:/usr/local/output
     environment:
       - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
       - EXECUTOR=Celery
@@ -88,10 +88,10 @@ services:
     depends_on:
       - webserver
     volumes:
+      - ./.output:/usr/local/airflow/tmp
       - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
       - ./dags:/usr/local/airflow/dags
       - ./logs:/usr/local/airflow/logs
-      - ./.output:/usr/local/output
     ports:
       - '5555:5555'
     environment:
