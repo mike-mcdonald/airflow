@@ -1,5 +1,7 @@
 import hashlib
 import json
+import pathlib
+import os
 
 from datetime import datetime, timedelta
 from tempfile import NamedTemporaryFile
@@ -14,6 +16,7 @@ from shapely.wkt import loads
 from airflow.models import BaseOperator
 
 from transportation_plugins.mobility_plugin.hooks.mobility_provider_hook import MobilityProviderHook
+from common_plugins.azure_plugin.hooks.azure_data_lake_hook import AzureDataLakeHook
 from common_plugins.dataframe_plugin.hooks.azure_mssql_dataframe_hook import AzureMsSqlDataFrameHook
 
 
@@ -22,17 +25,23 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
 
     """
 
+    template_fields = ('events_local_path', 'events_remote_path',)
+
     def __init__(self,
                  mobility_provider_conn_id="mobility_provider_default",
                  mobility_provider_token_conn_id=None,
                  sql_conn_id="azure_sql_server_default",
-                 table_name="",
-                 schema="",
+                 data_lake_conn_id="azure_data_lake_default",
+                 events_local_path=None,
+                 events_remote_path=None,
                  * args, **kwargs):
         super().__init__(*args, **kwargs)
         self.sql_conn_id = sql_conn_id
         self.mobility_provider_conn_id = mobility_provider_conn_id
         self.mobility_provider_token_conn_id = mobility_provider_token_conn_id
+        self.data_lake_conn_id = data_lake_conn_id
+        self.events_local_path = events_local_path
+        self.events_remote_path = events_remote_path
 
     def execute(self, context):
         end_time = context.get("execution_date")
@@ -54,6 +63,7 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
 
         events['batch'] = context.get("ts_nodash")
         events['seen'] = datetime.now()
+        events['seen'] = events.seen.dt.round('L')
 
         # Get the GeoDataFrame configured correctly
         events['event_location'] = events.event_location.map(
@@ -68,6 +78,7 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
             lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
         events['event_time'] = events.event_time.map(
             lambda x: datetime.replace(x, tzinfo=None))  # Remove timezone info after shifting
+        events['event_time'] = events.event_time.dt.round('L')
         events['date_key'] = events.event_time.map(
             lambda x: int(x.strftime('%Y%m%d')))
         events['event_hash'] = events.apply(
@@ -97,7 +108,38 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
             'event_type_reason': 'event'
         })
 
-        hook.write_dataframe(
-            events, table_name="extract_event", schema="etl")
+        pathlib.Path(os.path.dirname(self.events_local_path)
+                     ).mkdir(parents=True, exist_ok=True)
+
+        events['associated_trip'] = events['associated_trip'] if 'associated_trip' in events else np.nan
+
+        events[[
+            'event_hash',
+            'provider_id',
+            'provider_name',
+            'device_id',
+            'vehicle_id',
+            'vehicle_type',
+            'propulsion_type',
+            'date_key',
+            'event_time',
+            'state',
+            'event',
+            'event_location',
+            'battery_pct',
+            'associated_trip',
+            'seen',
+            'batch'
+        ]].to_csv(self.events_local_path, index=False)
+
+        hook = AzureDataLakeHook(
+            azure_data_lake_conn_id=self.data_lake_conn_id
+        )
+
+        hook.upload_file(self.events_local_path, self.events_remote_path)
+        hook.set_expiry(self.events_remote_path, 'RelativeToNow',
+                        timedelta(hours=72).seconds * 1000)
+
+        os.remove(self.events_local_path)
 
         return

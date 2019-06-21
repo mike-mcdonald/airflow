@@ -52,10 +52,6 @@ class SqlDataFrameHook(BaseHook):
                                  schema=schema)
 
     def read_sql_dataframe(self,
-                           sql,
-                           table_name,
-                           schema=None):
+                           sql):
         return pd.read_sql(sql=sql,
-                           table_name=table_name,
-                           con=self.connection,
-                           schema=schema)
+                           con=self.connection)

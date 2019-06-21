@@ -51,17 +51,6 @@ task2 = DummyOperator(
     dag=dag
 )
 
-clean_extract_task = MsSqlOperator(
-    task_id="clean_extract_table",
-    dag=dag,
-    mssql_conn_id="azure_sql_server_full",
-    sql="""
-    DELETE FROM etl.extract_trip WHERE batch = '{{ ts_nodash }}'
-    DELETE FROM etl.extract_segment_hit WHERE batch = '{{ ts_nodash }}'
-    """
-)
-clean_extract_task.set_downstream(task1)
-
 # Extract data from providers and stage in tables
 for provider in providers:
     mobility_provider_conn_id = f"mobility_provider_{provider}"
@@ -73,6 +62,11 @@ for provider in providers:
         mobility_provider_conn_id=mobility_provider_conn_id,
         mobility_provider_token_conn_id=mobility_provider_token_conn_id,
         sql_conn_id="azure_sql_server_default",
+        data_lake_conn_id="azure_data_lake_default",
+        trips_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/{provider}-trips-{{{{ ts_nodash }}}}.csv",
+        trips_remote_path=f"/transportation/mobility/etl/trip/{provider}-{{{{ ts_nodash }}}}.csv",
+        segment_hits_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/{provider}-segment-hits-{{{{ ts_nodash }}}}.csv",
+        segment_hits_remote_path=f"/transportation/mobility/etl/segment_hit/{provider}-{{{{ ts_nodash }}}}.csv",
         dag=dag)
 
     trip_extract_task.set_upstream(task1)
@@ -333,20 +327,3 @@ route_warehouse_insert_task = MsSqlOperator(
 )
 
 route_stage_task >> route_warehouse_insert_task
-
-final_cleanup_task = MsSqlOperator(
-    task_id="final_clean",
-    dag=dag,
-    mssql_conn_id="azure_sql_server_full",
-    sql="""
-    DELETE FROM etl.extract_trip WHERE batch = '{{ ts_nodash }}'
-    DELETE FROM etl.stage_trip WHERE batch = '{{ ts_nodash }}'
-    DELETE FROM etl.extract_segment_hit WHERE batch = '{{ ts_nodash }}'
-    DELETE FROM etl.stage_segment_hit WHERE batch = '{{ ts_nodash }}'
-    """
-)
-
-route_warehouse_insert_task >> final_cleanup_task
-route_warehouse_update_task >> final_cleanup_task
-trip_warehouse_insert_task >> final_cleanup_task
-trip_warehouse_update_task >> final_cleanup_task
