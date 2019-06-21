@@ -73,7 +73,7 @@ fleet_stage_task = MsSqlOperator(
     ,batch
     FROM etl.extract_fleet_count AS e
     OUTER APPLY (
-        SELECT COUNT(start_hash) AS count
+        SELECT COUNT(DISTINCT f.vehicle_key) AS count
         FROM fact.state AS f
         WHERE f.start_date_key = e.date_key
         AND f.provider_key = e.provider_key
@@ -82,7 +82,7 @@ fleet_stage_task = MsSqlOperator(
         AND start_state = 'available'
     ) AS a
     OUTER APPLY (
-        SELECT COUNT(start_hash) AS count
+        SELECT COUNT(DISTINCT f.vehicle_key) AS count
         FROM fact.state AS f
         WHERE f.start_date_key = e.date_key
         AND f.provider_key = e.provider_key
@@ -91,7 +91,7 @@ fleet_stage_task = MsSqlOperator(
         AND start_state = 'reserved'
     ) AS r
     OUTER APPLY (
-        SELECT COUNT(start_hash) AS count
+        SELECT COUNT(DISTINCT f.vehicle_key) AS count
         FROM fact.state AS f
         WHERE f.start_date_key = e.date_key
         AND f.provider_key = e.provider_key
@@ -100,7 +100,7 @@ fleet_stage_task = MsSqlOperator(
         AND start_state = 'unavailable'
     ) AS u
     OUTER APPLY (
-        SELECT COUNT(start_hash) AS count
+        SELECT COUNT(DISTINCT f.vehicle_key) AS count
         FROM fact.state AS f
         WHERE f.start_date_key = e.date_key
         AND f.provider_key = e.provider_key
@@ -146,7 +146,7 @@ fleet_warehouse_insert_task = MsSqlOperator(
         ,removed
         ,first_seen
         ,last_seen
-    )  
+    )
     SELECT source.date_key
     ,source.provider_key
     ,source.time
