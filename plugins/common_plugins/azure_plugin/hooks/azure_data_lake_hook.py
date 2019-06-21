@@ -1,0 +1,16 @@
+from airflow.contrib.hooks.azure_data_lake_hook import AzureDataLakeHook as ContribHook
+
+
+class AzureDataLakeHook(ContribHook):
+    """
+    Additional Azure Data Lake functionality exposed as a hook
+    """
+
+    def __init__(self, azure_data_lake_conn_id='azure_data_lake_default'):
+        super().__init__(azure_data_lake_conn_id=azure_data_lake_conn_id)
+
+    def set_expiry(self, path, expiry_option, expire_time=None):
+        self.connection.set_expiry(path, expiry_option, expire_time)
+
+    def rm(self, path, recursive=False):
+        self.connection.rm(path, recursive)

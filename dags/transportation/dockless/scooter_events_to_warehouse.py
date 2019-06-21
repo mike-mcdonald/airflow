@@ -47,17 +47,6 @@ task1 = DummyOperator(
     dag=dag
 )
 
-clean_extract_task = MsSqlOperator(
-    task_id="clean_extract_table",
-    dag=dag,
-    mssql_conn_id="azure_sql_server_full",
-    sql="""
-    DELETE FROM etl.extract_event WHERE batch = '{{ ts_nodash }}'
-    """
-)
-clean_extract_task.set_downstream(task1)
-
-
 task2 = DummyOperator(
     task_id="provider_extract_complete",
     dag=dag
@@ -74,6 +63,9 @@ for provider in providers:
         mobility_provider_conn_id=mobility_provider_conn_id,
         mobility_provider_token_conn_id=mobility_provider_token_conn_id,
         sql_conn_id="azure_sql_server_default",
+        data_lake_conn_id="azure_data_lake_default",
+        events_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/{provider}-{{{{ ts_nodash }}}}.csv",
+        events_remote_path=f"/transportation/mobility/etl/event/{provider}-{{{{ ts_nodash }}}}.csv",
         dag=dag)
 
     event_extract_task.set_upstream(task1)
@@ -129,15 +121,3 @@ mobility_states_warehouse_task = MobilityStatesToSqlWarehouseOperator(
     dag=dag
 )
 mobility_states_warehouse_task.set_upstream(task3)
-
-final_cleanup_task = MsSqlOperator(
-    task_id="final_clean",
-    dag=dag,
-    mssql_conn_id="azure_sql_server_full",
-    sql="""
-    DELETE FROM etl.extract_event WHERE batch = '{{ ts_nodash }}'
-    DELETE FROM etl.stage_state WHERE batch = '{{ ts_nodash }}'
-    """
-)
-
-mobility_states_warehouse_task >> final_cleanup_task

@@ -1,10 +1,14 @@
 import hashlib
 import json
+import pathlib
+import os
+
 from datetime import datetime,  timedelta
 from math import atan2, pi, pow, sqrt
 from numpy import nan
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 
 from pytz import timezone
@@ -13,6 +17,7 @@ from shapely.wkt import loads
 from airflow.models import BaseOperator
 
 from transportation_plugins.mobility_plugin.hooks.mobility_provider_hook import MobilityProviderHook
+from common_plugins.azure_plugin.hooks.azure_data_lake_hook import AzureDataLakeHook
 from common_plugins.dataframe_plugin.hooks.azure_mssql_dataframe_hook import AzureMsSqlDataFrameHook
 
 
@@ -21,15 +26,30 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
 
     """
 
+    template_fields = ('trips_local_path',
+                       'trips_remote_path',
+                       'segment_hits_local_path',
+                       'segment_hits_remote_path',)
+
     def __init__(self,
                  mobility_provider_conn_id="mobility_provider_default",
                  mobility_provider_token_conn_id=None,
                  sql_conn_id="azure_sql_server_default",
+                 data_lake_conn_id="azure_data_lake_default",
+                 trips_local_path=None,
+                 trips_remote_path=None,
+                 segment_hits_local_path=None,
+                 segment_hits_remote_path=None,
                  * args, **kwargs):
         super().__init__(*args, **kwargs)
         self.sql_conn_id = sql_conn_id
         self.mobility_provider_conn_id = mobility_provider_conn_id
         self.mobility_provider_token_conn_id = mobility_provider_token_conn_id
+        self.data_lake_conn_id = data_lake_conn_id
+        self.trips_local_path = trips_local_path
+        self.trips_remote_path = trips_remote_path
+        self.segment_hits_local_path = segment_hits_local_path
+        self.segment_hits_remote_path = segment_hits_remote_path
 
     def execute(self, context):
         end_time = context.get("execution_date")
@@ -57,14 +77,21 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
 
         trips['batch'] = context.get("ts_nodash")
         trips['seen'] = datetime.now()
+        trips['seen'] = trips.seen.dt.round("L")
         trips['propulsion_type'] = trips.propulsion_type.map(
             lambda x: ','.join(sorted(x)))
         trips['start_time'] = trips.start_time.map(
             lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
+        trips['start_time'] = trips.start_time.dt.round("L")
+        trips['start_time'] = trips.start_time.map(
+            lambda x: datetime.replace(x, tzinfo=None))  # Remove timezone info after shifting
         trips['start_date_key'] = trips.start_time.map(
             lambda x: int(x.strftime('%Y%m%d')))
         trips['end_time'] = trips.end_time.map(
             lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
+        trips['end_time'] = trips.end_time.dt.round("L")
+        trips['end_time'] = trips.end_time.map(
+            lambda x: datetime.replace(x, tzinfo=None))
         trips['end_date_key'] = trips.end_time.map(
             lambda x: int(x.strftime('%Y%m%d')))
 
@@ -101,12 +128,15 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
 
         route_df = gpd.GeoDataFrame(
             pd.concat(trips.route.values, sort=False).sort_values(
-            by=['trip_id', 'timestamp'], ascending=True
+                by=['trip_id', 'timestamp'], ascending=True
             )
         ).reset_index(drop=True)
         route_df.crs = {'init': 'epsg:4326'}
         route_df['datetime'] = route_df.timestamp.map(
             lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
+        route_df['datetime'] = route_df.datetime.dt.round("L")
+        route_df['datetime'] = route_df.datetime.map(
+            lambda x: datetime.replace(x, tzinfo=None))
         route_df['date_key'] = route_df.datetime.map(
             lambda x: int(x.strftime('%Y%m%d')))
         # Generate a hash to aid in merge operations
@@ -131,22 +161,59 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
 
         self.log.debug("Mapping trip O/D to cells...")
 
-        trips['origin'] = gpd.sjoin(
+        trips['start_cell_key'] = gpd.sjoin(
             trips.set_geometry('origin'), cells, how="left", op="within")['key']
-        trips['destination'] = gpd.sjoin(
+        trips['end_cell_key'] = gpd.sjoin(
             trips.set_geometry('destination'), cells, how="left", op="within")['key']
 
         del cells
 
-        self.log.debug("Writing trips extract to data warehouse...")
+        self.log.debug("Writing trips extract to data lake...")
 
-        hook.write_dataframe(
-            trips,
-            table_name='extract_trip',
-            schema='etl'
+        pathlib.Path(os.path.dirname(self.trips_local_path)
+                     ).mkdir(parents=True, exist_ok=True)
+
+        trips['standard_cost'] = trips['standard_cost'] if 'standard_cost' in trips else np.nan
+        trips['actual_cost'] = trips['actual_cost'] if 'actual_cost' in trips else np.nan
+        trips['parking_verification_url'] = trips['parking_verification_url'] if 'parking_verification_url' in trips else np.nan
+
+        trips[[
+            'trip_id',
+            'provider_id',
+            'provider_name',
+            'device_id',
+            'vehicle_id',
+            'vehicle_type',
+            'propulsion_type',
+            'start_time',
+            'start_date_key',
+            'start_cell_key',
+            'end_time',
+            'end_date_key',
+            'end_cell_key',
+            'distance',
+            'duration',
+            'accuracy',
+            'standard_cost',
+            'actual_cost',
+            'parking_verification_url',
+            'seen',
+            'batch'
+        ]].to_csv(self.trips_local_path, index=False)
+
+        hook = AzureDataLakeHook(
+            azure_data_lake_conn_id=self.data_lake_conn_id
         )
 
+        hook.upload_file(self.trips_local_path, self.trips_remote_path)
+        hook.set_expiry(self.trips_remote_path, 'RelativeToNow',
+                        timedelta(hours=72).seconds * 1000)
+
         self.log.debug("Reading segments from data warehouse...")
+
+        hook = AzureMsSqlDataFrameHook(
+            azure_mssql_conn_id=self.sql_conn_id
+        )
 
         # Break out segment hits
         segments = hook.read_table_dataframe(
@@ -216,17 +283,33 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         del route_df['dy']
         del route_df['dt']
 
-        self.log.debug("Writing route extract...")
+        self.log.debug("Writing routes to data lake...")
 
         route_df = route_df.drop_duplicates(
             subset=['segment_key', 'trip_id'], keep='last')
 
         del route_df["trip_id"]
 
-        hook.write_dataframe(
-            route_df,
-            table_name='extract_segment_hit',
-            schema='etl'
+        route_df[[
+            'provider_id',
+            'date_key',
+            'segment_key',
+            'hash',
+            'datetime',
+            'vehicle_type',
+            'propulsion_type',
+            'heading',
+            'speed',
+            'seen',
+            'batch'
+        ]].to_csv(self.segment_hits_local_path, index=False)
+
+        hook = AzureDataLakeHook(
+            azure_data_lake_conn_id=self.data_lake_conn_id
         )
 
+        hook.upload_file(self.segment_hits_local_path,
+                         self.segment_hits_remote_path)
+        hook.set_expiry(self.segment_hits_remote_path, 'RelativeToNow',
+                        timedelta(hours=72).seconds * 1000)
         return
