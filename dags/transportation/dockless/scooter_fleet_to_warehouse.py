@@ -39,7 +39,10 @@ dag = DAG(
 fleet_extract_task = MobilityFleetToSqlExtractOperator(
     task_id="build_fleet_extract",
     dag=dag,
-    sql_conn_id="azure_sql_server_default"
+    sql_conn_id="azure_sql_server_default",
+    data_lake_conn_id="azure_data_lake_default",
+    fleet_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/{{ ts_nodash }}.csv",
+    fleet_remote_path="/transportation/mobility/etl/fleet_count/{{ ts_nodash }}.csv"
 )
 
 fleet_stage_task = MsSqlOperator(
