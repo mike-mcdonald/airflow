@@ -44,10 +44,10 @@ jobs:
   deploy_image:
     <<: *container_config
     steps:
-      - *restore_cache
       - checkout
       - setup_remote_docker:
           docker_layer_caching: true
+      - *restore_cache
       - run:
           name: Login to Azure
           command: |
