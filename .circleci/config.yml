@@ -45,7 +45,7 @@ jobs:
       - run:
           name: Login to Azure
           command: |
-            az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT
+            az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
       - run:
           name: Login to Azure Container Registry
           command: |
