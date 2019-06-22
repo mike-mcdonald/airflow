@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from tempfile import NamedTemporaryFile
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 
 from pytz import timezone
@@ -138,7 +139,7 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
 
         hook.upload_file(self.events_local_path, self.events_remote_path)
         hook.set_expiry(self.events_remote_path, 'RelativeToNow',
-                        timedelta(hours=72).seconds * 1000)
+                        expire_time=(72 * 3600 * 1000))
 
         os.remove(self.events_local_path)
 

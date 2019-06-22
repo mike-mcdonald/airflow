@@ -207,7 +207,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
 
         hook.upload_file(self.trips_local_path, self.trips_remote_path)
         hook.set_expiry(self.trips_remote_path, 'RelativeToNow',
-                        timedelta(hours=72).seconds * 1000)
+                        expire_time=(72 * 3600 * 1000))
 
         self.log.debug("Reading segments from data warehouse...")
 
@@ -311,5 +311,5 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         hook.upload_file(self.segment_hits_local_path,
                          self.segment_hits_remote_path)
         hook.set_expiry(self.segment_hits_remote_path, 'RelativeToNow',
-                        timedelta(hours=72).seconds * 1000)
+                        expire_time=(72 * 3600 * 1000))
         return
