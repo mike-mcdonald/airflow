@@ -58,7 +58,7 @@ jobs:
       - run:
           name: Login to Azure Container Registry
           command: |
-            az acr login --name $AZURE_CONTAINER_REPOSITORY
+            az acr login --name $AZURE_CONTAINER_REGISTRY
       - run:
           name: Load docker image
           command: |
