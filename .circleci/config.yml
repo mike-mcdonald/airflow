@@ -29,15 +29,13 @@ jobs:
       - run:
           name: Generate tag name
           command: |
-            if [[ $CIRCLE_BRANCH = "master" ]]; then
-              TAG_NAME=$CIRCLE_BRANCH
-            else
-              TAG_NAME=$(echo "${CIRCLE_BRANCH////-}")
-            fi
+            TAG_NAME=$(echo "${CIRCLE_BRANCH////-}")
+            echo "Tag name will be $TAG_NAME"
       - run:
           name: Save docker image
           command: |
             mkdir -p docker-cache
+            echo "Saving $IMAGE_NAME:$TAG_NAME"
             docker save -o docker-cache/image.tar $IMAGE_NAME:$TAG_NAME
       - save_cache:
           key: *cache_key
