@@ -29,6 +29,7 @@ jobs:
             docker run $IMAGE_NAME version |grep '1.10.2'
       - run:
           name: Save docker image
+          command: |
             mkdir -p docker-cache
             docker save -o docker-cache/image.tar $IMAGE_NAME:$CIRCLE_BRANCH
       - save_cache:
