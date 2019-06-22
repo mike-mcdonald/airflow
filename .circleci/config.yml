@@ -29,7 +29,7 @@ jobs:
       - run:
           name: Generate tag name
           command: |
-            if ! [[ $CIRCLE_BRANCH = "master" ]]; then
+            if [[ $CIRCLE_BRANCH = "master" ]]; then
               TAG_NAME=$CIRCLE_BRANCH
             else
               TAG_NAME=$(echo "${CIRCLE_BRANCH////-}")
