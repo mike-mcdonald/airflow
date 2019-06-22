@@ -2,7 +2,7 @@ version: 2
 
 container_config: &container_config
   docker:
-    - image: mike-mcdonald/docker-azure:stable
+    - image: mcdonaldmike/docker-azure:stable
   working_directory: /usr/local/lib
 cache_key: &cache_key
   docker_cache
@@ -16,21 +16,26 @@ jobs:
     <<: *container_config
     steps:
       - checkout
-      - setup_remote_docker
       - setup_remote_docker:
           docker_layer_caching: true
       - run:
+          name: Generate tag name
+          command: |
+            echo 'export TAG_NAME=$(echo "${CIRCLE_BRANCH////-}")' >> $BASH_ENV
+      - run:
           name: Build docker image
           command: |
-            docker build -t $IMAGE_NAME .
+            docker build -t $IMAGE_NAME:$TAG_NAME .
       - run:
           name: Test docker image
           command: |
-            docker run $IMAGE_NAME version |grep '1.10.2'
+            docker run $IMAGE_NAME:$TAG_NAME version |grep '1.10.2'
       - run:
           name: Save docker image
+          command: |
             mkdir -p docker-cache
-            docker save -o docker-cache/image.tar $IMAGE_NAME:$CIRCLE_BRANCH
+            echo "Saving $IMAGE_NAME:$TAG_NAME"
+            docker save -o docker-cache/image.tar $IMAGE_NAME:$TAG_NAME
       - save_cache:
           key: *cache_key
           paths:
@@ -40,16 +45,17 @@ jobs:
     <<: *container_config
     steps:
       - *restore_cache
-      - setup_remote_docker
       - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
       - run:
           name: Login to Azure
           command: |
-            az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT
+            az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
       - run:
           name: Login to Azure Container Registry
           command: |
-            az acr login --name $AZURE_CONTAINER_REPOSITORY
+            az acr login --name $AZURE_CONTAINER_REGISTRY
       - run:
           name: Load docker image
           command: |
@@ -63,5 +69,7 @@ workflows:
   build_and_deploy:
     jobs:
       - build_image
-      - deploy_image
+      - deploy_image:
+          requires:
+            - build_image
 
