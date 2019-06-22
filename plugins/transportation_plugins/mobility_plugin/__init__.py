@@ -2,7 +2,6 @@ from airflow.plugins_manager import AirflowPlugin
 
 from transportation_plugins.mobility_plugin.hooks.mobility_provider_hook import MobilityProviderHook
 from transportation_plugins.mobility_plugin.operators.mobility_trips_to_sql_extract_operator import MobilityTripsToSqlExtractOperator
-from transportation_plugins.mobility_plugin.operators.mobility_trips_to_sql_warehouse_operator import MobilityTripsToSqlWarehouseOperator
 from transportation_plugins.mobility_plugin.operators.mobility_events_to_sql_extract_operator import MobilityEventsToSqlExtractOperator
 from transportation_plugins.mobility_plugin.operators.mobility_events_to_sql_stage_operator import MobilityEventsToSqlStageOperator
 from transportation_plugins.mobility_plugin.operators.mobility_states_to_sql_warehouse_operator import MobilityStatesToSqlWarehouseOperator
@@ -16,7 +15,6 @@ from transportation_plugins.mobility_plugin.operators.mobility_fleet_to_sql_extr
 class MobilityPlugin(AirflowPlugin):
     name = "mobility_plugin"
     operators = [MobilityTripsToSqlExtractOperator,
-                 MobilityTripsToSqlWarehouseOperator,
                  MobilityEventsToSqlExtractOperator,
                  MobilityEventsToSqlStageOperator,
                  MobilityStatesToSqlWarehouseOperator,
