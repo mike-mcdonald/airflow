@@ -29,8 +29,7 @@ jobs:
       - run:
           name: Generate tag name
           command: |
-            TAG_NAME=$(echo "${CIRCLE_BRANCH////-}")
-            echo "Tag name will be $TAG_NAME"
+            echo 'export TAG_NAME=$(echo "${CIRCLE_BRANCH////-}")' >> $BASH_ENV
       - run:
           name: Save docker image
           command: |
