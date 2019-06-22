@@ -16,6 +16,8 @@ jobs:
     <<: *container_config
     steps:
       - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
       - run:
           name: Build docker image
           command: |
@@ -39,6 +41,8 @@ jobs:
     steps:
       - *restore_cache
       - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
       - run:
           name: Login to Azure
           command: |
