@@ -27,10 +27,18 @@ jobs:
           command: |
             docker run $IMAGE_NAME version |grep '1.10.2'
       - run:
+          name: Generate tag name
+          command: |
+            if ! [[ $CIRCLE_BRANCH = "master" ]]; then
+              TAG_NAME=$CIRCLE_BRANCH
+            else
+              TAG_NAME=$(echo "${CIRCLE_BRANCH////-}")
+            fi
+      - run:
           name: Save docker image
           command: |
             mkdir -p docker-cache
-            docker save -o docker-cache/image.tar $IMAGE_NAME:$CIRCLE_BRANCH
+            docker save -o docker-cache/image.tar $IMAGE_NAME:$TAG_NAME
       - save_cache:
           key: *cache_key
           paths:
