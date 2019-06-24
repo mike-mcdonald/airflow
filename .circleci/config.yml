@@ -11,10 +11,10 @@ restore_cache: &restore_cache
     name: Restore cache
     key: *cache_key
 generate_tag_name: &generate_tag_name
-  - run:
-      name: Generate tag name
-      command: |
-        echo 'export TAG_NAME=$(echo "${CIRCLE_BRANCH////-}")' >> $BASH_ENV
+  run:
+    name: Generate tag name
+    command: |
+      echo 'export TAG_NAME=$(echo "${CIRCLE_BRANCH////-}")' >> $BASH_ENV
       
 jobs:
   build_image:
@@ -23,7 +23,7 @@ jobs:
       - checkout
       - setup_remote_docker:
           docker_layer_caching: true
-      *generate_tag_name
+      - *generate_tag_name
       - run:
           name: Build docker image
           command: |
@@ -50,7 +50,7 @@ jobs:
       - setup_remote_docker:
           docker_layer_caching: true
       - *restore_cache
-      *generate_tag_name
+      - *generate_tag_name
       - run:
           name: Login to Azure
           command: |
