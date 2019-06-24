@@ -87,6 +87,8 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             lambda x: datetime.replace(x, tzinfo=None))  # Remove timezone info after shifting
         trips['start_date_key'] = trips.start_time.map(
             lambda x: int(x.strftime('%Y%m%d')))
+        trips['start_time'] = trips.start_time.map(
+            lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
         trips['end_time'] = trips.end_time.map(
             lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
         trips['end_time'] = trips.end_time.dt.round("L")
@@ -94,6 +96,8 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             lambda x: datetime.replace(x, tzinfo=None))
         trips['end_date_key'] = trips.end_time.map(
             lambda x: int(x.strftime('%Y%m%d')))
+        trips['end_time'] = trips.end_time.map(
+            lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
 
         self.log.debug("Converting route to a GeoDataFrame...")
         # Convert the route to a DataFrame now to make mapping easier
@@ -139,6 +143,8 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             lambda x: datetime.replace(x, tzinfo=None))
         route_df['date_key'] = route_df.datetime.map(
             lambda x: int(x.strftime('%Y%m%d')))
+        route_df['datetime'] = route_df.datetime.map(
+            lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
         # Generate a hash to aid in merge operations
         route_df['hash'] = route_df.apply(lambda x: hashlib.md5((
             x.trip_id + x.provider_id + x.datetime.strftime('%d%m%Y%H%M%S%f')
