@@ -78,6 +78,8 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         trips['batch'] = context.get("ts_nodash")
         trips['seen'] = datetime.now()
         trips['seen'] = trips.seen.dt.round("L")
+        trips['seen'] = trips.seen.map(
+            lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
         trips['propulsion_type'] = trips.propulsion_type.map(
             lambda x: ','.join(sorted(x)))
         trips['start_time'] = trips.start_time.map(

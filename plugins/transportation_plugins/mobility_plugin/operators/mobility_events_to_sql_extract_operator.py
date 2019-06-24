@@ -65,6 +65,8 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
         events['batch'] = context.get("ts_nodash")
         events['seen'] = datetime.now()
         events['seen'] = events.seen.dt.round('L')
+        events['seen'] = events.seen.map(
+            lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
 
         # Get the GeoDataFrame configured correctly
         events['event_location'] = events.event_location.map(
