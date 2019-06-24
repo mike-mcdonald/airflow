@@ -77,8 +77,8 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
             lambda x: ','.join(sorted(x)))
         events['event_time'] = events.event_time.map(
             lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
-        events['event_time'] = events.event_time.map(
-            lambda x: datetime.replace(x, tzinfo=None))  # Remove timezone info after shifting
+        events['event_time'] = events.event_time.dt.replace(
+            tzinfo=None)  # Remove timezone info after shifting
         events['event_time'] = events.event_time.dt.round('L')
         events['date_key'] = events.event_time.map(
             lambda x: int(x.strftime('%Y%m%d')))
@@ -87,6 +87,8 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
                 f"{x.device_id}{x.event_type_reason}{x.event_time.strftime('%d%m%Y%H%M%S%f')}".encode(
                     'utf-8')
             ).hexdigest(), axis=1)
+        events['event_time'] = events.event_time.map(
+            lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
 
         events = events.drop_duplicates(subset='event_hash')
 
