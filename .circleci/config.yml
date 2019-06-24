@@ -23,7 +23,7 @@ jobs:
       - checkout
       - setup_remote_docker:
           docker_layer_caching: true
-      <<: *generate_tag_name
+      *generate_tag_name
       - run:
           name: Build docker image
           command: |
@@ -50,7 +50,7 @@ jobs:
       - setup_remote_docker:
           docker_layer_caching: true
       - *restore_cache
-      <<: *generate_tag_name
+      *generate_tag_name
       - run:
           name: Login to Azure
           command: |
