@@ -16,7 +16,7 @@ services:
       - ./artifacts:/docker-entrypoint-initdb.d
 
   webserver:
-    image: pbotapps.azurecr.io/airflow/base
+    image: pbotapps.azurecr.io/airflow
     restart: always
     depends_on:
       - postgres
@@ -44,7 +44,7 @@ services:
       retries: 3
 
   scheduler:
-    image: pbotapps.azurecr.io/airflow/base
+    image: pbotapps.azurecr.io/airflow
     restart: always
     depends_on:
       - webserver
@@ -64,7 +64,7 @@ services:
     command: scheduler
 
   worker:
-    image: pbotapps.azurecr.io/airflow/base
+    image: pbotapps.azurecr.io/airflow
     restart: always
     depends_on:
       - scheduler
@@ -83,7 +83,7 @@ services:
     command: worker
 
   flower:
-    image: pbotapps.azurecr.io/airflow/base
+    image: pbotapps.azurecr.io/airflow
     restart: always
     depends_on:
       - webserver

@@ -5,7 +5,7 @@ container_config: &container_config
     - image: mcdonaldmike/docker-azure:stable
   working_directory: /usr/local/lib
 cache_key: &cache_key
-  docker_cache-{{ epoch }}
+  docker_cache-{{ .Branch }}-{{ .Revision   }}
 restore_cache: &restore_cache
   restore_cache:
     name: Restore cache
@@ -29,7 +29,7 @@ jobs:
       - run:
           name: Test docker image
           command: |
-            docker run $IMAGE_NAME:$TAG_NAME version |grep '1.10.2'
+            docker run $IMAGE_NAME:$TAG_NAME version | grep '1.10.2'
       - run:
           name: Save docker image
           command: |
@@ -63,7 +63,16 @@ jobs:
       - run:
           name: Push image to Azure Container Registry
           command: |
-            docker push $IMAGE_NAME
+            docker push $IMAGE_NAME:$TAG_NAME
+      - run:
+          name: Tag as latest
+          command: |
+            docker tag $IMAGE_NAME:$TAG_NAME $IMAGE_NAME:latest
+      - run:
+          name: Push latest tag image to Azure Container Registry
+          command: |
+            docker push $IMAGE_NAME:latest
+
 workflows:
   version: 2
   build_and_deploy:
@@ -72,4 +81,7 @@ workflows:
       - deploy_image:
           requires:
             - build_image
-
+          filters:
+             branches:
+               only:
+                 - master
