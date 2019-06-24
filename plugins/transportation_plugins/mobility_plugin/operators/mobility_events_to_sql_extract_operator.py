@@ -77,8 +77,8 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
             lambda x: ','.join(sorted(x)))
         events['event_time'] = events.event_time.map(
             lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
-        events['event_time'] = events.event_time.dt.replace(
-            tzinfo=None)  # Remove timezone info after shifting
+        events['event_time'] = events.event_time.map(lambda x: x.replace(
+            tzinfo=None))  # Remove timezone info after shifting
         events['event_time'] = events.event_time.dt.round('L')
         events['date_key'] = events.event_time.map(
             lambda x: int(x.strftime('%Y%m%d')))

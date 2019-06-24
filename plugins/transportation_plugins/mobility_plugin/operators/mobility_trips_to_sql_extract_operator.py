@@ -143,12 +143,12 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             lambda x: datetime.replace(x, tzinfo=None))
         route_df['date_key'] = route_df.datetime.map(
             lambda x: int(x.strftime('%Y%m%d')))
-        route_df['datetime'] = route_df.datetime.map(
-            lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
         # Generate a hash to aid in merge operations
         route_df['hash'] = route_df.apply(lambda x: hashlib.md5((
             x.trip_id + x.provider_id + x.datetime.strftime('%d%m%Y%H%M%S%f')
         ).encode('utf-8')).hexdigest(), axis=1)
+        route_df['datetime'] = route_df.datetime.map(
+            lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
 
         # delete before passing to dataframe write, segmentation fault otherwise
         del trips["route"]
