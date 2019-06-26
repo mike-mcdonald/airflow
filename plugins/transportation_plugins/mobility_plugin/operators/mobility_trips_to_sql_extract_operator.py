@@ -217,6 +217,8 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         hook.set_expiry(self.trips_remote_path, 'RelativeToNow',
                         expire_time=(72 * 3600 * 1000))
 
+        os.remove(self.trips_local_path)
+
         self.log.debug("Reading segments from data warehouse...")
 
         hook = AzureMsSqlDataFrameHook(
@@ -320,4 +322,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
                          self.segment_hits_remote_path)
         hook.set_expiry(self.segment_hits_remote_path, 'RelativeToNow',
                         expire_time=(72 * 3600 * 1000))
+
+        os.remove(self.segment_hits_local_path)
+
         return
