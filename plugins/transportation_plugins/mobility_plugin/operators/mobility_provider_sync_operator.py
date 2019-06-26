@@ -18,7 +18,8 @@ class MobilityProviderSyncOperator(MsSqlOperator):
         provider_id
         ,provider_name
         FROM {source_table} AS e
-        WHERE NOT EXISTS (
+        WHERE batch = '{{{{ ts_nodash }}}}'
+        AND NOT EXISTS (
             SELECT 1
             FROM dim.provider AS p
             WHERE p.provider_id = e.provider_id
