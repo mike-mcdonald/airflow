@@ -10,7 +10,7 @@ This repository contains **Dockerfile** of [apache-airflow](https://github.com/a
 
 From the project directory run:
 
-    docker build -t pbotapps.azurecr.io/airflow/base .
+    docker build -t pbotapps.azurecr.io/airflow .
 
 ## Run
     docker-compose up
