@@ -1,0 +1,88 @@
+---
+# Source: airflow/templates/statefulsets-workers.yaml
+## Workers are not in deployment, but in StatefulSet, to allow each worker expose a mini-server
+## that only serve logs, that will be used by the web server.
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: airflow-worker
+  labels:
+    app: airflow
+    component: worker
+    chart: airflow-3.0.2
+    release: airflow
+    heritage: Tiller
+spec:
+  serviceName: "airflow-worker"
+  updateStrategy:
+    ## Kill the workers as soon as possible, the scheduler will restart the failed job later
+    type: RollingUpdate
+  ## Use experimental burst mode for faster StatefulSet scaling
+  ##   https://github.com/kubernetes/kubernetes/commit/c2c5051adf096ffd48bf1dcf5b11cb47e464ecdd
+  podManagementPolicy: Parallel
+  replicas: 3
+  selector:
+    matchLabels:
+      app: airflow
+      component: worker
+      release: airflow
+  template:
+    metadata:
+      annotations:
+        checksum/config-env: 09c0b816c26040730d0592ef304d387444071d0f91d78ca5c69b762ef70ac067
+      labels:
+        app: airflow
+        component: worker
+        release: airflow
+    spec:
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      serviceAccountName: airflow
+      containers:
+        - name: airflow-worker
+          imagePullPolicy: Always
+          image: "pbotapps.azurecr.io/airflow:latest"
+          envFrom:
+            - configMapRef:
+                name: "airflow-env"
+          env:          
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-postgresql
+                  key: postgres-password
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-redis
+                  key: redis-password
+          volumeMounts:
+            - name: scripts
+              mountPath: /usr/local/scripts
+          args:
+            - "bash"
+            - "-c"
+            - >
+              echo 'waiting 60s...' &&
+              sleep 60 &&
+              mkdir -p /usr/local/airflow/.local/bin &&
+              export PATH=/usr/local/airflow/.local/bin:$PATH &&
+              echo 'executing worker...' &&
+              airflow worker
+          ports:
+            - name: wlog
+              containerPort: 8793
+              protocol: TCP
+          resources:
+            {}
+            
+      volumes:
+        - name: scripts
+          configMap:
+            name: airflow-scripts
+            defaultMode: 0755
+        - name: dags-data
+          emptyDir: {}

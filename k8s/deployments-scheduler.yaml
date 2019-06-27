@@ -1,0 +1,86 @@
+---
+# Source: airflow/templates/deployments-scheduler.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-scheduler
+  labels:
+    app: airflow
+    component: scheduler
+    chart: airflow-3.0.2
+    release: airflow
+    heritage: Tiller
+spec:
+  replicas: 1
+  strategy:
+    # Kill the scheduler as soon as possible. It will restart quickly with all the workers,
+    # minimizing the time they are not synchronized.
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 100%
+  selector:
+    matchLabels:
+      app: airflow
+      component: scheduler
+      release: airflow
+  template:
+    metadata:
+      annotations:
+        checksum/config-env: 09c0b816c26040730d0592ef304d387444071d0f91d78ca5c69b762ef70ac067
+        checksum/config-git-clone: f512cae06f947137440d3abc371a99e0523123c824b2d95bb45129b1e0a362ad
+        checksum/config-scripts: a54b787422709d2fabba925f46dbe8fb1ea4343cb90e6136f38f7988d9710169
+        checksum/config-variables-pools: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+        checksum/secret-connections: 01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+      labels:
+        app: airflow
+        component: scheduler
+        release: airflow
+    spec:
+      restartPolicy: Always
+      serviceAccountName: airflow
+      containers:
+        - name: airflow-scheduler
+          image: pbotapps.azurecr.io/airflow:latest
+          imagePullPolicy: Always
+          envFrom:
+          - configMapRef:
+              name: "airflow-env"
+          env:          
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-postgresql
+                  key: postgres-password
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-redis
+                  key: redis-password
+          resources:
+            {}
+            
+          volumeMounts:
+            - name: scripts
+              mountPath: /usr/local/scripts
+          args:
+            - "bash"
+            - "-c"
+            - >
+              echo 'waiting 10s...' &&
+              sleep 10 &&
+              mkdir -p /usr/local/airflow/.local/bin &&
+              export PATH=/usr/local/airflow/.local/bin:$PATH &&
+              echo "executing initdb" &&
+              airflow initdb &&
+              echo "executing scheduler" &&
+              airflow scheduler -n -1
+      volumes:
+        - name: scripts
+          configMap:
+            name: airflow-scripts
+            defaultMode: 0755
+        - name: dags-data
+          emptyDir: {}
