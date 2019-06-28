@@ -30,7 +30,13 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
     template_fields = ('trips_local_path',
                        'trips_remote_path',
                        'segment_hits_local_path',
-                       'segment_hits_remote_path',)
+                       'segment_hits_remote_path',
+                       'cities_local_path',
+                       'cities_remote_path',
+                       'parking_districts_local_path',
+                       'parking_districts_remote_path',
+                       'pattern_areas_local_path',
+                       'pattern_areas_remote_path',)
 
     def __init__(self,
                  mobility_provider_conn_id="mobility_provider_default",
