@@ -190,7 +190,8 @@ task3 = DummyOperator(
     dag=dag
 )
 
-event_stage_task.set_downstream(task3)
+for task in remote_paths_delete_tasks:
+    event_stage_task >> task
 
 state_warehouse_update_task = MsSqlOperator(
     task_id="warehouse_update_trip",
@@ -213,7 +214,7 @@ state_warehouse_update_task = MsSqlOperator(
     """
 )
 
-task3 >> state_warehouse_update_task
+event_stage_task >> state_warehouse_update_task
 
 state_warehouse_insert_task = MsSqlOperator(
     task_id="warehouse_insert_trip",
@@ -287,8 +288,4 @@ state_warehouse_insert_task = MsSqlOperator(
     """
 )
 
-task3 >> state_warehouse_insert_task
-
-for task in remote_paths_delete_tasks:
-    state_warehouse_insert_task >> task
-    state_warehouse_update_task >> task
+event_stage_task >> state_warehouse_insert_task
