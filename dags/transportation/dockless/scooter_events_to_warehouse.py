@@ -7,6 +7,7 @@ import airflow
 from airflow import DAG
 from airflow.operators.dummy_operator import DummyOperator
 
+from airflow.operators.azure_plugin import AzureDataLakeRemoveOperator
 from airflow.operators.mssql_plugin import MsSqlOperator
 from airflow.operators.mobility_plugin import (
     MobilityEventsToSqlExtractOperator,
@@ -50,10 +51,14 @@ task2 = DummyOperator(
     dag=dag
 )
 
+remote_paths_delete_tasks = []
+
 # Extract data from providers and stage in tables
 for provider in providers:
     mobility_provider_conn_id = f"mobility_provider_{provider}"
     mobility_provider_token_conn_id = f"mobility_provider_{provider}_token"
+
+    events_remote_path = f"/transportation/mobility/etl/event/{provider}-{{{{ ts_nodash }}}}.csv"
 
     event_extract_task = MobilityEventsToSqlExtractOperator(
         task_id=f"loading_{provider}_events",
@@ -63,7 +68,7 @@ for provider in providers:
         sql_conn_id="azure_sql_server_default",
         data_lake_conn_id="azure_data_lake_default",
         events_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/{provider}-{{{{ ts_nodash }}}}.csv",
-        events_remote_path=f"/transportation/mobility/etl/event/{provider}-{{{{ ts_nodash }}}}.csv",
+        events_remote_path=events_remote_path,
         cities_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/cities-{{{{ ts_nodash }}}}.csv",
         cities_remote_path=f"/transportation/mobility/dim/cities.csv",
         parking_districts_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/parking_districts-{{{{ ts_nodash }}}}.csv",
@@ -71,6 +76,12 @@ for provider in providers:
         pattern_areas_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/pattern_areas-{{{{ ts_nodash }}}}.csv",
         pattern_areas_remote_path=f"/transportation/mobility/dim/pattern_areas.csv",
         dag=dag)
+
+    remote_paths_delete_tasks.append(
+        AzureDataLakeRemoveOperator(task_id=f"delete_{provider}_extract",
+                                    dag=dag,
+                                    azure_data_lake_conn_id="azure_data_lake_default",
+                                    remote_path=events_remote_path))
 
     event_extract_task.set_upstream(task1)
     event_extract_task.set_downstream(task2)
@@ -179,7 +190,8 @@ task3 = DummyOperator(
     dag=dag
 )
 
-event_stage_task.set_downstream(task3)
+for task in remote_paths_delete_tasks:
+    event_stage_task >> task
 
 state_warehouse_update_task = MsSqlOperator(
     task_id="warehouse_update_trip",
@@ -202,7 +214,7 @@ state_warehouse_update_task = MsSqlOperator(
     """
 )
 
-task3 >> state_warehouse_update_task
+event_stage_task >> state_warehouse_update_task
 
 state_warehouse_insert_task = MsSqlOperator(
     task_id="warehouse_insert_trip",
@@ -276,4 +288,4 @@ state_warehouse_insert_task = MsSqlOperator(
     """
 )
 
-task3 >> state_warehouse_insert_task
+event_stage_task >> state_warehouse_insert_task
