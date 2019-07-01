@@ -1,5 +1,5 @@
 # airflow-base
-[![CircleCI](https://circleci.com/gh/mike-mcdonald/airflow-base/tree/master.svg?style=svg)](https://circleci.com/gh/mike-mcdonald/airflow-base/tree/master)
+[![CircleCI](https://circleci.com/gh/mike-mcdonald/airflow-base/tree/master.svg?style=svg&circle-token=917f4ac9fbdc1406ed376aacd175600873520bc8)](https://circleci.com/gh/mike-mcdonald/airflow-base/tree/master)
 
 This repository contains **Dockerfile** of [apache-airflow](https://github.com/apache/incubator-airflow) for [Docker](https://www.docker.com/)
 
