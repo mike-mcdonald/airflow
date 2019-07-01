@@ -145,7 +145,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             return route.loc[route['timestamp'].idxmin()].geometry
 
         def get_destination(route):
-            return route.loc[route['timestamp'].idxmax()].geometry
+            return route.loc[route['timestamp'].idxmax()].geometry or route.loc[route["timestamp"].idxmin()].geometry
 
         # Pull out the origin and destination
         trips['origin'] = trips.route.map(get_origin)
