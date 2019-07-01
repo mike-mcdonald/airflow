@@ -7,6 +7,7 @@ import airflow
 from airflow import DAG
 from airflow.operators.dummy_operator import DummyOperator
 
+from airflow.operators.azure_plugin import AzureDataLakeRemoveOperator
 from airflow.operators.mssql_plugin import MsSqlOperator
 from airflow.operators.mobility_plugin import (
     MobilityTripsToSqlExtractOperator,
@@ -50,10 +51,15 @@ task2 = DummyOperator(
     dag=dag
 )
 
+remote_paths_delete_tasks = []
+
 # Extract data from providers and stage in tables
 for provider in providers:
     mobility_provider_conn_id = f"mobility_provider_{provider}"
     mobility_provider_token_conn_id = f"mobility_provider_{provider}_token"
+
+    trips_remote_path = f"/transportation/mobility/etl/trip/{provider}-{{{{ ts_nodash }}}}.csv"
+    segment_hits_remote_path = f"/transportation/mobility/etl/segment_hit/{provider}-{{{{ ts_nodash }}}}.csv"
 
     trip_extract_task = MobilityTripsToSqlExtractOperator(
         task_id=f"loading_{provider}_trips",
@@ -63,9 +69,9 @@ for provider in providers:
         sql_conn_id="azure_sql_server_default",
         data_lake_conn_id="azure_data_lake_default",
         trips_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/{provider}-trips-{{{{ ts_nodash }}}}.csv",
-        trips_remote_path=f"/transportation/mobility/etl/trip/{provider}-{{{{ ts_nodash }}}}.csv",
+        trips_remote_path=trips_remote_path,
         segment_hits_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/{provider}-segment-hits-{{{{ ts_nodash }}}}.csv",
-        segment_hits_remote_path=f"/transportation/mobility/etl/segment_hit/{provider}-{{{{ ts_nodash }}}}.csv",
+        segment_hits_remote_path=segment_hits_remote_path,
         cities_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/cities-{{{{ ts_nodash }}}}.csv",
         cities_remote_path=f"/transportation/mobility/dim/cities.csv",
         parking_districts_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/parking_districts-{{{{ ts_nodash }}}}.csv",
@@ -73,6 +79,18 @@ for provider in providers:
         pattern_areas_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/pattern_areas-{{{{ ts_nodash }}}}.csv",
         pattern_areas_remote_path=f"/transportation/mobility/dim/pattern_areas.csv",
         dag=dag)
+
+    remote_paths_delete_tasks.append(
+        AzureDataLakeRemoveOperator(task_id=f"delete_{provider}_trip_extract",
+                                    dag=dag,
+                                    azure_data_lake_conn_id="azure_data_lake_default",
+                                    remote_path=trips_remote_path))
+
+    remote_paths_delete_tasks.append(
+        AzureDataLakeRemoveOperator(task_id=f"delete_{provider}_route_extract",
+                                    dag=dag,
+                                    azure_data_lake_conn_id="azure_data_lake_default",
+                                    remote_path=segment_hits_remote_path))
 
     trip_extract_task.set_upstream(task1)
     trip_extract_task.set_downstream(task2)
@@ -364,3 +382,10 @@ route_warehouse_insert_task = MsSqlOperator(
 )
 
 route_stage_task >> route_warehouse_insert_task
+
+
+for task in remote_paths_delete_tasks:
+    trip_warehouse_insert_task >> task
+    trip_warehouse_update_task >> task
+    route_warehouse_insert_task >> task
+    route_warehouse_update_task >> task
