@@ -95,6 +95,110 @@ for provider in providers:
     trip_extract_task.set_upstream(task1)
     trip_extract_task.set_downstream(task2)
 
+trip_external_stage_task = MsSqlOperator(
+    task_id="extract_external_trips",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    INSERT INTO etl.extract_trip (
+        [trip_id]
+        ,[provider_id]
+        ,[provider_name]
+        ,[device_id]
+        ,[vehicle_id]
+        ,[vehicle_type]
+        ,[propulsion_type]
+        ,[start_time]
+        ,[start_date_key]
+        ,[start_cell_key]
+        ,[start_city_key]
+        ,[start_parking_district_key]
+        ,[start_pattern_area_key]
+        ,[end_time]
+        ,[end_date_key]
+        ,[end_cell_key]
+        ,[end_city_key]
+        ,[end_parking_district_key]
+        ,[end_pattern_area_key]
+        ,[distance]
+        ,[duration]
+        ,[accuracy]
+        ,[standard_cost]
+        ,[actual_cost]
+        ,[parking_verification_url]
+        ,[seen]
+        ,[batch]
+    )
+    SELECT
+    [trip_id]
+    ,[provider_id]
+    ,[provider_name]
+    ,[device_id]
+    ,[vehicle_id]
+    ,[vehicle_type]
+    ,[propulsion_type]
+    ,[start_time]
+    ,[start_date_key]
+    ,[start_cell_key]
+    ,[start_city_key]
+    ,[start_parking_district_key]
+    ,[start_pattern_area_key]
+    ,[end_time]
+    ,[end_date_key]
+    ,[end_cell_key]
+    ,[end_city_key]
+    ,[end_parking_district_key]
+    ,[end_pattern_area_key]
+    ,[distance]
+    ,[duration]
+    ,[accuracy]
+    ,[standard_cost]
+    ,[actual_cost]
+    ,[parking_verification_url]
+    ,[seen]
+    ,[batch]
+    FROM etl.external_trip
+    WHERE batch = '{{ ts_nodash }}'
+    """
+)
+
+segment_hit_external_stage_task = MsSqlOperator(
+    task_id="extract_external_segment_hits",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    INSERT INTO etl.extract_segment_hit (
+        [provider_id]
+        ,[date_key]
+        ,[segment_key]
+        ,[hash]
+        ,[datetime]
+        ,[vehicle_type]
+        ,[propulsion_type]
+        ,[heading]
+        ,[speed]
+        ,[seen]
+        ,[batch]
+    )
+    SELECT
+    [provider_id]
+    ,[date_key]
+    ,[segment_key]
+    ,[hash]
+    ,[datetime]
+    ,[vehicle_type]
+    ,[propulsion_type]
+    ,[heading]
+    ,[speed]
+    ,[seen]
+    ,[batch]
+    FROM etl.external_segment_hit
+    WHERE batch = '{{ ts_nodash }}'
+    """
+)
+
+task2 >> trip_external_stage_task
+task2 >> segment_hit_external_stage_task
 
 clean_stage_task = MsSqlOperator(
     task_id="clean_stage_table",
@@ -106,7 +210,8 @@ clean_stage_task = MsSqlOperator(
     """
 )
 
-task2 >> clean_stage_task
+trip_external_stage_task >> clean_stage_task
+segment_hit_external_stage_task >> clean_stage_task
 
 provider_sync_task = MobilityProviderSyncOperator(
     task_id="provider_sync",
@@ -115,7 +220,8 @@ provider_sync_task = MobilityProviderSyncOperator(
     dag=dag
 )
 
-task2 >> provider_sync_task
+trip_external_stage_task >> provider_sync_task
+segment_hit_external_stage_task >> provider_sync_task
 
 vehicle_sync_task = MobilityVehicleSyncOperator(
     task_id="vehicle_sync",
@@ -124,7 +230,8 @@ vehicle_sync_task = MobilityVehicleSyncOperator(
     dag=dag
 )
 
-task2 >> vehicle_sync_task
+trip_external_stage_task >> vehicle_sync_task
+segment_hit_external_stage_task >> vehicle_sync_task
 
 trip_stage_task = MsSqlOperator(
     task_id="stage_trips",

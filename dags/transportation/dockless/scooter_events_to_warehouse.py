@@ -86,6 +86,59 @@ for provider in providers:
     event_extract_task.set_upstream(task1)
     event_extract_task.set_downstream(task2)
 
+event_external_stage_task = MsSqlOperator(
+    task_id="extract_external_batch",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    INSERT INTO etl.extract_event (
+        [event_hash]
+        ,[provider_id]
+        ,[provider_name]
+        ,[device_id]
+        ,[vehicle_id]
+        ,[vehicle_type]
+        ,[propulsion_type]
+        ,[date_key]
+        ,[event_time]
+        ,[state]
+        ,[event]
+        ,[cell_key]
+        ,[city_key]
+        ,[parking_district_key]
+        ,[pattern_area_key]
+        ,[battery_pct]
+        ,[associated_trip]
+        ,[seen]
+        ,[batch]
+    )
+    SELECT
+    [event_hash]
+    ,[provider_id]
+    ,[provider_name]
+    ,[device_id]
+    ,[vehicle_id]
+    ,[vehicle_type]
+    ,[propulsion_type]
+    ,[date_key]
+    ,[event_time]
+    ,[state]
+    ,[event]
+    ,[cell_key]
+    ,[city_key]
+    ,[parking_district_key]
+    ,[pattern_area_key]
+    ,[battery_pct]
+    ,[associated_trip]
+    ,[seen]
+    ,[batch]
+    FROM etl.external_event
+    WHERE batch = '{{ ts_nodash }}'
+    """
+)
+
+task2 >> event_external_stage_task
+
 # Run SQL scripts to transform extract data into staged facts
 event_stage_task = MsSqlOperator(
     task_id=f"staging_states",
@@ -162,7 +215,7 @@ provider_sync_task = MobilityProviderSyncOperator(
     mssql_conn_id="azure_sql_server_full",
     dag=dag
 )
-provider_sync_task.set_upstream(task2)
+provider_sync_task.set_upstream(event_external_stage_task)
 provider_sync_task.set_downstream(event_stage_task)
 
 vehicle_sync_task = MobilityVehicleSyncOperator(
@@ -171,7 +224,7 @@ vehicle_sync_task = MobilityVehicleSyncOperator(
     mssql_conn_id="azure_sql_server_full",
     dag=dag
 )
-vehicle_sync_task.set_upstream(task2)
+vehicle_sync_task.set_upstream(event_external_stage_task)
 vehicle_sync_task.set_downstream(event_stage_task)
 
 clean_stage_task = MsSqlOperator(
@@ -182,13 +235,8 @@ clean_stage_task = MsSqlOperator(
     DELETE FROM etl.stage_state WHERE batch = '{{ ts_nodash }}'
     """
 )
-clean_stage_task.set_upstream(task2)
+clean_stage_task.set_upstream(event_external_stage_task)
 clean_stage_task.set_downstream(event_stage_task)
-
-task3 = DummyOperator(
-    task_id="provider_staging_complete",
-    dag=dag
-)
 
 for task in remote_paths_delete_tasks:
     event_stage_task >> task
