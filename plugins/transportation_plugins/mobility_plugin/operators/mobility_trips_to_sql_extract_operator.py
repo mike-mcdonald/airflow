@@ -138,7 +138,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             return frame
 
         trips["route"] = trips.apply(parse_route, axis=1)
-
+        trips['route'] = trips.route.map(lambda x: x.dropna(axis=0, subset=['geometry']))  #remove all rows for which the value of geometry is NaN
         self.log.debug("Retrieving origin and destination...")
 
         def get_origin(route):
@@ -146,7 +146,6 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
 
         def get_destination(route):
             return route.loc[route['timestamp'].idxmax()].geometry or route.loc[route["timestamp"].idxmin()].geometry
-
         # Pull out the origin and destination
         trips['origin'] = trips.route.map(get_origin)
         trips['destination'] = trips.route.map(get_destination)
@@ -158,7 +157,6 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
                 by=['trip_id', 'timestamp'], ascending=True
             )
         ).reset_index(drop=True)
-        route_df.dropna(axis=0, subset=[route_df.geometry]) #remove all rows for which the value of geometry is NaN
         route_df.crs = {'init': 'epsg:4326'}
         route_df['datetime'] = route_df.timestamp.map(
             lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
@@ -232,7 +230,6 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             del start_city_key
             del start_parking_district_key
             del start_pattern_area_key
-
         trips = trips.set_geometry('destination')
         trips['end_cell_key'] = gpd.sjoin(
             trips, cells, how="left", op="within")['key']
