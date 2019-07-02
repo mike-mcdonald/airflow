@@ -158,6 +158,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
                 by=['trip_id', 'timestamp'], ascending=True
             )
         ).reset_index(drop=True)
+        route_df.dropna(axis=0, subset=[route_df.geometry]) #remove all rows for which the value of geometry is NaN
         route_df.crs = {'init': 'epsg:4326'}
         route_df['datetime'] = route_df.timestamp.map(
             lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
