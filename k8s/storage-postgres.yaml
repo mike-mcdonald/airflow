@@ -1,16 +1,3 @@
-kind: PersistentVolume
-apiVersion: v1
-metadata:
-  name: postgres-pv-volume
-  labels:
-    type: local
-    app: postgres
-spec:
-  storageClassName: azure-disk-retain
-  capacity:
-    storage: 100Gi
-  accessModes:
-    - ReadWriteOnce
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1
