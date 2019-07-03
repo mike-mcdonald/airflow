@@ -6,13 +6,11 @@ metadata:
     type: local
     app: postgres
 spec:
-  storageClassName: manual
+  storageClassName: azure-disk-retain
   capacity:
-    storage: 5Gi
+    storage: 100Gi
   accessModes:
-    - ReadWriteMany
-  hostPath:
-    path: "/mnt/data"
+    - ReadWriteOnce
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1
@@ -21,9 +19,9 @@ metadata:
   labels:
     app: postgres
 spec:
-  storageClassName: manual
+  storageClassName: azure-disk-retain
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   resources:
     requests:
       storage: 100Gi
