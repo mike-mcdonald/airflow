@@ -53,6 +53,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
                  parking_districts_remote_path=None,
                  pattern_areas_local_path=None,
                  pattern_areas_remote_path=None,
+                 df_global=None,
                  * args, **kwargs):
         super().__init__(*args, **kwargs)
         self.sql_conn_id = sql_conn_id
@@ -191,26 +192,28 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
 
         trips = trips.set_geometry('origin')
         trips['start_cell_key'] = gpd.sjoin(
-            trips.set_geometry('origin'), cells, how="left", op="within")['key']
+            trips.set_geometry('origin'), cells, how="left", op="within")['key'] # why set_geometry again?
 
         hook = AzureDataLakeHook(
             azure_data_lake_conn_id=self.data_lake_conn_id
         )
 
-        def find_geospatial_dim(local_path, remote_path):
-            pathlib.Path(os.path.dirname(local_path)
-                         ).mkdir(parents=True, exist_ok=True)
-
+        def set_df_globally(local_path, remote_path):
             df = hook.download_file(
-                local_path, remote_path)
+                local_path, remote_path) 
             df = gpd.read_file(local_path)
             df['geometry'] = df.wkt.map(loads)
             df.crs = {'init': 'epsg:4326'}
+            self.df_global
 
+        def find_geospatial_dim(local_path, remote_path):
+            pathlib.Path(os.path.dirname(local_path)
+                         ).mkdir(parents=True, exist_ok=True)
+            if (self.df_global == None):
+                set_df_globally(local_path,remote_path)
             series = gpd.sjoin(
-                trips.copy(), df, how="left", op="within")['key']
+                trips.copy(), self.df_global, how="left", op="within")['key']
 
-            del df
             os.remove(local_path)
 
             return series
@@ -227,6 +230,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             trips['start_parking_district_key'] = start_parking_district_key.result()
             trips['start_pattern_area_key'] = start_pattern_area_key.result()
 
+            self.df_global=None
             del start_city_key
             del start_parking_district_key
             del start_pattern_area_key
@@ -247,6 +251,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             trips['end_parking_district_key'] = end_parking_district_key.result()
             trips['end_pattern_area_key'] = end_pattern_area_key.result()
 
+            self.df_global=None
             del end_city_key
             del end_parking_district_key
             del end_pattern_area_key
