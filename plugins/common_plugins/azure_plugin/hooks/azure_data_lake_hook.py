@@ -13,4 +13,7 @@ class AzureDataLakeHook(ContribHook):
         self.connection.set_expiry(path, expiry_option, expire_time)
 
     def rm(self, path, recursive=False):
-        self.connection.rm(path, recursive)
+        try:
+            self.connection.rm(path, recursive)
+        except FileNotFoundError as err:
+            self.log.debug(f"{path} not found.")

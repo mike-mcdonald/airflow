@@ -3,6 +3,7 @@ import json
 import pathlib
 import os
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime,  timedelta
 from math import atan2, pi, pow, sqrt
 from numpy import nan
@@ -29,7 +30,13 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
     template_fields = ('trips_local_path',
                        'trips_remote_path',
                        'segment_hits_local_path',
-                       'segment_hits_remote_path',)
+                       'segment_hits_remote_path',
+                       'cities_local_path',
+                       'cities_remote_path',
+                       'parking_districts_local_path',
+                       'parking_districts_remote_path',
+                       'pattern_areas_local_path',
+                       'pattern_areas_remote_path',)
 
     def __init__(self,
                  mobility_provider_conn_id="mobility_provider_default",
@@ -40,6 +47,12 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
                  trips_remote_path=None,
                  segment_hits_local_path=None,
                  segment_hits_remote_path=None,
+                 cities_local_path=None,
+                 cities_remote_path=None,
+                 parking_districts_local_path=None,
+                 parking_districts_remote_path=None,
+                 pattern_areas_local_path=None,
+                 pattern_areas_remote_path=None,
                  * args, **kwargs):
         super().__init__(*args, **kwargs)
         self.sql_conn_id = sql_conn_id
@@ -50,10 +63,18 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         self.trips_remote_path = trips_remote_path
         self.segment_hits_local_path = segment_hits_local_path
         self.segment_hits_remote_path = segment_hits_remote_path
+        self.cities_local_path = cities_local_path
+        self.cities_remote_path = cities_remote_path
+        self.parking_districts_local_path = parking_districts_local_path
+        self.parking_districts_remote_path = parking_districts_remote_path
+        self.pattern_areas_local_path = pattern_areas_local_path
+        self.pattern_areas_remote_path = pattern_areas_remote_path
 
     def execute(self, context):
         end_time = context.get("execution_date")
-        start_time = end_time - timedelta(hours=12)
+        pace = timedelta(hours=2) if datetime.now().date() > context.get(
+            "execution_date").date() else timedelta(hours=12)
+        start_time = end_time - pace
 
         # Create the hook
         hook = MobilityProviderHook(
@@ -117,15 +138,14 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             return frame
 
         trips["route"] = trips.apply(parse_route, axis=1)
-
+        trips['route'] = trips.route.map(lambda x: x.dropna(axis=0, subset=['geometry']))  #remove all rows for which the value of geometry is NaN
         self.log.debug("Retrieving origin and destination...")
 
         def get_origin(route):
             return route.loc[route['timestamp'].idxmin()].geometry
 
         def get_destination(route):
-            return route.loc[route['timestamp'].idxmax()].geometry
-
+            return route.loc[route['timestamp'].idxmax()].geometry or route.loc[route["timestamp"].idxmin()].geometry
         # Pull out the origin and destination
         trips['origin'] = trips.route.map(get_origin)
         trips['destination'] = trips.route.map(get_destination)
@@ -169,12 +189,67 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
 
         self.log.debug("Mapping trip O/D to cells...")
 
+        trips = trips.set_geometry('origin')
         trips['start_cell_key'] = gpd.sjoin(
             trips.set_geometry('origin'), cells, how="left", op="within")['key']
-        trips['end_cell_key'] = gpd.sjoin(
-            trips.set_geometry('destination'), cells, how="left", op="within")['key']
 
+        hook = AzureDataLakeHook(
+            azure_data_lake_conn_id=self.data_lake_conn_id
+        )
+
+        def find_geospatial_dim(local_path, remote_path):
+            pathlib.Path(os.path.dirname(local_path)
+                         ).mkdir(parents=True, exist_ok=True)
+
+            df = hook.download_file(
+                local_path, remote_path)
+            df = gpd.read_file(local_path)
+            df['geometry'] = df.wkt.map(loads)
+            df.crs = {'init': 'epsg:4326'}
+
+            series = gpd.sjoin(
+                trips.copy(), df, how="left", op="within")['key']
+
+            del df
+            os.remove(local_path)
+
+            return series
+
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            start_city_key = executor.submit(find_geospatial_dim,
+                                             self.cities_local_path, self.cities_remote_path)
+            start_parking_district_key = executor.submit(find_geospatial_dim,
+                                                         self.parking_districts_local_path, self.parking_districts_remote_path)
+            start_pattern_area_key = executor.submit(find_geospatial_dim,
+                                                     self.pattern_areas_local_path, self.pattern_areas_remote_path)
+
+            trips['start_city_key'] = start_city_key.result()
+            trips['start_parking_district_key'] = start_parking_district_key.result()
+            trips['start_pattern_area_key'] = start_pattern_area_key.result()
+
+            del start_city_key
+            del start_parking_district_key
+            del start_pattern_area_key
+        trips = trips.set_geometry('destination')
+        trips['end_cell_key'] = gpd.sjoin(
+            trips, cells, how="left", op="within")['key']
         del cells
+
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            end_city_key = executor.submit(find_geospatial_dim,
+                                           self.cities_local_path, self.cities_remote_path)
+            end_parking_district_key = executor.submit(find_geospatial_dim,
+                                                       self.parking_districts_local_path, self.parking_districts_remote_path)
+            end_pattern_area_key = executor.submit(find_geospatial_dim,
+                                                   self.pattern_areas_local_path, self.pattern_areas_remote_path)
+
+            trips['end_city_key'] = end_city_key.result()
+            trips['end_parking_district_key'] = end_parking_district_key.result()
+            trips['end_pattern_area_key'] = end_pattern_area_key.result()
+
+            del end_city_key
+            del end_parking_district_key
+            del end_pattern_area_key
 
         self.log.debug("Writing trips extract to data lake...")
 
@@ -196,9 +271,15 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             'start_time',
             'start_date_key',
             'start_cell_key',
+            'start_city_key',
+            'start_parking_district_key',
+            'start_pattern_area_key',
             'end_time',
             'end_date_key',
             'end_cell_key',
+            'end_city_key',
+            'end_parking_district_key',
+            'end_pattern_area_key',
             'distance',
             'duration',
             'accuracy',
@@ -209,13 +290,11 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             'batch'
         ]].to_csv(self.trips_local_path, index=False)
 
-        hook = AzureDataLakeHook(
-            azure_data_lake_conn_id=self.data_lake_conn_id
-        )
-
         hook.upload_file(self.trips_local_path, self.trips_remote_path)
         hook.set_expiry(self.trips_remote_path, 'RelativeToNow',
                         expire_time=(72 * 3600 * 1000))
+
+        os.remove(self.trips_local_path)
 
         self.log.debug("Reading segments from data warehouse...")
 
@@ -320,4 +399,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
                          self.segment_hits_remote_path)
         hook.set_expiry(self.segment_hits_remote_path, 'RelativeToNow',
                         expire_time=(72 * 3600 * 1000))
+
+        os.remove(self.segment_hits_local_path)
+
         return

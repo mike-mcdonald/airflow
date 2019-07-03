@@ -10,7 +10,8 @@ setup(
         'airflow.plugins': [
             'mobility_plugin = transportation_plugins.mobility_plugin:MobilityPlugin',
             'dataframe_plugin = common_plugins.dataframe_plugin:DataFramePlugin',
-            'mssql_plugin = common_plugins.mssql_plugin:MsSqlPlugin'
+            'mssql_plugin = common_plugins.mssql_plugin:MsSqlPlugin',
+            'azure_plugin = common_plugins.azure_plugin:AzurePlugin'
         ]
     }
 )

@@ -7,6 +7,7 @@ import airflow
 from airflow import DAG
 from airflow.operators.dummy_operator import DummyOperator
 
+from airflow.operators.azure_plugin import AzureDataLakeRemoveOperator
 from airflow.operators.mssql_plugin import MsSqlOperator
 from airflow.operators.mobility_plugin import (
     MobilityTripsToSqlExtractOperator,
@@ -22,7 +23,7 @@ default_args = {
     "email_on_failure": True,
     "email_on_retry": False,
     "retries": 9,
-    "retry_delay": timedelta(minutes=2),
+    "retry_delay": timedelta(minutes=1),
     "concurrency": 1,
     "max_active_runs": 1,
     # "queue": "bash_queue",
@@ -50,10 +51,15 @@ task2 = DummyOperator(
     dag=dag
 )
 
+remote_paths_delete_tasks = []
+
 # Extract data from providers and stage in tables
 for provider in providers:
     mobility_provider_conn_id = f"mobility_provider_{provider}"
     mobility_provider_token_conn_id = f"mobility_provider_{provider}_token"
+
+    trips_remote_path = f"/transportation/mobility/etl/trip/{provider}-{{{{ ts_nodash }}}}.csv"
+    segment_hits_remote_path = f"/transportation/mobility/etl/segment_hit/{provider}-{{{{ ts_nodash }}}}.csv"
 
     trip_extract_task = MobilityTripsToSqlExtractOperator(
         task_id=f"loading_{provider}_trips",
@@ -63,14 +69,136 @@ for provider in providers:
         sql_conn_id="azure_sql_server_default",
         data_lake_conn_id="azure_data_lake_default",
         trips_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/{provider}-trips-{{{{ ts_nodash }}}}.csv",
-        trips_remote_path=f"/transportation/mobility/etl/trip/{provider}-{{{{ ts_nodash }}}}.csv",
+        trips_remote_path=trips_remote_path,
         segment_hits_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/{provider}-segment-hits-{{{{ ts_nodash }}}}.csv",
-        segment_hits_remote_path=f"/transportation/mobility/etl/segment_hit/{provider}-{{{{ ts_nodash }}}}.csv",
+        segment_hits_remote_path=segment_hits_remote_path,
+        cities_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/cities-{{{{ ts_nodash }}}}.csv",
+        cities_remote_path=f"/transportation/mobility/dim/cities.csv",
+        parking_districts_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/parking_districts-{{{{ ts_nodash }}}}.csv",
+        parking_districts_remote_path=f"/transportation/mobility/dim/parking_districts.csv",
+        pattern_areas_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/pattern_areas-{{{{ ts_nodash }}}}.csv",
+        pattern_areas_remote_path=f"/transportation/mobility/dim/pattern_areas.csv",
         dag=dag)
+
+    remote_paths_delete_tasks.append(
+        AzureDataLakeRemoveOperator(task_id=f"delete_{provider}_trip_extract",
+                                    dag=dag,
+                                    azure_data_lake_conn_id="azure_data_lake_default",
+                                    remote_path=trips_remote_path))
+
+    remote_paths_delete_tasks.append(
+        AzureDataLakeRemoveOperator(task_id=f"delete_{provider}_route_extract",
+                                    dag=dag,
+                                    azure_data_lake_conn_id="azure_data_lake_default",
+                                    remote_path=segment_hits_remote_path))
 
     trip_extract_task.set_upstream(task1)
     trip_extract_task.set_downstream(task2)
 
+trip_external_stage_task = MsSqlOperator(
+    task_id="extract_external_trips",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    INSERT INTO etl.extract_trip (
+        [trip_id]
+        ,[provider_id]
+        ,[provider_name]
+        ,[device_id]
+        ,[vehicle_id]
+        ,[vehicle_type]
+        ,[propulsion_type]
+        ,[start_time]
+        ,[start_date_key]
+        ,[start_cell_key]
+        ,[start_city_key]
+        ,[start_parking_district_key]
+        ,[start_pattern_area_key]
+        ,[end_time]
+        ,[end_date_key]
+        ,[end_cell_key]
+        ,[end_city_key]
+        ,[end_parking_district_key]
+        ,[end_pattern_area_key]
+        ,[distance]
+        ,[duration]
+        ,[accuracy]
+        ,[standard_cost]
+        ,[actual_cost]
+        ,[parking_verification_url]
+        ,[seen]
+        ,[batch]
+    )
+    SELECT
+    [trip_id]
+    ,[provider_id]
+    ,[provider_name]
+    ,[device_id]
+    ,[vehicle_id]
+    ,[vehicle_type]
+    ,[propulsion_type]
+    ,[start_time]
+    ,[start_date_key]
+    ,[start_cell_key]
+    ,[start_city_key]
+    ,[start_parking_district_key]
+    ,[start_pattern_area_key]
+    ,[end_time]
+    ,[end_date_key]
+    ,[end_cell_key]
+    ,[end_city_key]
+    ,[end_parking_district_key]
+    ,[end_pattern_area_key]
+    ,[distance]
+    ,[duration]
+    ,[accuracy]
+    ,[standard_cost]
+    ,[actual_cost]
+    ,[parking_verification_url]
+    ,[seen]
+    ,[batch]
+    FROM etl.external_trip
+    WHERE batch = '{{ ts_nodash }}'
+    """
+)
+
+segment_hit_external_stage_task = MsSqlOperator(
+    task_id="extract_external_segment_hits",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    INSERT INTO etl.extract_segment_hit (
+        [provider_id]
+        ,[date_key]
+        ,[segment_key]
+        ,[hash]
+        ,[datetime]
+        ,[vehicle_type]
+        ,[propulsion_type]
+        ,[heading]
+        ,[speed]
+        ,[seen]
+        ,[batch]
+    )
+    SELECT
+    [provider_id]
+    ,[date_key]
+    ,[segment_key]
+    ,[hash]
+    ,[datetime]
+    ,[vehicle_type]
+    ,[propulsion_type]
+    ,[heading]
+    ,[speed]
+    ,[seen]
+    ,[batch]
+    FROM etl.external_segment_hit
+    WHERE batch = '{{ ts_nodash }}'
+    """
+)
+
+task2 >> trip_external_stage_task
+task2 >> segment_hit_external_stage_task
 
 clean_stage_task = MsSqlOperator(
     task_id="clean_stage_table",
@@ -82,7 +210,8 @@ clean_stage_task = MsSqlOperator(
     """
 )
 
-task2 >> clean_stage_task
+trip_external_stage_task >> clean_stage_task
+segment_hit_external_stage_task >> clean_stage_task
 
 provider_sync_task = MobilityProviderSyncOperator(
     task_id="provider_sync",
@@ -91,7 +220,8 @@ provider_sync_task = MobilityProviderSyncOperator(
     dag=dag
 )
 
-task2 >> provider_sync_task
+trip_external_stage_task >> provider_sync_task
+segment_hit_external_stage_task >> provider_sync_task
 
 vehicle_sync_task = MobilityVehicleSyncOperator(
     task_id="vehicle_sync",
@@ -100,7 +230,8 @@ vehicle_sync_task = MobilityVehicleSyncOperator(
     dag=dag
 )
 
-task2 >> vehicle_sync_task
+trip_external_stage_task >> vehicle_sync_task
+segment_hit_external_stage_task >> vehicle_sync_task
 
 trip_stage_task = MsSqlOperator(
     task_id="stage_trips",
@@ -113,7 +244,13 @@ trip_stage_task = MsSqlOperator(
         ,[propulsion_type]
         ,[trip_id]
         ,[start_cell_key]
+        ,[start_city_key]
+        ,[start_parking_district_key]
+        ,[start_pattern_area_key]
         ,[end_cell_key]
+        ,[end_city_key]
+        ,[end_parking_district_key]
+        ,[end_pattern_area_key]
         ,[start_time]
         ,[start_date_key]
         ,[end_time]
@@ -133,7 +270,13 @@ trip_stage_task = MsSqlOperator(
     ,[propulsion_type]
     ,[trip_id]
     ,[start_cell_key]
+    ,[start_city_key]
+    ,[start_parking_district_key]
+    ,[start_pattern_area_key]
     ,[end_cell_key]
+    ,[end_city_key]
+    ,[end_parking_district_key]
+    ,[end_pattern_area_key]
     ,[start_time]
     ,[start_date_key]
     ,[end_time]
@@ -166,7 +309,15 @@ trip_warehouse_update_task = MsSqlOperator(
     mssql_conn_id="azure_sql_server_full",
     sql="""
     UPDATE fact.trip
-    SET last_seen = source.seen
+    SET last_seen = source.seen,
+    [start_cell_key] = source.start_cell_key,
+    [start_city_key] = source.start_city_key,
+    [start_parking_district_key] = source.start_parking_district_key,
+    [start_pattern_area_key] = source.start_pattern_area_key,
+    [end_cell_key] = source.end_cell_key,
+    [end_city_key] = source.end_city_key,
+    [end_parking_district_key] = source.end_parking_district_key,
+    [end_pattern_area_key] = source.end_pattern_area_key
     FROM etl.stage_trip AS source
     WHERE source.trip_id = fact.trip.trip_id
     AND source.batch = '{{ ts_nodash }}'
@@ -181,44 +332,56 @@ trip_warehouse_insert_task = MsSqlOperator(
     mssql_conn_id="azure_sql_server_full",
     sql="""
     INSERT INTO [fact].[trip] (
-        [trip_id]
-        ,[provider_key]
-        ,[vehicle_key]
-        ,[propulsion_type]
-        ,[start_cell_key]
-        ,[end_cell_key]
-        ,[start_time]
-        ,[start_date_key]
-        ,[end_time]
-        ,[end_date_key]
-        ,[distance]
-        ,[duration]
-        ,[accuracy]
-        ,[standard_cost]
-        ,[actual_cost]
-        ,[parking_verification_url]
-        ,[first_seen]
-        ,[last_seen]
+        [trip_id],
+        [provider_key],
+        [vehicle_key],
+        [propulsion_type],
+        [start_time],
+        [start_date_key],
+        [start_cell_key],
+        [start_city_key],
+        [start_parking_district_key],
+        [start_pattern_area_key],
+        [end_time],
+        [end_date_key],
+        [end_cell_key],
+        [end_city_key],
+        [end_parking_district_key],
+        [end_pattern_area_key],
+        [distance],
+        [duration],
+        [accuracy],
+        [standard_cost],
+        [actual_cost],
+        [parking_verification_url],
+        [first_seen],
+        [last_seen]
     )
     SELECT
-    [trip_id]
-    ,[provider_key]
-    ,[vehicle_key]
-    ,[propulsion_type]
-    ,[start_cell_key]
-    ,[end_cell_key]
-    ,[start_time]
-    ,[start_date_key]
-    ,[end_time]
-    ,[end_date_key]
-    ,[distance]
-    ,[duration]
-    ,[accuracy]
-    ,[standard_cost]
-    ,[actual_cost]
-    ,[parking_verification_url]
-    ,[seen]
-    ,[seen]
+    [trip_id],
+    [provider_key],
+    [vehicle_key],
+    [propulsion_type],
+    [start_time],
+    [start_date_key],
+    [start_cell_key],
+    [start_city_key],
+    [start_parking_district_key],
+    [start_pattern_area_key],
+    [end_time],
+    [end_date_key],
+    [end_cell_key],
+    [end_city_key],
+    [end_parking_district_key],
+    [end_pattern_area_key],
+    [distance],
+    [duration],
+    [accuracy],
+    [standard_cost],
+    [actual_cost],
+    [parking_verification_url],
+    [seen],
+    [seen]
     FROM [etl].[stage_trip] AS source
     WHERE batch = '{{ ts_nodash }}'
     AND NOT EXISTS (
@@ -326,3 +489,10 @@ route_warehouse_insert_task = MsSqlOperator(
 )
 
 route_stage_task >> route_warehouse_insert_task
+
+
+for task in remote_paths_delete_tasks:
+    trip_warehouse_insert_task >> task
+    trip_warehouse_update_task >> task
+    route_warehouse_insert_task >> task
+    route_warehouse_update_task >> task

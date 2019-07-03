@@ -1,4 +1,5 @@
 # airflow-base
+[![CircleCI](https://circleci.com/gh/mike-mcdonald/airflow-base/tree/master.svg?style=svg&circle-token=917f4ac9fbdc1406ed376aacd175600873520bc8)](https://circleci.com/gh/mike-mcdonald/airflow-base/tree/master)
 
 This repository contains **Dockerfile** of [apache-airflow](https://github.com/apache/incubator-airflow) for [Docker](https://www.docker.com/)
 
@@ -10,7 +11,7 @@ This repository contains **Dockerfile** of [apache-airflow](https://github.com/a
 
 From the project directory run:
 
-    docker build -t pbotapps.azurecr.io/airflow/base .
+    docker build -t pbotapps.azurecr.io/airflow .
 
 ## Run
     docker-compose up

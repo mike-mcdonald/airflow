@@ -20,7 +20,8 @@ class MobilityVehicleSyncOperator(MsSqlOperator):
         ,vehicle_id
         ,vehicle_type
         FROM {source_table} AS e
-        WHERE NOT EXISTS (
+        WHERE batch = '{{{{ ts_nodash }}}}'
+        AND NOT EXISTS (
             SELECT 1
             FROM dim.vehicle AS v
             WHERE v.device_id = e.device_id
