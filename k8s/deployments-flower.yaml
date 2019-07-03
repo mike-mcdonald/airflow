@@ -7,9 +7,6 @@ metadata:
   labels:
     app: airflow
     component: flower
-    chart: airflow-3.0.2
-    release: airflow
-    heritage: Tiller
 spec:
   replicas: 1
   minReadySeconds: 10
@@ -22,7 +19,6 @@ spec:
     matchLabels:
       app: airflow
       component: flower
-      release: airflow
   template:
     metadata:
       annotations:
@@ -30,19 +26,19 @@ spec:
       labels:
         app: airflow
         component: flower
-        release: airflow
+
     spec:
       restartPolicy: Always
       containers:
         - name: airflow-flower
-          image: pbotapps.azurecr.io/airflow:latest
+          image: pbotapps.azurecr.io/airflow:1.10.2.1
           imagePullPolicy: Always
           envFrom:
             - configMapRef:
                 name: "airflow-env"
           env:          
             - name: POSTGRES_USER
-              value: "postgres"
+              value: airflowadmin
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -69,4 +65,10 @@ spec:
             failureThreshold: 5
           resources:
             {}
-            
+          volumeMounts:
+            - mountPath: /usr/local/lib/airflow/logs
+              name: airflow-logs
+      volumes:
+        - name: airflow-logs
+          persistentVolumeClaim:
+            claimName: airflow-logs-pv-claim

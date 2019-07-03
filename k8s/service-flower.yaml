@@ -7,16 +7,12 @@ metadata:
   labels:
     app: airflow
     component: flower
-    chart: airflow-3.0.2
-    release: airflow
-    heritage: Tiller
   annotations:
 spec:
   type: ClusterIP
   selector:
     app: airflow
     component: flower
-    release: airflow
   ports:
     - name: flower
       protocol: TCP

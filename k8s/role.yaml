@@ -1,15 +1,10 @@
 ---
-# Source: airflow/templates/role.yaml
-
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: Role
 metadata:
   name: airflow
   labels:
     app: airflow
-    chart: airflow-3.0.2
-    release: airflow
-    heritage: Tiller
 rules:
 - apiGroups: [""]
   resources:

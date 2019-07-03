@@ -3,9 +3,9 @@ kind: ConfigMap
 metadata:
   name: postgres-env
   labels:
-    app: postgres
+    app: airflow
+    component: database
 data:
   POSTGRES_DB: airflow
   POSTGRES_USER: airflowadmin
-  POSTGRES_PASSWORD: admin123
   PGDATA: /var/lib/postgresql/data/pgdata

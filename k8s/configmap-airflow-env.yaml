@@ -6,23 +6,19 @@ metadata:
   name: "airflow-env"
   labels:
     app: airflow
-    chart: airflow-3.0.2
-    release: airflow
-    heritage: Tiller
 data:
   ## Force UTC timezone
   TZ: Etc/UTC
   ## Postgres DB configuration
-  POSTGRES_HOST: "airflow-postgresql"
+  POSTGRES_HOST: "airflow-postgres"
   POSTGRES_PORT: "5432"
   POSTGRES_DB: "airflow"
   ## Redis DB configuration
-  REDIS_HOST: "airflow-redis-master"
-  REDIS_PORT: ""
+  REDIS_HOST: "airflow-redis"
+  REDIS_PORT: "6379"
   ## Flower PORT
   FLOWER_PORT: "5555"
-  # Configure puckel's docker-airflow entrypoint
-  EXECUTOR: "Celery"
+  # Configure entrypoint
   FERNET_KEY: ""
   DO_WAIT_INITDB: "false"
   ## Custom Airflow settings

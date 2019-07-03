@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: postgres
+  name: airflow-postgres
   labels:
     app: airflow
     component: database
@@ -11,7 +11,7 @@ spec:
     app: airflow
     component: database
   ports:
-   - name: postgres
+    - name: postgres
       protocol: TCP
       port: 5432
       targetPort: 5432

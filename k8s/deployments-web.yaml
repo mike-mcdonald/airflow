@@ -7,9 +7,6 @@ metadata:
   labels:
     app: airflow
     component: web
-    chart: airflow-3.0.2
-    release: airflow
-    heritage: Tiller
 spec:
   replicas: 1
   minReadySeconds: 120
@@ -23,22 +20,16 @@ spec:
     matchLabels:
       app: airflow
       component: web
-      release: airflow
   template:
     metadata:
-      annotations:
-        checksum/config-env: 09c0b816c26040730d0592ef304d387444071d0f91d78ca5c69b762ef70ac067
-        checksum/config-git-clone: f512cae06f947137440d3abc371a99e0523123c824b2d95bb45129b1e0a362ad
-        checksum/config-scripts: a54b787422709d2fabba925f46dbe8fb1ea4343cb90e6136f38f7988d9710169
       labels:
         app: airflow
         component: web
-        release: airflow
     spec:
       restartPolicy: Always
       containers:
         - name: airflow-web
-          image: pbotapps.azurecr.io/airflow:latest
+          image: pbotapps.azurecr.io/airflow:1.10.2.1
           imagePullPolicy: Always
           ports:
             - name: web
@@ -49,7 +40,7 @@ spec:
                 name: "airflow-env"
           env:          
             - name: POSTGRES_USER
-              value: "postgres"
+              value: airflow
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -62,20 +53,8 @@ spec:
                   key: redis-password
           resources:
             {}
-            
-          volumeMounts:
-            - name: scripts
-              mountPath: /usr/local/scripts
-          args:
-            - "bash"
-            - "-c"
-            - >
-              echo 'waiting 60s...' &&
-              sleep 60 &&
-              mkdir -p /usr/local/airflow/.local/bin &&
-              export PATH=/usr/local/airflow/.local/bin:$PATH &&
-              echo 'executing webserver...' &&
-              airflow webserver
+          command: 
+            - webserver
           livenessProbe:
             httpGet:
               path: "/health"
@@ -86,10 +65,10 @@ spec:
             timeoutSeconds: 1
             successThreshold: 1
             failureThreshold: 5
+          volumeMounts:
+            - mountPath: /usr/local/lib/airflow/logs
+              name: airflow-logs
       volumes:
-        - name: scripts
-          configMap:
-            name: airflow-scripts
-            defaultMode: 0755
-        - name: dags-data
-          emptyDir: {}
+        - name: airflow-logs
+          persistentVolumeClaim:
+            claimName: airflow-logs-pv-claim

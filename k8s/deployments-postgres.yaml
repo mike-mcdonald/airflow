@@ -1,17 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: postgres
+  name: airflow-postgres
   labels:
     app: airflow
     component: database
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: airflow
+      component: database
   template:
     metadata:
       labels:
         app: airflow
         component: database
+
     spec:
       restartPolicy: Always
       serviceAccountName: airflow
@@ -25,8 +30,6 @@ spec:
             - configMapRef:
                 name: postgres-env
           env:          
-            - name: POSTGRES_USER
-              value: "postgres"
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:

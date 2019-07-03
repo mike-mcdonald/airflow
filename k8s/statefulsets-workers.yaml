@@ -10,9 +10,6 @@ metadata:
   labels:
     app: airflow
     component: worker
-    chart: airflow-3.0.2
-    release: airflow
-    heritage: Tiller
 spec:
   serviceName: "airflow-worker"
   updateStrategy:
@@ -26,15 +23,11 @@ spec:
     matchLabels:
       app: airflow
       component: worker
-      release: airflow
   template:
     metadata:
-      annotations:
-        checksum/config-env: 09c0b816c26040730d0592ef304d387444071d0f91d78ca5c69b762ef70ac067
       labels:
         app: airflow
         component: worker
-        release: airflow
     spec:
       restartPolicy: Always
       terminationGracePeriodSeconds: 30
@@ -42,13 +35,13 @@ spec:
       containers:
         - name: airflow-worker
           imagePullPolicy: Always
-          image: "pbotapps.azurecr.io/airflow:latest"
+          image: "pbotapps.azurecr.io/airflow:1.10.2.1"
           envFrom:
             - configMapRef:
                 name: "airflow-env"
           env:          
             - name: POSTGRES_USER
-              value: "postgres"
+              value: airflowadmin
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -59,30 +52,18 @@ spec:
                 secretKeyRef:
                   name: airflow-redis
                   key: redis-password
-          volumeMounts:
-            - name: scripts
-              mountPath: /usr/local/scripts
-          args:
-            - "bash"
-            - "-c"
-            - >
-              echo 'waiting 60s...' &&
-              sleep 60 &&
-              mkdir -p /usr/local/airflow/.local/bin &&
-              export PATH=/usr/local/airflow/.local/bin:$PATH &&
-              echo 'executing worker...' &&
-              airflow worker
+          command:
+            - worker
           ports:
             - name: wlog
               containerPort: 8793
               protocol: TCP
           resources:
             {}
-            
+          volumeMounts:
+            - mountPath: /usr/local/lib/airflow/logs
+              name: airflow-logs
       volumes:
-        - name: scripts
-          configMap:
-            name: airflow-scripts
-            defaultMode: 0755
-        - name: dags-data
-          emptyDir: {}
+        - name: airflow-logs
+          persistentVolumeClaim:
+            claimName: airflow-logs-pv-claim

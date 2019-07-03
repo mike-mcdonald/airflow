@@ -7,14 +7,9 @@ metadata:
   labels:
     app: airflow
     component: scheduler
-    chart: airflow-3.0.2
-    release: airflow
-    heritage: Tiller
 spec:
   selector:
     matchLabels:
       app: airflow
       component: scheduler
-      release: airflow
   maxUnavailable: 1
-  
