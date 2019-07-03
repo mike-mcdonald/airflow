@@ -77,12 +77,12 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         start_time = end_time - pace
 
         # Create the hook
-        hook = MobilityProviderHook(
+        hook_api = MobilityProviderHook(
             mobility_provider_conn_id=self.mobility_provider_conn_id,
             mobility_provider_token_conn_id=self.mobility_provider_token_conn_id)
 
         # Get trips as a GeoDataFrame
-        trips = gpd.GeoDataFrame(hook.get_trips(
+        trips = gpd.GeoDataFrame(hook_api.get_trips(
             min_end_time=start_time, max_end_time=end_time))
         trips.crs = {'init': 'epsg:4326'}
 
@@ -178,8 +178,8 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         del trips["route"]
 
         hook = AzureMsSqlDataFrameHook(
-            azure_mssql_conn_id=self.sql_conn_id
-        )
+                azure_mssql_conn_id=self.sql_conn_id
+            )
 
         self.log.debug("Reading cells from data warehouse...")
 
@@ -187,7 +187,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
 
         self.log.debug("Mapping trip O/D to cells...")
 
-        hook = AzureDataLakeHook(
+        hook_data_lake = AzureDataLakeHook(
             azure_data_lake_conn_id=self.data_lake_conn_id
         )
 
@@ -195,7 +195,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             pathlib.Path(os.path.dirname(local_path)
                          ).mkdir(parents=True, exist_ok=True)
 
-            df = hook.download_file(
+            df = hook_data_lake.download_file(
                 local_path, remote_path)
             df = gpd.read_file(local_path)
             df['geometry'] = df.wkt.map(loads)
@@ -203,9 +203,10 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
 
             return df
 
+
         def find_geospatial_dim(right_df):
             series = gpd.sjoin(
-                trips.copy(), right_df, how="left", op="within")['key']
+                trips, right_df, how="left", op="within")['key']
 
             return series
 
@@ -309,8 +310,8 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             'batch'
         ]].to_csv(self.trips_local_path, index=False)
 
-        hook.upload_file(self.trips_local_path, self.trips_remote_path)
-        hook.set_expiry(self.trips_remote_path, 'RelativeToNow',
+        hook_data_lake.upload_file(self.trips_local_path, self.trips_remote_path)
+        hook_data_lake.set_expiry(self.trips_remote_path, 'RelativeToNow',
                         expire_time=(72 * 3600 * 1000))
 
         os.remove(self.trips_local_path)
@@ -410,13 +411,9 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             'batch'
         ]].to_csv(self.segment_hits_local_path, index=False)
 
-        hook = AzureDataLakeHook(
-            azure_data_lake_conn_id=self.data_lake_conn_id
-        )
-
-        hook.upload_file(self.segment_hits_local_path,
+        hook_data_lake.upload_file(self.segment_hits_local_path,
                          self.segment_hits_remote_path)
-        hook.set_expiry(self.segment_hits_remote_path, 'RelativeToNow',
+        hook_data_lake.set_expiry(self.segment_hits_remote_path, 'RelativeToNow',
                         expire_time=(72 * 3600 * 1000))
 
         os.remove(self.segment_hits_local_path)
