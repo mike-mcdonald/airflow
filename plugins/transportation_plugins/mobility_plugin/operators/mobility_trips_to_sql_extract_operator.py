@@ -53,7 +53,6 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
                  parking_districts_remote_path=None,
                  pattern_areas_local_path=None,
                  pattern_areas_remote_path=None,
-                 df_global=None,
                  * args, **kwargs):
         super().__init__(*args, **kwargs)
         self.sql_conn_id = sql_conn_id
@@ -139,7 +138,9 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             return frame
 
         trips["route"] = trips.apply(parse_route, axis=1)
-        trips['route'] = trips.route.map(lambda x: x.dropna(axis=0, subset=['geometry']))  #remove all rows for which the value of geometry is NaN
+        # remove all rows for which the value of geometry is NaN
+        trips['route'] = trips.route.map(
+            lambda x: x.dropna(axis=0, subset=['geometry']))
         self.log.debug("Retrieving origin and destination...")
 
         def get_origin(route):
@@ -183,78 +184,91 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         self.log.debug("Reading cells from data warehouse...")
 
         # Map to cells
-        cells = hook.read_table_dataframe(table_name="cell", schema="dim")
-        cells['geometry'] = cells.wkt.map(loads)
-        cells = gpd.GeoDataFrame(cells)
-        cells.crs = {'init': 'epsg:4326'}
 
         self.log.debug("Mapping trip O/D to cells...")
-
-        trips = trips.set_geometry('origin')
-        trips['start_cell_key'] = gpd.sjoin(
-            trips.set_geometry('origin'), cells, how="left", op="within")['key'] # why set_geometry again?
 
         hook = AzureDataLakeHook(
             azure_data_lake_conn_id=self.data_lake_conn_id
         )
 
-        def set_df_globally(local_path, remote_path):
+        def download_data_lake_geodataframe(local_path, remote_path):
+            pathlib.Path(os.path.dirname(local_path)
+                         ).mkdir(parents=True, exist_ok=True)
+
             df = hook.download_file(
-                local_path, remote_path) 
+                local_path, remote_path)
             df = gpd.read_file(local_path)
             df['geometry'] = df.wkt.map(loads)
             df.crs = {'init': 'epsg:4326'}
-            self.df_global = df
 
-        def find_geospatial_dim(local_path, remote_path):
-            pathlib.Path(os.path.dirname(local_path)
-                         ).mkdir(parents=True, exist_ok=True)
-            if (self.df_global == None):
-                set_df_globally(local_path,remote_path)
+            return df
+
+        def find_geospatial_dim(right_df):
             series = gpd.sjoin(
-                trips.copy(), self.df_global, how="left", op="within")['key']
-
-            os.remove(local_path)
+                trips.copy(), right_df, how="left", op="within")['key']
 
             return series
 
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            start_city_key = executor.submit(find_geospatial_dim,
-                                             self.cities_local_path, self.cities_remote_path)
-            start_parking_district_key = executor.submit(find_geospatial_dim,
-                                                         self.parking_districts_local_path, self.parking_districts_remote_path)
-            start_pattern_area_key = executor.submit(find_geospatial_dim,
-                                                     self.pattern_areas_local_path, self.pattern_areas_remote_path)
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            cities = executor.submit(
+                download_data_lake_geodataframe, self.cities_local_path, self.cities_remote_path)
+            parking_districts = executor.submit(
+                download_data_lake_geodataframe, self.parking_districts_local_path, self.parking_districts_remote_path)
+            pattern_areas = executor.submit(
+                download_data_lake_geodataframe, self.pattern_areas_local_path, self.pattern_areas_remote_path)
 
+            cells = hook.read_table_dataframe(table_name="cell", schema="dim")
+            cells['geometry'] = cells.wkt.map(loads)
+            cells = gpd.GeoDataFrame(cells)
+            cells.crs = {'init': 'epsg:4326'}
+
+            trips = trips.set_geometry('origin')
+
+            start_cell_key = executor.submit(
+                find_geospatial_dim, cells)
+            start_city_key = executor.submit(
+                find_geospatial_dim, cities.result())
+            start_parking_district_key = executor.submit(
+                find_geospatial_dim, parking_districts.result())
+            start_pattern_area_key = executor.submit(
+                find_geospatial_dim, pattern_areas.result())
+
+            trips['start_cell_key'] = start_cell_key.result()
             trips['start_city_key'] = start_city_key.result()
             trips['start_parking_district_key'] = start_parking_district_key.result()
             trips['start_pattern_area_key'] = start_pattern_area_key.result()
 
-            self.df_global=None
+            del start_cell_key
             del start_city_key
             del start_parking_district_key
             del start_pattern_area_key
-        trips = trips.set_geometry('destination')
-        trips['end_cell_key'] = gpd.sjoin(
-            trips, cells, how="left", op="within")['key']
-        del cells
 
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            end_city_key = executor.submit(find_geospatial_dim,
-                                           self.cities_local_path, self.cities_remote_path)
-            end_parking_district_key = executor.submit(find_geospatial_dim,
-                                                       self.parking_districts_local_path, self.parking_districts_remote_path)
-            end_pattern_area_key = executor.submit(find_geospatial_dim,
-                                                   self.pattern_areas_local_path, self.pattern_areas_remote_path)
+            trips = trips.set_geometry('destination')
 
+            end_cell_key = executor.submit(
+                find_geospatial_dim, cells)
+            end_city_key = executor.submit(
+                find_geospatial_dim, cities.result())
+            end_parking_district_key = executor.submit(
+                find_geospatial_dim, cities.result())
+            end_pattern_area_key = executor.submit(
+                find_geospatial_dim, cities.result())
+
+            trips['end_cell_key'] = end_cell_key.result()
             trips['end_city_key'] = end_city_key.result()
             trips['end_parking_district_key'] = end_parking_district_key.result()
             trips['end_pattern_area_key'] = end_pattern_area_key.result()
 
-            self.df_global=None
+            del end_cell_key
             del end_city_key
             del end_parking_district_key
             del end_pattern_area_key
+
+            del cells
+
+            os.remove(self.cities_local_path)
+            os.remove(self.parking_districts_local_path)
+            os.remove(self.pattern_areas_local_path)
 
         self.log.debug("Writing trips extract to data lake...")
 
