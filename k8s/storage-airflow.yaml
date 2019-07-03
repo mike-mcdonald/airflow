@@ -6,7 +6,7 @@ metadata:
   labels:
     app: airflow
 spec:
-  storageClassName: azure-file
+  storageClassName: azure-file-retain
   accessModes:
     - ReadWriteMany
   resources:
