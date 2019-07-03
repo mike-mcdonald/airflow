@@ -204,7 +204,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             df = gpd.read_file(local_path)
             df['geometry'] = df.wkt.map(loads)
             df.crs = {'init': 'epsg:4326'}
-            self.df_global
+            self.df_global = df
 
         def find_geospatial_dim(local_path, remote_path):
             pathlib.Path(os.path.dirname(local_path)
