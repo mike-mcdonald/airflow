@@ -5,7 +5,7 @@ metadata:
   labels:
     app: postgres
 spec:
-  storageClassName: azure-file-retain
+  storageClassName: azure-disk-retain
   accessModes:
     - ReadWriteOnce
   resources:
