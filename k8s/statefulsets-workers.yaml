@@ -57,8 +57,7 @@ spec:
                 secretKeyRef:
                   name: airflow-redis
                   key: redis-password
-          command:
-            - worker
+          args: ["worker"]
           ports:
             - name: wlog
               containerPort: 8793

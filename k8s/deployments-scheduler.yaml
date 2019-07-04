@@ -55,8 +55,7 @@ spec:
                   key: redis-password
           resources:
             {}
-          command: 
-            - scheduler
+          args: ["scheduler"]
           volumeMounts:
             - mountPath: /usr/local/lib/airflow/logs
               name: airflow-logs

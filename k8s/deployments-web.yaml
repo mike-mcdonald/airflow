@@ -38,7 +38,7 @@ spec:
           envFrom:
             - configMapRef:
                 name: "airflow-env"
-          env:          
+          env:
             - name: FERNET_KEY
               valueFrom:
                 secretKeyRef:
@@ -58,8 +58,7 @@ spec:
                   key: redis-password
           resources:
             {}
-          command: 
-            - webserver
+          args: ["webserver"]
           livenessProbe:
             httpGet:
               path: "/health"
