@@ -70,7 +70,7 @@ spec:
             successThreshold: 1
             failureThreshold: 5
           volumeMounts:
-            - mountPath: /usr/local/lib/airflow/logs
+            - mountPath: /usr/local/airflow/logs
               name: airflow-logs
       volumes:
         - name: airflow-logs

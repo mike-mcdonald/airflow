@@ -57,7 +57,7 @@ spec:
             {}
           args: ["scheduler"]
           volumeMounts:
-            - mountPath: /usr/local/lib/airflow/logs
+            - mountPath: /usr/local/airflow/logs
               name: airflow-logs
       volumes:
         - name: airflow-logs

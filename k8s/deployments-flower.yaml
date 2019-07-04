@@ -71,7 +71,7 @@ spec:
           resources:
             {}
           volumeMounts:
-            - mountPath: /usr/local/lib/airflow/logs
+            - mountPath: /usr/local/airflow/logs
               name: airflow-logs
       volumes:
         - name: airflow-logs
