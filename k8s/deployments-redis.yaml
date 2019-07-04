@@ -28,9 +28,10 @@ spec:
           envFrom:
             - configMapRef:
                 name: redis-env
-          env:          
-            - name: POSTGRES_PASSWORD
+          env:
+            - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: airflow-redis
                   key: redis-password
+          args: ["--requirepass", "$(REDIS_PASSWORD)"]
