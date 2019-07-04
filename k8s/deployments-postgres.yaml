@@ -36,9 +36,10 @@ spec:
                   name: airflow-postgresql
                   key: postgres-password
           volumeMounts:
-            - mountPath: /var/lib/postgresql/data/pgdata
-              name: postgredb
+            - mountPath: /var/lib/postgresql/data
+              name: postgres-data
+              subPath: pgdata
       volumes:
-        - name: postgredb
+        - name: postgres-data
           persistentVolumeClaim:
             claimName: postgres-pv-claim
