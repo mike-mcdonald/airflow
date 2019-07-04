@@ -19,10 +19,10 @@ data:
   ## Flower PORT
   FLOWER_PORT: "5555"
   # Configure entrypoint
-  FERNET_KEY: ""
   DO_WAIT_INITDB: "false"
   ## Custom Airflow settings
   AIRFLOW__CORE__DONOT_PICKLE: "false"
+  AIRFLOW__CORE__EXECUTOR: "CeleryExecutor"
   AIRFLOW__CELERY__FLOWER_URL_PREFIX: ""
   AIRFLOW__CELERY__WORKER_CONCURRENCY: "3"
   AIRFLOW__CORE__DAGS_FOLDER: "/usr/local/airflow/dags"

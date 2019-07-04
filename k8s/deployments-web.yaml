@@ -39,6 +39,11 @@ spec:
             - configMapRef:
                 name: "airflow-env"
           env:          
+            - name: FERNET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-fernet
+                  key: fernet-key
             - name: POSTGRES_USER
               value: airflow
             - name: POSTGRES_PASSWORD
