@@ -42,7 +42,7 @@ spec:
                   name: airflow-fernet
                   key: fernet-key
             - name: POSTGRES_USER
-              value: "postgres"
+              value: airflowadmin
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
