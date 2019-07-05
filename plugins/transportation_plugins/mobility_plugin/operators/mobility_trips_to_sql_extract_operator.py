@@ -177,7 +177,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         # delete before passing to dataframe write, segmentation fault otherwise
         del trips["route"]
 
-        hook = AzureMsSqlDataFrameHook(
+        hook_mssql = AzureMsSqlDataFrameHook(
                 azure_mssql_conn_id=self.sql_conn_id
             )
 
@@ -218,7 +218,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             pattern_areas = executor.submit(
                 download_data_lake_geodataframe, self.pattern_areas_local_path, self.pattern_areas_remote_path)
 
-            cells = hook.read_table_dataframe(table_name="cell", schema="dim")
+            cells = hook_mssql.read_table_dataframe(table_name="cell", schema="dim")
             cells['geometry'] = cells.wkt.map(loads)
             cells = gpd.GeoDataFrame(cells)
             cells.crs = {'init': 'epsg:4326'}
@@ -311,19 +311,13 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         ]].to_csv(self.trips_local_path, index=False)
 
         hook_data_lake.upload_file(self.trips_local_path, self.trips_remote_path)
-        hook_data_lake.set_expiry(self.trips_remote_path, 'RelativeToNow',
-                        expire_time=(72 * 3600 * 1000))
 
         os.remove(self.trips_local_path)
 
         self.log.debug("Reading segments from data warehouse...")
 
-        hook = AzureMsSqlDataFrameHook(
-            azure_mssql_conn_id=self.sql_conn_id
-        )
-
         # Break out segment hits
-        segments = hook.read_table_dataframe(
+        segments = hook_mssql.read_table_dataframe(
             table_name="segment", schema="dim")
         segments['geometry'] = segments.wkt.map(lambda g: loads(g))
         segments = gpd.GeoDataFrame(segments)
@@ -413,8 +407,6 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
 
         hook_data_lake.upload_file(self.segment_hits_local_path,
                          self.segment_hits_remote_path)
-        hook_data_lake.set_expiry(self.segment_hits_remote_path, 'RelativeToNow',
-                        expire_time=(72 * 3600 * 1000))
 
         os.remove(self.segment_hits_local_path)
 
