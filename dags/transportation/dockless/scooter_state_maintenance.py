@@ -46,14 +46,14 @@ extract_states_task = MsSqlOperator(
     [start_time],
     [start_state],
     [start_event],
-    [start_location],
+    [start_cell_key],
     [start_battery_pct],
     [end_hash],
     [end_date_key],
     [end_time],
     [end_state],
     [end_event],
-    [end_location],
+    [end_cell_key],
     [end_battery_pct],
     [associated_trip],
     [duration],
@@ -107,7 +107,7 @@ stage_states_task = MsSqlOperator(
     ,[next_state].[start_time]
     ,[next_state].[start_state]
     ,[next_state].[start_event]
-    ,[next_state].[start_location]
+    ,[next_state].[start_cell_key]
     ,[next_state].[start_battery_pct]
     ,coalesce(s1.[associated_trip], [next_state].[associated_trip])
     ,datediff(second, s1.[start_time], [next_state].[start_time])
@@ -121,7 +121,7 @@ stage_states_task = MsSqlOperator(
         ,start_state
         ,start_event
         ,start_time
-        ,start_location
+        ,start_cell_key
         ,start_battery_pct
         ,associated_trip
         from fact.state as s2
