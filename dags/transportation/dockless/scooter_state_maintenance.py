@@ -47,6 +47,9 @@ extract_states_task = MsSqlOperator(
     [start_state],
     [start_event],
     [start_cell_key],
+    [start_city_key],
+    [start_parking_district_key],
+    [start_pattern_area_key],
     [start_battery_pct],
     [end_hash],
     [end_date_key],
@@ -79,6 +82,9 @@ stage_states_task = MsSqlOperator(
         ,[start_state]
         ,[start_event]
         ,[start_cell_key]
+        ,[start_city_key]
+        ,[start_parking_district_key]
+        ,[start_pattern_area_key]
         ,[start_battery_pct]
         ,[end_hash]
         ,[end_date_key]
@@ -86,6 +92,9 @@ stage_states_task = MsSqlOperator(
         ,[end_state]
         ,[end_event]
         ,[end_cell_key]
+        ,[end_city_key]
+        ,[end_parking_district_key]
+        ,[end_pattern_area_key]
         ,[end_battery_pct]
         ,[associated_trip]
         ,[duration]
@@ -101,6 +110,9 @@ stage_states_task = MsSqlOperator(
     ,s1.[start_state]
     ,s1.[start_event]
     ,s1.[start_cell_key]
+    ,s1.[start_city_key]
+    ,s1.[start_parking_district_key]
+    ,s1.[start_pattern_area_key]
     ,s1.[start_battery_pct]
     ,[next_state].[start_hash]
     ,[next_state].[start_date_key]
@@ -108,6 +120,9 @@ stage_states_task = MsSqlOperator(
     ,[next_state].[start_state]
     ,[next_state].[start_event]
     ,[next_state].[start_cell_key]
+    ,[next_state].[start_city_key]
+    ,[next_state].[start_parking_district_key]
+    ,[next_state].[start_pattern_area_key]
     ,[next_state].[start_battery_pct]
     ,coalesce(s1.[associated_trip], [next_state].[associated_trip])
     ,datediff(second, s1.[start_time], [next_state].[start_time])
@@ -122,6 +137,9 @@ stage_states_task = MsSqlOperator(
         ,start_event
         ,start_time
         ,start_cell_key
+        ,start_city_key
+        ,start_parking_district_key
+        ,start_pattern_area_key
         ,start_battery_pct
         ,associated_trip
         from fact.state as s2
@@ -146,6 +164,9 @@ warehouse_update_task = MsSqlOperator(
     end_event = source.end_event,
     end_time = source.end_time,
     end_cell_key = source.end_cell_key,
+    end_city_key = source.end_city_key,
+    end_parking_district_key = source.end_parking_district_key,
+    end_pattern_area_key = source.end_pattern_area_key,
     end_battery_pct = source.end_battery_pct,
     associated_trip = source.associated_trip,
     duration = source.duration,
