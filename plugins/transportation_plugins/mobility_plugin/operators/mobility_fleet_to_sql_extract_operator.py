@@ -56,8 +56,11 @@ class MobilityFleetToSqlExtractOperator(BaseOperator):
         fleet_df = pd.DataFrame(index=index).reset_index()
         fleet_df['seen'] = datetime.now()
         fleet_df['seen'] = fleet_df.seen.dt.round('L')
+        fleet_df['seen'] = fleet_df.seen.map(
+            lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
         fleet_df['date_key'] = fleet_df.time.map(
             lambda x: int(x.strftime('%Y%m%d')))
+        fleet_df['time'] = fleet_df.time.dt.round('L')
         fleet_df['time'] = fleet_df.time.map(
             lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
         fleet_df['batch'] = context.get("ts_nodash")
