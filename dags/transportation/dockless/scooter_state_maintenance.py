@@ -78,14 +78,14 @@ stage_states_task = MsSqlOperator(
         ,[start_time]
         ,[start_state]
         ,[start_event]
-        ,[start_location]
+        ,[start_cell_key]
         ,[start_battery_pct]
         ,[end_hash]
         ,[end_date_key]
         ,[end_time]
         ,[end_state]
         ,[end_event]
-        ,[end_location]
+        ,[end_cell_key]
         ,[end_battery_pct]
         ,[associated_trip]
         ,[duration]
@@ -100,7 +100,7 @@ stage_states_task = MsSqlOperator(
     ,s1.[start_time]
     ,s1.[start_state]
     ,s1.[start_event]
-    ,s1.[start_location]
+    ,s1.[start_cell_key]
     ,s1.[start_battery_pct]
     ,[next_state].[start_hash]
     ,[next_state].[start_date_key]
@@ -145,7 +145,7 @@ warehouse_update_task = MsSqlOperator(
     end_state = source.end_state,
     end_event = source.end_event,
     end_time = source.end_time,
-    end_location = source.end_location,
+    end_cell_key = source.end_cell_key,
     end_battery_pct = source.end_battery_pct,
     associated_trip = source.associated_trip,
     duration = source.duration,
