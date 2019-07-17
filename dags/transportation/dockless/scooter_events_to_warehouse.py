@@ -227,16 +227,24 @@ vehicle_sync_task = MobilityVehicleSyncOperator(
 vehicle_sync_task.set_upstream(event_external_stage_task)
 vehicle_sync_task.set_downstream(event_stage_task)
 
-clean_stage_task = MsSqlOperator(
-    task_id="clean_stage_table",
+clean_stage_task_before = MsSqlOperator(
+    task_id="clean_stage_table_before",
     dag=dag,
     mssql_conn_id="azure_sql_server_full",
     sql="""
     DELETE FROM etl.stage_state WHERE batch = '{{ ts_nodash }}'
     """
 )
-clean_stage_task.set_upstream(event_external_stage_task)
-clean_stage_task.set_downstream(event_stage_task)
+
+clean_stage_task_after = MsSqlOperator(
+    task_id="clean_stage_table_after",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    DELETE FROM etl.stage_state WHERE batch = '{{ ts_nodash }}'
+    """
+)
+event_external_stage_task >> clean_stage_task_before >> event_stage_task
 
 for task in remote_paths_delete_tasks:
     event_stage_task >> task
@@ -262,7 +270,7 @@ state_warehouse_update_task = MsSqlOperator(
     """
 )
 
-event_stage_task >> state_warehouse_update_task
+event_stage_task >> state_warehouse_update_task >> clean_stage_task_after
 
 state_warehouse_insert_task = MsSqlOperator(
     task_id="warehouse_insert_trip",
@@ -336,4 +344,4 @@ state_warehouse_insert_task = MsSqlOperator(
     """
 )
 
-event_stage_task >> state_warehouse_insert_task
+event_stage_task >> state_warehouse_insert_task >> clean_stage_task_after
