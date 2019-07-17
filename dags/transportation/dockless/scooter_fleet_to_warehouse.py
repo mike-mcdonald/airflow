@@ -45,6 +45,16 @@ fleet_extract_task = MobilityFleetToSqlExtractOperator(
     fleet_remote_path="/transportation/mobility/etl/fleet_count/{{ ts_nodash }}.csv"
 )
 
+clean_stage_task_before = MsSqlOperator(
+    task_id="clean_stage_table",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    DELETE FROM etl.stage_fleet_count
+    WHERE batch = '{{ ts_nodash }}'
+    """
+)
+
 fleet_stage_task = MsSqlOperator(
     task_id="stage_fleet_extract",
     dag=dag,
@@ -112,7 +122,17 @@ fleet_stage_task = MsSqlOperator(
     """
 )
 
-fleet_extract_task >> fleet_stage_task
+clean_stage_task_after = MsSqlOperator(
+    task_id="clean_stage_table_after",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    DELETE FROM etl.stage_fleet_count
+    WHERE batch = '{{ ts_nodash }}'
+    """
+)
+
+fleet_extract_task >> clean_stage_task_before >> fleet_stage_task
 
 fleet_warehouse_update_task = MsSqlOperator(
     task_id="warehouse_update_fleet",
@@ -168,5 +188,5 @@ fleet_warehouse_insert_task = MsSqlOperator(
     """
 )
 
-fleet_stage_task >> fleet_warehouse_insert_task
-fleet_stage_task >> fleet_warehouse_update_task
+fleet_stage_task >> fleet_warehouse_insert_task >> clean_stage_task_after
+fleet_stage_task >> fleet_warehouse_update_task >> clean_stage_task_after
