@@ -209,6 +209,17 @@ event_stage_task = MsSqlOperator(
         """
 )
 
+clean_extract_table_task = MsSqlOperator(
+    task_id="clean_extract_table",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    DELETE FROM etl.extract_event WHERE batch = '{{ ts_nodash }}'
+    """
+)
+
+event_stage_task >> clean_extract_table_task
+
 provider_sync_task = MobilityProviderSyncOperator(
     task_id="provider_sync",
     source_table="etl.extract_event",
@@ -246,11 +257,9 @@ clean_stage_task_after = MsSqlOperator(
 )
 event_external_stage_task >> clean_stage_task_before >> event_stage_task
 
-for task in remote_paths_delete_tasks:
-    event_stage_task >> task
 
 state_warehouse_update_task = MsSqlOperator(
-    task_id="warehouse_update_trip",
+    task_id="warehouse_update_state",
     dag=dag,
     mssql_conn_id="azure_sql_server_full",
     sql="""
@@ -273,7 +282,7 @@ state_warehouse_update_task = MsSqlOperator(
 event_stage_task >> state_warehouse_update_task >> clean_stage_task_after
 
 state_warehouse_insert_task = MsSqlOperator(
-    task_id="warehouse_insert_trip",
+    task_id="warehouse_insert_state",
     dag=dag,
     mssql_conn_id="azure_sql_server_full",
     sql="""
@@ -345,3 +354,6 @@ state_warehouse_insert_task = MsSqlOperator(
 )
 
 event_stage_task >> state_warehouse_insert_task >> clean_stage_task_after
+
+for task in remote_paths_delete_tasks:
+    event_stage_task >> task

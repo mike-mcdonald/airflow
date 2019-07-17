@@ -51,7 +51,8 @@ task2 = DummyOperator(
     dag=dag
 )
 
-remote_paths_delete_tasks = []
+trip_remote_files_delete_tasks = []
+segment_hits_remote_files_delete_tasks = []
 
 # Extract data from providers and stage in tables
 for provider in providers:
@@ -80,13 +81,13 @@ for provider in providers:
         pattern_areas_remote_path=f"/transportation/mobility/dim/pattern_areas.csv",
         dag=dag)
 
-    remote_paths_delete_tasks.append(
+    trip_remote_files_delete_tasks.append(
         AzureDataLakeRemoveOperator(task_id=f"delete_{provider}_trip_extract",
                                     dag=dag,
                                     azure_data_lake_conn_id="azure_data_lake_default",
                                     remote_path=trips_remote_path))
 
-    remote_paths_delete_tasks.append(
+    segment_hits_remote_files_delete_tasks.append(
         AzureDataLakeRemoveOperator(task_id=f"delete_{provider}_route_extract",
                                     dag=dag,
                                     azure_data_lake_conn_id="azure_data_lake_default",
@@ -200,8 +201,8 @@ segment_hit_external_stage_task = MsSqlOperator(
 task2 >> trip_external_stage_task
 task2 >> segment_hit_external_stage_task
 
-clean_stage_task = MsSqlOperator(
-    task_id="clean_stage_table",
+clean_stage_task_before = MsSqlOperator(
+    task_id="clean_stage_table_before",
     dag=dag,
     mssql_conn_id="azure_sql_server_full",
     sql="""
@@ -210,8 +211,28 @@ clean_stage_task = MsSqlOperator(
     """
 )
 
-trip_external_stage_task >> clean_stage_task
-segment_hit_external_stage_task >> clean_stage_task
+clean_stage_task_after = MsSqlOperator(
+    task_id="clean_stage_table_after",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    DELETE FROM etl.stage_trip WHERE batch = '{{ ts_nodash }}'
+    DELETE FROM etl.stage_segment_hit WHERE batch = '{{ ts_nodash }}'
+    """
+)
+
+clean_extract_task = MsSqlOperator(
+    task_id="clean_extract_table",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    DELETE FROM etl.extract_trip WHERE batch = '{{ ts_nodash }}'
+    DELETE FROM etl.extract_segment_hit WHERE batch = '{{ ts_nodash }}'
+    """
+)
+
+trip_external_stage_task >> clean_stage_task_before
+segment_hit_external_stage_task >> clean_stage_task_before
 
 provider_sync_task = MobilityProviderSyncOperator(
     task_id="provider_sync",
@@ -299,9 +320,11 @@ trip_stage_task = MsSqlOperator(
     """
 )
 
-clean_stage_task >> trip_stage_task
+clean_stage_task_before >> trip_stage_task
 provider_sync_task >> trip_stage_task
 vehicle_sync_task >> trip_stage_task
+
+trip_stage_task >> clean_extract_task
 
 trip_warehouse_update_task = MsSqlOperator(
     task_id="warehouse_update_trip",
@@ -324,7 +347,7 @@ trip_warehouse_update_task = MsSqlOperator(
     """
 )
 
-trip_stage_task >> trip_warehouse_update_task
+trip_stage_task >> trip_warehouse_update_task >> clean_stage_task_after
 
 trip_warehouse_insert_task = MsSqlOperator(
     task_id="warehouse_insert_trip",
@@ -392,7 +415,7 @@ trip_warehouse_insert_task = MsSqlOperator(
     """
 )
 
-trip_stage_task >> trip_warehouse_insert_task
+trip_stage_task >> trip_warehouse_insert_task >> clean_stage_task_after
 
 route_stage_task = MsSqlOperator(
     task_id="stage_route",
@@ -428,10 +451,11 @@ route_stage_task = MsSqlOperator(
     WHERE batch = '{{ ts_nodash }}'
     """
 )
-clean_stage_task >> route_stage_task
+clean_stage_task_before >> route_stage_task
 provider_sync_task >> route_stage_task
 vehicle_sync_task >> route_stage_task
 
+route_stage_task >> clean_extract_task
 
 route_warehouse_update_task = MsSqlOperator(
     task_id="warehouse_update_route",
@@ -446,7 +470,7 @@ route_warehouse_update_task = MsSqlOperator(
     """
 )
 
-route_stage_task >> route_warehouse_update_task
+route_stage_task >> route_warehouse_update_task >> clean_stage_task_after
 
 route_warehouse_insert_task = MsSqlOperator(
     task_id="warehouse_insert_route",
@@ -488,11 +512,12 @@ route_warehouse_insert_task = MsSqlOperator(
     """
 )
 
-route_stage_task >> route_warehouse_insert_task
+route_stage_task >> route_warehouse_insert_task >> clean_stage_task_after
 
 
-for task in remote_paths_delete_tasks:
+for task in trip_remote_files_delete_tasks:
     trip_warehouse_insert_task >> task
     trip_warehouse_update_task >> task
+for task in segment_hits_remote_files_delete_tasks:
     route_warehouse_insert_task >> task
     route_warehouse_update_task >> task
