@@ -122,7 +122,7 @@ parks_warehouse_update_task = MsSqlOperator(
     UPDATE dim.park
     SET last_seen = GETDATE()
     FROM etl.external_park AS source
-    WHERE source.key = dim.park.key
+    WHERE source.[key] = dim.park.[key]
     AND source.hash = dim.park.hash
     '''
 )
@@ -142,7 +142,7 @@ parks_warehouse_insert_task = MsSqlOperator(
         first_seen,
         last_seen
     )
-    SELECT source.key,
+    SELECT source.[key],
     source.hash,
     source.name,
     source.center_x,
@@ -155,7 +155,7 @@ parks_warehouse_insert_task = MsSqlOperator(
     (
         SELECT 1
         FROM dim.park AS target
-        WHERE source.key = target.key
+        WHERE source.[key] = target.[key]
         AND source.hash = target.hash
     )
     '''

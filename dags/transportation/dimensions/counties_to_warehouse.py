@@ -119,7 +119,7 @@ counties_warehouse_update_task = MsSqlOperator(
     UPDATE dim.county
     SET last_seen = GETDATE()
     FROM etl.external_county AS source
-    WHERE source.key = dim.county.key
+    WHERE source.[key] = dim.county.[key]
     AND source.hash = dim.county.hash
     """
 )
@@ -139,7 +139,7 @@ counties_warehouse_insert_task = MsSqlOperator(
         first_seen,
         last_seen
     )
-    SELECT source.key,
+    SELECT source.[key],
     source.hash,
     source.name,
     source.center_x,
@@ -152,7 +152,7 @@ counties_warehouse_insert_task = MsSqlOperator(
     (
         SELECT 1
         FROM dim.county AS target
-        WHERE source.key = target.key
+        WHERE source.[key] = target.[key]
         AND source.hash = target.hash
     )
     """

@@ -118,7 +118,7 @@ zipcodes_warehouse_update_task = MsSqlOperator(
     UPDATE dim.zipcode
     SET last_seen = GETDATE()
     FROM etl.external_zipcode AS source
-    WHERE source.key = dim.zipcode.key
+    WHERE source.[key] = dim.zipcode.[key]
     AND source.hash = dim.zipcode.hash
     """
 )
@@ -138,7 +138,7 @@ zipcodes_warehouse_insert_task = MsSqlOperator(
         [first_seen],
         [last_seen]
     )
-    SELECT source.key,
+    SELECT source.[key],
     source.hash,
     source.name,
     source.center_x,
@@ -151,7 +151,7 @@ zipcodes_warehouse_insert_task = MsSqlOperator(
     (
         SELECT 1
         FROM dim.zipcode AS target
-        WHERE source.key = target.key
+        WHERE source.[key] = target.[key]
         AND source.hash = target.hash
     )
     """
