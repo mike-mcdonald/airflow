@@ -42,7 +42,10 @@ parks_extract_warehouse_task = GeoPandasUriToAzureDataLakeOperator(
         'center_x',
         'center_y',
         'area'
-    ]
+    ],
+    rename={
+        'Name': 'name'
+    }
 )
 
 parks_extract_datalake_task = GeoPandasUriToAzureDataLakeOperator(
@@ -59,7 +62,10 @@ parks_extract_datalake_task = GeoPandasUriToAzureDataLakeOperator(
         'center_y',
         'area',
         'wkt'
-    ]
+    ],
+    rename={
+        'Name': 'name'
+    }
 )
 
 parks_drop_external_table_task = MsSqlOperator(
@@ -106,7 +112,6 @@ parks_create_external_table_task = MsSqlOperator(
     """
 )
 
-parks_drop_external_table_task >> parks_create_external_table_task
 
 parks_warehouse_update_task = MsSqlOperator(
     task_id='warehouse_update_parks',
@@ -120,8 +125,6 @@ parks_warehouse_update_task = MsSqlOperator(
     AND source.hash = dim.park.hash
     '''
 )
-
-parks_warehouse_update_task >> parks_extract_warehouse_task
 
 parks_warehouse_insert_task = MsSqlOperator(
     task_id='warehouse_insert_parks',
@@ -157,4 +160,5 @@ parks_warehouse_insert_task = MsSqlOperator(
     '''
 )
 
-parks_extract_warehouse_task >> parks_warehouse_insert_task
+parks_extract_warehouse_task >> parks_create_external_table_task << parks_drop_external_table_task
+parks_warehouse_insert_task << parks_create_external_table_task >> parks_warehouse_update_task

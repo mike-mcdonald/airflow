@@ -36,13 +36,15 @@ counties_extract_warehouse_task = GeoPandasUriToAzureDataLakeOperator(
     local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/counties-{{ ts_nodash }}.csv",
     remote_path='/transportation/mobility/etl/dim/counties.csv',
     columns=[
-        'key',
         'hash',
         'name',
         'center_x',
         'center_y',
         'area'
-    ]
+    ],
+    rename={
+        'COUNTY': 'name'
+    }
 )
 
 counties_extract_datalake_task = GeoPandasUriToAzureDataLakeOperator(
@@ -52,14 +54,16 @@ counties_extract_datalake_task = GeoPandasUriToAzureDataLakeOperator(
     local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/counties-{{ ts_nodash }}.csv",
     remote_path='/transportation/mobility/dim/counties.csv',
     columns=[
-        'key',
         'hash',
         'name',
         'center_x',
         'center_y',
         'area',
         'wkt'
-    ]
+    ],
+    rename={
+        'COUNTY': 'name'
+    }
 )
 
 counties_drop_external_table_task = MsSqlOperator(
@@ -76,8 +80,6 @@ counties_drop_external_table_task = MsSqlOperator(
     DROP EXTERNAL TABLE etl.external_county
     """
 )
-
-counties_extract_warehouse_task >> counties_drop_external_table_task
 
 counties_create_external_table_task = MsSqlOperator(
     task_id='create_external_table',
@@ -108,8 +110,6 @@ counties_create_external_table_task = MsSqlOperator(
     """
 )
 
-counties_drop_external_table_task >> counties_create_external_table_task
-
 counties_warehouse_update_task = MsSqlOperator(
     task_id="warehouse_update_counties",
     dag=dag,
@@ -122,8 +122,6 @@ counties_warehouse_update_task = MsSqlOperator(
     AND source.hash = dim.county.hash
     """
 )
-
-counties_create_external_table_task >> counties_warehouse_update_task
 
 counties_warehouse_insert_task = MsSqlOperator(
     task_id="warehouse_insert_counties",
@@ -159,4 +157,5 @@ counties_warehouse_insert_task = MsSqlOperator(
     """
 )
 
-counties_create_external_table_task >> counties_warehouse_insert_task
+counties_extract_warehouse_task >> counties_create_external_table_task << counties_drop_external_table_task
+counties_warehouse_insert_task << counties_create_external_table_task >> counties_warehouse_update_task

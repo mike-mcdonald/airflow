@@ -59,7 +59,10 @@ zipcodes_extract_datalake_task = GeoPandasUriToAzureDataLakeOperator(
         'center_y',
         'area',
         'wkt'
-    ]
+    ],
+    rename={
+        'Zip Code': 'name'
+    }
 )
 
 zipcodes_drop_external_table_task = MsSqlOperator(
@@ -106,8 +109,6 @@ zipcodes_create_external_table_task = MsSqlOperator(
     """
 )
 
-zipcodes_drop_external_table_task >> zipcodes_create_external_table_task
-
 zipcodes_warehouse_update_task = MsSqlOperator(
     task_id='warehouse_update_zipcodes',
     dag=dag,
@@ -120,8 +121,6 @@ zipcodes_warehouse_update_task = MsSqlOperator(
     AND source.hash = dim.zipcode.hash
     """
 )
-zipcodes_create_external_table_task >> zipcodes_warehouse_update_task
-zipcodes_warehouse_update_task >> zipcodes_extract_warehouse_task
 
 zipcodes_warehouse_insert_task = MsSqlOperator(
     task_id='warehouse_insert_zipcodes',
@@ -157,5 +156,5 @@ zipcodes_warehouse_insert_task = MsSqlOperator(
     """
 )
 
-zipcodes_create_external_table_task >> zipcodes_warehouse_insert_task
-zipcodes_extract_warehouse_task >> zipcodes_warehouse_insert_task
+zipcodes_extract_warehouse_task >> zipcodes_create_external_table_task << zipcodes_drop_external_table_task
+zipcodes_warehouse_insert_task << zipcodes_create_external_table_task >> zipcodes_warehouse_update_task
