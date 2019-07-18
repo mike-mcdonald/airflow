@@ -27,6 +27,7 @@ default_args = {
 dag = DAG(
     dag_id='parks_to_warehouse',
     default_args=default_args,
+    schedule_interval=None
 )
 
 parks_extract_warehouse_task = GeoPandasUriToAzureDataLakeOperator(

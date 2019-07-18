@@ -27,6 +27,7 @@ default_args = {
 dag = DAG(
     dag_id='zipcodes_to_warehouse',
     default_args=default_args,
+    schedule_interval=None
 )
 
 zipcodes_extract_warehouse_task = GeoPandasUriToAzureDataLakeOperator(
