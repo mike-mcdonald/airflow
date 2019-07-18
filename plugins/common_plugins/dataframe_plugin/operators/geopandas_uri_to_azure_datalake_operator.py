@@ -20,9 +20,10 @@ class GeoPandasUriToAzureDataLakeOperator(BaseOperator):
                  local_path=None,
                  azure_data_lake_conn_id='azure_data_lake_default',
                  remote_path=None,
+                 rename={},
                  columns=[],
                  index_label='key',
-                 df_epsg=4326,
+                 df_crs={'init': 'epsg:4326'},
                  area_epsg=3857,
                  * args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -30,14 +31,15 @@ class GeoPandasUriToAzureDataLakeOperator(BaseOperator):
         self.local_path = local_path
         self.azure_data_lake_conn_id = azure_data_lake_conn_id
         self.remote_path = remote_path
+        self.rename = rename
         self.columns = columns
         self.index_label = index_label
-        self.df_epsg = df_epsg
+        self.df_crs = df_crs
         self.area_epsg = area_epsg
 
     def execute(self, context):
         df = gpd.read_file(self.uri)
-        df.crs = self.df_epsg
+        df.crs = self.df_crs
 
         df['wkt'] = df.geometry.map(dumps)
         df['hash'] = df.wkt.map(lambda x: hashlib.md5(
@@ -45,13 +47,15 @@ class GeoPandasUriToAzureDataLakeOperator(BaseOperator):
 
         df['center'] = df.geometry.map(lambda x: x.centroid)
         df['center_x'] = df.center.map(lambda x: x.x)
-        df['center_y'] = df.center.map(lambda y: y.y)
+        df['center_y'] = df.center.map(lambda x: x.y)
 
-        df = df.to_crs(epsg=self.area_epsg)
+        df = df.to_crs(epsg=3857)
         df['area'] = df.geometry.map(lambda x: x.area)
 
         pathlib.Path(os.path.dirname(self.local_path)
                      ).mkdir(parents=True, exist_ok=True)
+
+        df = df.rename(index=str, columns=self.rename)
 
         df[self.columns].to_csv(self.local_path, index_label=self.index_label)
 
