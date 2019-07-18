@@ -116,7 +116,7 @@ zipcodes_warehouse_update_task = MsSqlOperator(
     mssql_conn_id='azure_sql_server_full',
     sql="""
     UPDATE dim.zipcode
-    SET last_seen = GETDATE(),
+    SET last_seen = GETDATE()
     FROM etl.external_zipcode AS source
     WHERE source.key = dim.zipcode.key
     AND source.hash = dim.zipcode.hash

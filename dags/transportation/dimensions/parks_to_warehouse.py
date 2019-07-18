@@ -120,7 +120,7 @@ parks_warehouse_update_task = MsSqlOperator(
     mssql_conn_id='azure_sql_server_full',
     sql='''
     UPDATE dim.park
-    SET last_seen = GETDATE(),
+    SET last_seen = GETDATE()
     FROM etl.external_park AS source
     WHERE source.key = dim.park.key
     AND source.hash = dim.park.hash

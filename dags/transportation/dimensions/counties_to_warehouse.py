@@ -117,7 +117,7 @@ counties_warehouse_update_task = MsSqlOperator(
     mssql_conn_id="azure_sql_server_full",
     sql="""
     UPDATE dim.county
-    SET last_seen = GETDATE(),
+    SET last_seen = GETDATE()
     FROM etl.external_county AS source
     WHERE source.key = dim.county.key
     AND source.hash = dim.county.hash
