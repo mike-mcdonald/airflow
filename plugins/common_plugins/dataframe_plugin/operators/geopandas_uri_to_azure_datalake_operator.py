@@ -25,6 +25,7 @@ class GeoPandasUriToAzureDataLakeOperator(BaseOperator):
                  df_epsg=4326,
                  area_epsg=3857,
                  * args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.uri = uri
         self.local_path = local_path
         self.azure_data_lake_conn_id = azure_data_lake_conn_id
