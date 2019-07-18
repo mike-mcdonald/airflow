@@ -37,13 +37,15 @@ zipcodes_extract_warehouse_task = GeoPandasUriToAzureDataLakeOperator(
     local_path='/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/zipcodes-{{ ts_nodash }}.csv',
     remote_path='/transportation/mobility/etl/dim/zipcodes.csv',
     columns=[
-        'key',
         'hash',
         'name',
         'center_x',
         'center_y',
         'area'
-    ]
+    ],
+    rename={
+        'ZIPCODE': 'name'
+    }
 )
 
 zipcodes_extract_datalake_task = GeoPandasUriToAzureDataLakeOperator(
@@ -53,7 +55,6 @@ zipcodes_extract_datalake_task = GeoPandasUriToAzureDataLakeOperator(
     local_path='/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/zipcodes-{{ ts_nodash }}.csv',
     remote_path='/transportation/mobility/dim/zipcodes.csv',
     columns=[
-        'key',
         'hash',
         'name',
         'center_x',
@@ -62,7 +63,7 @@ zipcodes_extract_datalake_task = GeoPandasUriToAzureDataLakeOperator(
         'wkt'
     ],
     rename={
-        'Zip Code': 'name'
+        'ZIPCODE': 'name'
     }
 )
 

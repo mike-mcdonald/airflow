@@ -37,7 +37,6 @@ parks_extract_warehouse_task = GeoPandasUriToAzureDataLakeOperator(
     local_path='/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/parks-{{ ts_nodash }}.csv',
     remote_path='/transportation/mobility/etl/dim/parks.csv',
     columns=[
-        'key',
         'hash',
         'name',
         'center_x',
@@ -45,7 +44,7 @@ parks_extract_warehouse_task = GeoPandasUriToAzureDataLakeOperator(
         'area'
     ],
     rename={
-        'Name': 'name'
+        'NAME': 'name'
     }
 )
 
@@ -56,7 +55,6 @@ parks_extract_datalake_task = GeoPandasUriToAzureDataLakeOperator(
     local_path='/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/parks-{{ ts_nodash }}.csv',
     remote_path='/transportation/mobility/dim/parks.csv',
     columns=[
-        'key',
         'hash',
         'name',
         'center_x',
@@ -65,7 +63,7 @@ parks_extract_datalake_task = GeoPandasUriToAzureDataLakeOperator(
         'wkt'
     ],
     rename={
-        'Name': 'name'
+        'NAME': 'name'
     }
 )
 
