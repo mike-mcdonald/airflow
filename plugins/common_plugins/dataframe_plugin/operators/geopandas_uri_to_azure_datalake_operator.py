@@ -20,6 +20,7 @@ class GeoPandasUriToAzureDataLakeOperator(BaseOperator):
                  local_path=None,
                  azure_data_lake_conn_id='azure_data_lake_default',
                  remote_path=None,
+                 rename={},
                  columns=[],
                  index_label='key',
                  df_epsg=4326,
@@ -30,6 +31,7 @@ class GeoPandasUriToAzureDataLakeOperator(BaseOperator):
         self.local_path = local_path
         self.azure_data_lake_conn_id = azure_data_lake_conn_id
         self.remote_path = remote_path
+        self.rename = rename
         self.columns = columns
         self.index_label = index_label
         self.df_epsg = df_epsg
@@ -52,6 +54,8 @@ class GeoPandasUriToAzureDataLakeOperator(BaseOperator):
 
         pathlib.Path(os.path.dirname(self.local_path)
                      ).mkdir(parents=True, exist_ok=True)
+
+        df = df.rename(index=str, columns=self.rename)
 
         df[self.columns].to_csv(self.local_path, index_label=self.index_label)
 
