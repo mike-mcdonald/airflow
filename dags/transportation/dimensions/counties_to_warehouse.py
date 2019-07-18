@@ -130,14 +130,14 @@ counties_warehouse_insert_task = MsSqlOperator(
     mssql_conn_id="azure_sql_server_full",
     sql="""
     INSERT dim.county (
-        key,
-        hash,
-        name,
-        center_x,
-        center_y,
-        area,
-        first_seen,
-        last_seen
+        [key],
+        [hash],
+        [name],
+        [center_x],
+        [center_y],
+        [area],
+        [first_seen],
+        [last_seen]
     )
     SELECT source.[key],
     source.hash,

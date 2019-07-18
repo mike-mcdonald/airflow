@@ -133,14 +133,14 @@ parks_warehouse_insert_task = MsSqlOperator(
     mssql_conn_id='azure_sql_server_full',
     sql='''
     INSERT dim.park (
-        key,
-        hash,
-        name,
-        center_x,
-        center_y,
-        area,
-        first_seen,
-        last_seen
+        [key],
+        [hash],
+        [name],
+        [center_x],
+        [center_y],
+        [area],
+        [first_seen],
+        [last_seen]
     )
     SELECT source.[key],
     source.hash,
