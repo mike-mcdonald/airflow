@@ -56,8 +56,8 @@ segment_hits_remote_files_delete_tasks = []
 
 # Extract data from providers and stage in tables
 for provider in providers:
-    mobility_provider_conn_id = "mobility_provider_{provider}"
-    mobility_provider_token_conn_id = "mobility_provider_{provider}_token"
+    mobility_provider_conn_id = f"mobility_provider_{provider}"
+    mobility_provider_token_conn_id = f"mobility_provider_{provider}_token"
 
     trips_remote_path = f"/transportation/mobility/etl/trip/{provider}-{{{{ ts_nodash }}}}.csv"
     segment_hits_remote_path = f"/transportation/mobility/etl/segment_hit/{provider}-{{{{ ts_nodash }}}}.csv"
@@ -71,7 +71,7 @@ for provider in providers:
         data_lake_conn_id="azure_data_lake_default",
         trips_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/{provider}-trips-{{{{ ts_nodash }}}}.csv",
         trips_remote_path=trips_remote_path,
-        segment_hits_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/{provider}-segment-hits-{{ ts_nodash }}.csv",
+        segment_hits_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/{provider}-segment-hits-{{{{ ts_nodash }}}}.csv",
         segment_hits_remote_path=segment_hits_remote_path,
         cities_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/cities-{{ ts_nodash }}.csv",
         cities_remote_path="/transportation/mobility/dim/cities.csv",
