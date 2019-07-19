@@ -59,8 +59,8 @@ for provider in providers:
     mobility_provider_conn_id = "mobility_provider_{provider}"
     mobility_provider_token_conn_id = "mobility_provider_{provider}_token"
 
-    trips_remote_path = "/transportation/mobility/etl/trip/{provider}-{{ ts_nodash }}.csv"
-    segment_hits_remote_path = "/transportation/mobility/etl/segment_hit/{provider}-{{ ts_nodash }}.csv"
+    trips_remote_path = f"/transportation/mobility/etl/trip/{provider}-{{{{ ts_nodash }}}}.csv"
+    segment_hits_remote_path = f"/transportation/mobility/etl/segment_hit/{provider}-{{{{ ts_nodash }}}}.csv"
 
     trip_extract_task = MobilityTripsToSqlExtractOperator(
         task_id=f"loading_{provider}_trips",
@@ -69,7 +69,7 @@ for provider in providers:
         mobility_provider_token_conn_id=mobility_provider_token_conn_id,
         sql_conn_id="azure_sql_server_default",
         data_lake_conn_id="azure_data_lake_default",
-        trips_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/{provider}-trips-{{ ts_nodash }}.csv",
+        trips_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/{provider}-trips-{{{{ ts_nodash }}}}.csv",
         trips_remote_path=trips_remote_path,
         segment_hits_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/{provider}-segment-hits-{{ ts_nodash }}.csv",
         segment_hits_remote_path=segment_hits_remote_path,
