@@ -58,7 +58,7 @@ for provider in providers:
     mobility_provider_conn_id = f"mobility_provider_{provider}"
     mobility_provider_token_conn_id = f"mobility_provider_{provider}_token"
 
-    events_remote_path = f"/transportation/mobility/etl/event/{provider}-{{{{ ts_nodash }}}}.csv"
+    events_remote_path = f"/transportation/mobility/etl/event/{provider}-{{ ts_nodash }}.csv"
 
     event_extract_task = MobilityEventsToSqlExtractOperator(
         task_id=f"loading_{provider}_events",
@@ -67,14 +67,14 @@ for provider in providers:
         mobility_provider_token_conn_id=mobility_provider_token_conn_id,
         sql_conn_id="azure_sql_server_default",
         data_lake_conn_id="azure_data_lake_default",
-        events_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/{provider}-{{{{ ts_nodash }}}}.csv",
+        events_local_path="/usr/local/airlow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/{provider}-{{ ts_nodash }}.csv",
         events_remote_path=events_remote_path,
-        cities_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/cities-{{{{ ts_nodash }}}}.csv",
-        cities_remote_path=f"/transportation/mobility/dim/cities.csv",
-        parking_districts_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/parking_districts-{{{{ ts_nodash }}}}.csv",
-        parking_districts_remote_path=f"/transportation/mobility/dim/parking_districts.csv",
-        pattern_areas_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/pattern_areas-{{{{ ts_nodash }}}}.csv",
-        pattern_areas_remote_path=f"/transportation/mobility/dim/pattern_areas.csv",
+        cities_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/cities-{{ ts_nodash }}.csv",
+        cities_remote_path="/transportation/mobility/dim/cities.csv",
+        parking_districts_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/parking_districts-{{ ts_nodash }}.csv",
+        parking_districts_remote_path="/transportation/mobility/dim/parking_districts.csv",
+        pattern_areas_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/pattern_areas-{{ ts_nodash }}.csv",
+        pattern_areas_remote_path="/transportation/mobility/dim/pattern_areas.csv",
 
         #New Geometry
         census_blocks_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/census_blocks-{{ ts_nodash }}.csv",

@@ -187,7 +187,7 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
 
             return series
 
-        with ThreadPoolExecutor(max_workers=7) as executor:  #changed from 3 to 7
+        with ThreadPoolExecutor(max_workers=8) as executor:  #changed from 3 to 8
             city_key = executor.submit(find_geospatial_dim,
                                        self.cities_local_path, self.cities_remote_path)
             parking_district_key = executor.submit(find_geospatial_dim,
