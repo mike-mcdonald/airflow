@@ -177,7 +177,7 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
             df.crs = {'init': 'epsg:4326'}
 
             series = gpd.sjoin(
-                events.copy(), df, how="left", op="within")['key']
+                events.copy(), df, how="left", op="within").drop_duplicates(subset='event_hash')['key']
 
             del df
             os.remove(local_path)

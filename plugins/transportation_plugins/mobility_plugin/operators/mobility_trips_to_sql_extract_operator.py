@@ -236,7 +236,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
 
         def find_geospatial_dim(right_df):
             series = gpd.sjoin(
-                trips, right_df, how="left", op="within")['key']
+                trips, right_df, how="left", op="within").drop_duplicates(subset='trip_id')['key']
 
             return series
 
