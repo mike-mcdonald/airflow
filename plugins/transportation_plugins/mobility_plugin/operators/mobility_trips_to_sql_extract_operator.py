@@ -63,8 +63,6 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
                  parking_districts_remote_path=None,
                  pattern_areas_local_path=None,
                  pattern_areas_remote_path=None,
-
-                 #New Geometry
                  census_blocks_local_path=None,
                  census_blocks_remote_path=None,
                  counties_local_path=None,
@@ -92,8 +90,6 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         self.parking_districts_remote_path = parking_districts_remote_path
         self.pattern_areas_local_path = pattern_areas_local_path
         self.pattern_areas_remote_path = pattern_areas_remote_path
-
-         #New Geometry
         self.census_blocks_local_path = census_blocks_local_path
         self.census_blocks_remote_path = census_blocks_remote_path
         self.counties_local_path = counties_local_path
@@ -244,15 +240,13 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
 
             return series
 
-        with ThreadPoolExecutor(max_workers=8) as executor: #changed to 8 from 4.
+        with ThreadPoolExecutor(max_workers=8) as executor:
             cities = executor.submit(
                 download_data_lake_geodataframe, self.cities_local_path, self.cities_remote_path)
             parking_districts = executor.submit(
                 download_data_lake_geodataframe, self.parking_districts_local_path, self.parking_districts_remote_path)
             pattern_areas = executor.submit(
                 download_data_lake_geodataframe, self.pattern_areas_local_path, self.pattern_areas_remote_path)
-
-            #New Geometry
             census_blocks = executor.submit(
                 download_data_lake_geodataframe, self.census_blocks_local_path, self.census_blocks_remote_path)
             counties = executor.submit(
@@ -280,9 +274,6 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
                 find_geospatial_dim, parking_districts.result())
             start_pattern_area_key = executor.submit(
                 find_geospatial_dim, pattern_areas.result())
-            
-            #New Geometry
-
             start_census_block_group_key = executor.submit(
                 find_geospatial_dim, census_blocks.result())
             start_counties_key = executor.submit(
@@ -292,14 +283,12 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             start_parks_key = executor.submit(
                 find_geospatial_dim, parks.result())
             start_zipcodes_key = executor.submit(
-                find_geospatial_dim, zipcodes.result()) 
+                find_geospatial_dim, zipcodes.result())
 
             trips['start_cell_key'] = start_cell_key.result()
             trips['start_city_key'] = start_city_key.result()
             trips['start_parking_district_key'] = start_parking_district_key.result()
             trips['start_pattern_area_key'] = start_pattern_area_key.result()
-
-            #New Geometry
             trips['start_census_block_group_key'] = start_census_block_group_key.result()
             trips['start_counties_key'] = start_counties_key.result()
             trips['start_neighborhoods_key'] = start_neighborhoods_key.result()
@@ -311,13 +300,12 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             del start_parking_district_key
             del start_pattern_area_key
 
-            #New Geometry
+            # New Geometry
             del start_census_block_group_key
             del start_counties_key
             del start_neighborhoods_key
             del start_parks_key
             del start_zipcodes_key
-
 
             trips = trips.set_geometry('destination')
 
@@ -329,9 +317,6 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
                 find_geospatial_dim, parking_districts.result())
             end_pattern_area_key = executor.submit(
                 find_geospatial_dim, pattern_areas.result())
-
-             #New Geometry
-
             end_census_block_group_key = executor.submit(
                 find_geospatial_dim, census_blocks.result())
             end_counties_key = executor.submit(
@@ -341,14 +326,12 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             end_parks_key = executor.submit(
                 find_geospatial_dim, parks.result())
             end_zipcodes_key = executor.submit(
-                find_geospatial_dim, zipcodes.result()) 
+                find_geospatial_dim, zipcodes.result())
 
             trips['end_cell_key'] = end_cell_key.result()
             trips['end_city_key'] = end_city_key.result()
             trips['end_parking_district_key'] = end_parking_district_key.result()
             trips['end_pattern_area_key'] = end_pattern_area_key.result()
-
-            #New Geometry
             trips['end_census_block_group_key'] = end_census_block_group_key.result()
             trips['end_counties_key'] = end_counties_key.result()
             trips['end_neighborhoods_key'] = end_neighborhoods_key.result()
@@ -359,21 +342,17 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             del end_city_key
             del end_parking_district_key
             del end_pattern_area_key
-
-            del cells
-
-             #New Geometry
             del end_census_block_group_key
             del end_counties_key
             del end_neighborhoods_key
             del end_parks_key
             del end_zipcodes_key
 
+            del cells
+
             os.remove(self.cities_local_path)
             os.remove(self.parking_districts_local_path)
             os.remove(self.pattern_areas_local_path)
-
-            #New Geometry
             os.remove(self.census_blocks_local_path)
             os.remove(self.counties_local_path)
             os.remove(self.neighborhoods_local_path)

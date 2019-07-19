@@ -59,8 +59,6 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
                  parking_districts_remote_path=None,
                  pattern_areas_local_path=None,
                  pattern_areas_remote_path=None,
-                 
-                 #New Geometry
                  census_blocks_local_path=None,
                  census_blocks_remote_path=None,
                  counties_local_path=None,
@@ -85,7 +83,6 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
         self.parking_districts_remote_path = parking_districts_remote_path
         self.pattern_areas_local_path = pattern_areas_local_path
         self.pattern_areas_remote_path = pattern_areas_remote_path
-        #New Geometry
         self.census_blocks_local_path = census_blocks_local_path
         self.census_blocks_remote_path = census_blocks_remote_path
         self.counties_local_path = counties_local_path
@@ -187,44 +184,36 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
 
             return series
 
-        with ThreadPoolExecutor(max_workers=8) as executor:  #changed from 3 to 8
+        with ThreadPoolExecutor(max_workers=8) as executor:
             city_key = executor.submit(find_geospatial_dim,
                                        self.cities_local_path, self.cities_remote_path)
             parking_district_key = executor.submit(find_geospatial_dim,
                                                    self.parking_districts_local_path, self.parking_districts_remote_path)
             pattern_area_key = executor.submit(find_geospatial_dim,
                                                self.pattern_areas_local_path, self.pattern_areas_remote_path)
-            
-            # New Geometry
             census_block_group_key = executor.submit(find_geospatial_dim,
-                                       self.census_blocks_local_path, self.census_blocks_remote_path)
+                                                     self.census_blocks_local_path, self.census_blocks_remote_path)
             county_key = executor.submit(find_geospatial_dim,
-                                       self.counties_local_path, self.counties_remote_path)
+                                         self.counties_local_path, self.counties_remote_path)
             neighborhood_key = executor.submit(find_geospatial_dim,
-                                                   self.neighborhoods_local_path, self.neighborhoods_remote_path)
+                                               self.neighborhoods_local_path, self.neighborhoods_remote_path)
             park_key = executor.submit(find_geospatial_dim,
-                                               self.parks_local_path, self.parks_remote_path)
+                                       self.parks_local_path, self.parks_remote_path)
             zipcode_key = executor.submit(find_geospatial_dim,
-                                               self.zipcodes_local_path, self.zipcodes_remote_path)
+                                          self.zipcodes_local_path, self.zipcodes_remote_path)
 
             events['city_key'] = city_key.result()
             events['parking_district_key'] = parking_district_key.result()
             events['pattern_area_key'] = pattern_area_key.result()
-
-            #New Geometry
             events['census_block_group_key'] = census_block_group_key.result()
             events['county_key'] = county_key.result()
             events['neighborhood_key'] = neighborhood_key.result()
             events['park_key'] = park_key.result()
             events['zipcode_key'] = zipcode_key.result()
-            
-
 
             del city_key
             del parking_district_key
             del pattern_area_key
-
-            #New Geometry
             del census_block_group_key
             del county_key
             del neighborhood_key
