@@ -69,12 +69,22 @@ for provider in providers:
         data_lake_conn_id="azure_data_lake_default",
         events_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/{provider}-{{{{ ts_nodash }}}}.csv",
         events_remote_path=events_remote_path,
-        cities_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/cities-{{{{ ts_nodash }}}}.csv",
-        cities_remote_path=f"/transportation/mobility/dim/cities.csv",
-        parking_districts_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/parking_districts-{{{{ ts_nodash }}}}.csv",
-        parking_districts_remote_path=f"/transportation/mobility/dim/parking_districts.csv",
-        pattern_areas_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/pattern_areas-{{{{ ts_nodash }}}}.csv",
-        pattern_areas_remote_path=f"/transportation/mobility/dim/pattern_areas.csv",
+        cities_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/cities-{{ ts_nodash }}.csv",
+        cities_remote_path="/transportation/mobility/dim/cities.csv",
+        parking_districts_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/parking_districts-{{ ts_nodash }}.csv",
+        parking_districts_remote_path="/transportation/mobility/dim/parking_districts.csv",
+        pattern_areas_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/pattern_areas-{{ ts_nodash }}.csv",
+        pattern_areas_remote_path="/transportation/mobility/dim/pattern_areas.csv",
+        census_blocks_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/census_blocks-{{ ts_nodash }}.csv",
+        census_blocks_remote_path='/transportation/mobility/dim/census_blocks.csv',
+        counties_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/counties-{{ ts_nodash }}.csv",
+        counties_remote_path='/transportation/mobility/dim/counties.csv',
+        neighborhoods_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/neighborhoods-{{ ts_nodash }}.csv",
+        neighborhoods_remote_path='/transportation/mobility/dim/neighborhoods.csv',
+        parks_local_path='/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/parks-{{ ts_nodash }}.csv',
+        parks_remote_path='/transportation/mobility/dim/parks.csv',
+        zipcodes_local_path='/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/zipcodes-{{ ts_nodash }}.csv',
+        zipcodes_remote_path='/transportation/mobility/dim/zipcodes.csv',
         dag=dag)
 
     remote_paths_delete_tasks.append(
@@ -104,9 +114,14 @@ event_external_stage_task = MsSqlOperator(
         ,[state]
         ,[event]
         ,[cell_key]
+        ,[census_block_group_key]
         ,[city_key]
+        ,[county_key]
+        ,[neighborhood_key]
+        ,[park_key]
         ,[parking_district_key]
         ,[pattern_area_key]
+        ,[zipcode_key]
         ,[battery_pct]
         ,[associated_trip]
         ,[seen]
@@ -125,9 +140,14 @@ event_external_stage_task = MsSqlOperator(
     ,[state]
     ,[event]
     ,[cell_key]
+    ,[census_block_group_key]
     ,[city_key]
+    ,[county_key]
+    ,[neighborhood_key]
+    ,[park_key]
     ,[parking_district_key]
     ,[pattern_area_key]
+    ,[zipcode_key]
     ,[battery_pct]
     ,[associated_trip]
     ,[seen]
@@ -155,9 +175,14 @@ event_stage_task = MsSqlOperator(
             ,start_event
             ,start_time
             ,start_cell_key
+            ,start_census_block_group_key
             ,start_city_key
+            ,start_county_key
+            ,start_neighborhood_key
+            ,start_park_key
             ,start_parking_district_key
             ,start_pattern_area_key
+            ,start_zipcode_key
             ,start_battery_pct
             ,end_hash
             ,end_date_key
@@ -165,9 +190,14 @@ event_stage_task = MsSqlOperator(
             ,end_event
             ,end_time
             ,end_cell_key
+            ,end_census_block_group_key
             ,end_city_key
+            ,end_county_key
+            ,end_neighborhood_key
+            ,end_park_key
             ,end_parking_district_key
             ,end_pattern_area_key
+            ,end_zipcode_key
             ,end_battery_pct
             ,associated_trip
             ,duration
@@ -184,9 +214,14 @@ event_stage_task = MsSqlOperator(
         ,event
         ,event_time
         ,cell_key
+        ,census_block_group_key
         ,city_key
+        ,county_key
+        ,neighborhood_key
+        ,park_key
         ,parking_district_key
         ,pattern_area_key
+        ,zipcode_key
         ,battery_pct
         ,LEAD(event_hash) OVER(PARTITION BY e.device_id ORDER BY event_time)
         ,LEAD(date_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
@@ -194,9 +229,14 @@ event_stage_task = MsSqlOperator(
         ,LEAD(event) OVER(PARTITION BY e.device_id ORDER BY event_time)
         ,LEAD(event_time) OVER(PARTITION BY e.device_id ORDER BY event_time)
         ,LEAD(cell_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
+        ,LEAD(census_block_group_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
         ,LEAD(city_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
+        ,LEAD(county_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
+        ,LEAD(neighborhood_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
+        ,LEAD(park_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
         ,LEAD(parking_district_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
         ,LEAD(pattern_area_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
+        ,LEAD(zipcode_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
         ,LEAD(battery_pct) OVER(PARTITION BY e.device_id ORDER BY event_time)
         ,COALESCE(associated_trip, LEAD(associated_trip) OVER(PARTITION BY e.device_id ORDER BY event_time))
         ,DATEDIFF(SECOND, event_time, LEAD(event_time) OVER(PARTITION BY e.device_id ORDER BY event_time))
@@ -266,13 +306,23 @@ state_warehouse_update_task = MsSqlOperator(
     UPDATE fact.state
     SET last_seen = source.seen,
     [start_cell_key] = source.start_cell_key,
+    [start_census_block_group_key] = source.start_census_block_group_key,
     [start_city_key] = source.start_city_key,
+    [start_county_key] = source.start_county_key,
+    [start_neighborhood_key] = source.start_neighborhood_key,
+    [start_park_key] = source.start_park_key,
     [start_parking_district_key] = source.start_parking_district_key,
     [start_pattern_area_key] = source.start_pattern_area_key,
+    [start_zipcode_key] = source.start_zipcode_key,
     [end_cell_key] = source.end_cell_key,
+    [end_census_block_group_key] = source.end_census_block_group_key,
     [end_city_key] = source.end_city_key,
+    [end_county_key] = source.end_county_key,
+    [end_neighborhood_key] = source.end_neighborhood_key,
+    [end_park_key] = source.end_park_key,
     [end_parking_district_key] = source.end_parking_district_key,
-    [end_pattern_area_key] = source.end_pattern_area_key
+    [end_pattern_area_key] = source.end_pattern_area_key,
+    [end_zipcode_key] = source.end_zipcode_key
     FROM etl.stage_state AS source
     WHERE source.start_hash = fact.state.start_hash
     AND source.batch = '{{ ts_nodash }}'
@@ -296,9 +346,14 @@ state_warehouse_insert_task = MsSqlOperator(
         [start_state],
         [start_event],
         [start_cell_key],
+        [start_census_block_group_key],
         [start_city_key],
+        [start_county_key],
+        [start_neighborhood_key],
+        [start_park_key],
         [start_parking_district_key],
         [start_pattern_area_key],
+        [start_zipcode_key],
         [start_battery_pct],
         [end_hash],
         [end_date_key],
@@ -306,9 +361,14 @@ state_warehouse_insert_task = MsSqlOperator(
         [end_state],
         [end_event],
         [end_cell_key],
+        [end_census_block_group_key],
         [end_city_key],
+        [end_county_key],
+        [end_neighborhood_key],
+        [end_park_key],
         [end_parking_district_key],
         [end_pattern_area_key],
+        [end_zipcode_key],
         [end_battery_pct],
         [associated_trip],
         [duration],
@@ -325,9 +385,14 @@ state_warehouse_insert_task = MsSqlOperator(
     [start_state],
     [start_event],
     [start_cell_key],
+    [start_census_block_group_key],
     [start_city_key],
+    [start_county_key],
+    [start_neighborhood_key],
+    [start_park_key],
     [start_parking_district_key],
     [start_pattern_area_key],
+    [start_zipcode_key],
     [start_battery_pct],
     [end_hash],
     [end_date_key],
@@ -335,9 +400,14 @@ state_warehouse_insert_task = MsSqlOperator(
     [end_state],
     [end_event],
     [end_cell_key],
+    [end_census_block_group_key],
     [end_city_key],
+    [end_county_key],
+    [end_neighborhood_key],
+    [end_park_key],
     [end_parking_district_key],
     [end_pattern_area_key],
+    [end_zipcode_key],
     [end_battery_pct],
     [associated_trip],
     [duration],

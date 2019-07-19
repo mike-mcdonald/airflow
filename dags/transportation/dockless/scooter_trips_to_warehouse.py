@@ -73,12 +73,22 @@ for provider in providers:
         trips_remote_path=trips_remote_path,
         segment_hits_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/{provider}-segment-hits-{{{{ ts_nodash }}}}.csv",
         segment_hits_remote_path=segment_hits_remote_path,
-        cities_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/cities-{{{{ ts_nodash }}}}.csv",
-        cities_remote_path=f"/transportation/mobility/dim/cities.csv",
-        parking_districts_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/parking_districts-{{{{ ts_nodash }}}}.csv",
-        parking_districts_remote_path=f"/transportation/mobility/dim/parking_districts.csv",
-        pattern_areas_local_path=f"/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/pattern_areas-{{{{ ts_nodash }}}}.csv",
-        pattern_areas_remote_path=f"/transportation/mobility/dim/pattern_areas.csv",
+        cities_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/cities-{{ ts_nodash }}.csv",
+        cities_remote_path="/transportation/mobility/dim/cities.csv",
+        parking_districts_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/parking_districts-{{ ts_nodash }}.csv",
+        parking_districts_remote_path="/transportation/mobility/dim/parking_districts.csv",
+        pattern_areas_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/pattern_areas-{{ ts_nodash }}.csv",
+        pattern_areas_remote_path="/transportation/mobility/dim/pattern_areas.csv",
+        census_blocks_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/census_blocks-{{ ts_nodash }}.csv",
+        census_blocks_remote_path='/transportation/mobility/dim/census_blocks.csv',
+        counties_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/counties-{{ ts_nodash }}.csv",
+        counties_remote_path='/transportation/mobility/dim/counties.csv',
+        neighborhoods_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/neighborhoods-{{ ts_nodash }}.csv",
+        neighborhoods_remote_path='/transportation/mobility/dim/neighborhoods.csv',
+        parks_local_path='/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/parks-{{ ts_nodash }}.csv',
+        parks_remote_path='/transportation/mobility/dim/parks.csv',
+        zipcodes_local_path='/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/zipcodes-{{ ts_nodash }}.csv',
+        zipcodes_remote_path='/transportation/mobility/dim/zipcodes.csv',
         dag=dag)
 
     trip_remote_files_delete_tasks.append(
@@ -112,15 +122,25 @@ trip_external_stage_task = MsSqlOperator(
         ,[start_time]
         ,[start_date_key]
         ,[start_cell_key]
+        ,[start_census_block_group_key]
         ,[start_city_key]
+        ,[start_county_key]
+        ,[start_neighborhood_key]
+        ,[start_park_key]
         ,[start_parking_district_key]
         ,[start_pattern_area_key]
+        ,[start_zipcode_key]
         ,[end_time]
         ,[end_date_key]
         ,[end_cell_key]
+        ,[end_census_block_group_key]
         ,[end_city_key]
+        ,[end_county_key]
+        ,[end_neighborhood_key]
+        ,[end_park_key]
         ,[end_parking_district_key]
         ,[end_pattern_area_key]
+        ,[end_zipcode_key]
         ,[distance]
         ,[duration]
         ,[accuracy]
@@ -141,15 +161,25 @@ trip_external_stage_task = MsSqlOperator(
     ,[start_time]
     ,[start_date_key]
     ,[start_cell_key]
+    ,[start_census_block_group_key]
     ,[start_city_key]
+    ,[start_county_key]
+    ,[start_neighborhood_key]
+    ,[start_park_key]
     ,[start_parking_district_key]
     ,[start_pattern_area_key]
+    ,[start_zipcode_key]
     ,[end_time]
     ,[end_date_key]
     ,[end_cell_key]
+    ,[end_census_block_group_key]
     ,[end_city_key]
+    ,[end_county_key]
+    ,[end_neighborhood_key]
+    ,[end_park_key]
     ,[end_parking_district_key]
     ,[end_pattern_area_key]
+    ,[end_zipcode_key]
     ,[distance]
     ,[duration]
     ,[accuracy]
@@ -265,13 +295,23 @@ trip_stage_task = MsSqlOperator(
         ,[propulsion_type]
         ,[trip_id]
         ,[start_cell_key]
+        ,[start_census_block_group_key]
         ,[start_city_key]
+        ,[start_county_key]
+        ,[start_neighborhood_key]
+        ,[start_park_key]
         ,[start_parking_district_key]
         ,[start_pattern_area_key]
+        ,[start_zipcode_key]
         ,[end_cell_key]
+        ,[end_census_block_group_key]
         ,[end_city_key]
+        ,[end_county_key]
+        ,[end_neighborhood_key]
+        ,[end_park_key]
         ,[end_parking_district_key]
         ,[end_pattern_area_key]
+        ,[end_zipcode_key]
         ,[start_time]
         ,[start_date_key]
         ,[end_time]
@@ -291,13 +331,23 @@ trip_stage_task = MsSqlOperator(
     ,[propulsion_type]
     ,[trip_id]
     ,[start_cell_key]
+    ,[start_census_block_group_key]
     ,[start_city_key]
+    ,[start_county_key]
+    ,[start_neighborhood_key]
+    ,[start_park_key]
     ,[start_parking_district_key]
     ,[start_pattern_area_key]
+    ,[start_zipcode_key]
     ,[end_cell_key]
+    ,[end_census_block_group_key]
     ,[end_city_key]
+    ,[end_county_key]
+    ,[end_neighborhood_key]
+    ,[end_park_key]
     ,[end_parking_district_key]
     ,[end_pattern_area_key]
+    ,[end_zipcode_key]
     ,[start_time]
     ,[start_date_key]
     ,[end_time]
@@ -333,14 +383,24 @@ trip_warehouse_update_task = MsSqlOperator(
     sql="""
     UPDATE fact.trip
     SET last_seen = source.seen,
-    [start_cell_key] = source.start_cell_key,
-    [start_city_key] = source.start_city_key,
-    [start_parking_district_key] = source.start_parking_district_key,
-    [start_pattern_area_key] = source.start_pattern_area_key,
-    [end_cell_key] = source.end_cell_key,
-    [end_city_key] = source.end_city_key,
-    [end_parking_district_key] = source.end_parking_district_key,
-    [end_pattern_area_key] = source.end_pattern_area_key
+    start_cell_key = source.start_cell_key,
+    start_census_block_group_key = source.start_census_block_group_key,
+    start_city_key = source.start_city_key,
+    start_county_key = source.start_county_key,
+    start_neighborhood_key = source.start_neighborhood_key,
+    start_park_key = source.start_park_key,
+    start_parking_district_key = source.start_parking_district_key,
+    start_pattern_area_key = source.start_pattern_area_key,
+    start_zipcode_key = source.start_zipcode_key,
+    end_cell_key = source.end_cell_key,
+    end_census_block_group_key = source.end_census_block_group_key,
+    end_city_key = source.end_city_key,
+    end_county_key = source.end_county_key,
+    end_neighborhood_key = source.end_neighborhood_key,
+    end_park_key = source.end_park_key,
+    end_parking_district_key = source.end_parking_district_key,
+    end_pattern_area_key = source.end_pattern_area_key,
+    end_zipcode_key = source.end_zipcode_key,
     FROM etl.stage_trip AS source
     WHERE source.trip_id = fact.trip.trip_id
     AND source.batch = '{{ ts_nodash }}'
@@ -362,15 +422,25 @@ trip_warehouse_insert_task = MsSqlOperator(
         [start_time],
         [start_date_key],
         [start_cell_key],
+        [start_census_block_group_key],
         [start_city_key],
+        [start_county_key],
+        [start_neighborhood_key],
+        [start_park_key],
         [start_parking_district_key],
         [start_pattern_area_key],
+        [start_zipcode_key],
         [end_time],
         [end_date_key],
         [end_cell_key],
+        [end_census_block_group_key],
         [end_city_key],
+        [end_county_key],
+        [end_neighborhood_key],
+        [end_park_key],
         [end_parking_district_key],
         [end_pattern_area_key],
+        [end_zipcode_key],
         [distance],
         [duration],
         [accuracy],
@@ -388,15 +458,25 @@ trip_warehouse_insert_task = MsSqlOperator(
     [start_time],
     [start_date_key],
     [start_cell_key],
+    [start_census_block_group_key],
     [start_city_key],
+    [start_county_key],
+    [start_neighborhood_key],
+    [start_park_key],
     [start_parking_district_key],
     [start_pattern_area_key],
+    [start_zipcode_key],
     [end_time],
     [end_date_key],
     [end_cell_key],
+    [end_census_block_group_key],
     [end_city_key],
+    [end_county_key],
+    [end_neighborhood_key],
+    [end_park_key],
     [end_parking_district_key],
     [end_pattern_area_key],
+    [end_zipcode_key],
     [distance],
     [duration],
     [accuracy],
