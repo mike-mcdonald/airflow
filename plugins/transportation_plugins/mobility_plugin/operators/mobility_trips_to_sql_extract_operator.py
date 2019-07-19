@@ -290,10 +290,10 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             trips['start_parking_district_key'] = start_parking_district_key.result()
             trips['start_pattern_area_key'] = start_pattern_area_key.result()
             trips['start_census_block_group_key'] = start_census_block_group_key.result()
-            trips['start_counties_key'] = start_counties_key.result()
-            trips['start_neighborhoods_key'] = start_neighborhoods_key.result()
-            trips['start_parks_key'] = start_parks_key.result()
-            trips['start_zipcodes_key'] = start_zipcodes_key.result()
+            trips['start_county_key'] = start_counties_key.result()
+            trips['start_neighborhood_key'] = start_neighborhoods_key.result()
+            trips['start_park_key'] = start_parks_key.result()
+            trips['start_zipcode_key'] = start_zipcodes_key.result()
 
             del start_cell_key
             del start_city_key
@@ -333,10 +333,10 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             trips['end_parking_district_key'] = end_parking_district_key.result()
             trips['end_pattern_area_key'] = end_pattern_area_key.result()
             trips['end_census_block_group_key'] = end_census_block_group_key.result()
-            trips['end_counties_key'] = end_counties_key.result()
-            trips['end_neighborhoods_key'] = end_neighborhoods_key.result()
-            trips['end_parks_key'] = end_parks_key.result()
-            trips['end_zipcodes_key'] = end_zipcodes_key.result()
+            trips['end_county_key'] = end_counties_key.result()
+            trips['end_neighborhood_key'] = end_neighborhoods_key.result()
+            trips['end_park_key'] = end_parks_key.result()
+            trips['end_zipcode_key'] = end_zipcodes_key.result()
 
             del end_cell_key
             del end_city_key
