@@ -178,8 +178,8 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         del trips["route"]
 
         hook_mssql = AzureMsSqlDataFrameHook(
-                azure_mssql_conn_id=self.sql_conn_id
-            )
+            azure_mssql_conn_id=self.sql_conn_id
+        )
 
         self.log.debug("Reading cells from data warehouse...")
 
@@ -203,7 +203,6 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
 
             return df
 
-
         def find_geospatial_dim(right_df):
             series = gpd.sjoin(
                 trips, right_df, how="left", op="within")['key']
@@ -218,7 +217,8 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             pattern_areas = executor.submit(
                 download_data_lake_geodataframe, self.pattern_areas_local_path, self.pattern_areas_remote_path)
 
-            cells = hook_mssql.read_table_dataframe(table_name="cell", schema="dim")
+            cells = hook_mssql.read_table_dataframe(
+                table_name="cell", schema="dim")
             cells['geometry'] = cells.wkt.map(loads)
             cells = gpd.GeoDataFrame(cells)
             cells.crs = {'init': 'epsg:4326'}
@@ -251,9 +251,9 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             end_city_key = executor.submit(
                 find_geospatial_dim, cities.result())
             end_parking_district_key = executor.submit(
-                find_geospatial_dim, cities.result())
+                find_geospatial_dim, parking_districts.result())
             end_pattern_area_key = executor.submit(
-                find_geospatial_dim, cities.result())
+                find_geospatial_dim, pattern_areas.result())
 
             trips['end_cell_key'] = end_cell_key.result()
             trips['end_city_key'] = end_city_key.result()
@@ -310,7 +310,8 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
             'batch'
         ]].to_csv(self.trips_local_path, index=False)
 
-        hook_data_lake.upload_file(self.trips_local_path, self.trips_remote_path)
+        hook_data_lake.upload_file(
+            self.trips_local_path, self.trips_remote_path)
 
         os.remove(self.trips_local_path)
 
@@ -406,7 +407,7 @@ class MobilityTripsToSqlExtractOperator(BaseOperator):
         ]].to_csv(self.segment_hits_local_path, index=False)
 
         hook_data_lake.upload_file(self.segment_hits_local_path,
-                         self.segment_hits_remote_path)
+                                   self.segment_hits_remote_path)
 
         os.remove(self.segment_hits_local_path)
 
