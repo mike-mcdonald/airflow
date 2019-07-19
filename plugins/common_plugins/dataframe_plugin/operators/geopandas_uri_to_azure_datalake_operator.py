@@ -49,7 +49,7 @@ class GeoPandasUriToAzureDataLakeOperator(BaseOperator):
         df['center_x'] = df.center.map(lambda x: x.x)
         df['center_y'] = df.center.map(lambda x: x.y)
 
-        df = df.to_crs(epsg=3857)
+        df = df.to_crs(epsg=self.area_espg)
         df['area'] = df.geometry.map(lambda x: x.area)
 
         pathlib.Path(os.path.dirname(self.local_path)
