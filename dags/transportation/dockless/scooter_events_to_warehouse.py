@@ -75,8 +75,6 @@ for provider in providers:
         parking_districts_remote_path="/transportation/mobility/dim/parking_districts.csv",
         pattern_areas_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/pattern_areas-{{ ts_nodash }}.csv",
         pattern_areas_remote_path="/transportation/mobility/dim/pattern_areas.csv",
-
-        #New Geometry
         census_blocks_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/census_blocks-{{ ts_nodash }}.csv",
         census_blocks_remote_path='/transportation/mobility/dim/census_blocks.csv',
         counties_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/counties-{{ ts_nodash }}.csv",
