@@ -400,7 +400,7 @@ trip_warehouse_update_task = MsSqlOperator(
     end_park_key = source.end_park_key,
     end_parking_district_key = source.end_parking_district_key,
     end_pattern_area_key = source.end_pattern_area_key,
-    end_zipcode_key = source.end_zipcode_key,
+    end_zipcode_key = source.end_zipcode_key
     FROM etl.stage_trip AS source
     WHERE source.trip_id = fact.trip.trip_id
     AND source.batch = '{{ ts_nodash }}'
