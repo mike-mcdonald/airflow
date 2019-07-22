@@ -61,7 +61,6 @@ extract_states_task = MsSqlOperator(
     [end_time],
     [end_state],
     [end_event],
-    [end_cell_key],
     [end_battery_pct],
     [associated_trip],
     [duration],
