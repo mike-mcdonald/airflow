@@ -85,8 +85,7 @@ fleet_stage_task = MsSqlOperator(
     OUTER APPLY (
         SELECT COUNT(DISTINCT f.vehicle_key) AS count
         FROM fact.state AS f
-        WHERE f.start_date_key = e.date_key
-        AND f.provider_key = e.provider_key
+        WHERE f.provider_key = e.provider_key
         AND f.start_time <= e.time
         AND COALESCE(f.end_time, cast('12/31/9999 23:59:59.9999' as datetime2)) >= e.time
         AND start_state = 'available'
@@ -94,8 +93,7 @@ fleet_stage_task = MsSqlOperator(
     OUTER APPLY (
         SELECT COUNT(DISTINCT f.vehicle_key) AS count
         FROM fact.state AS f
-        WHERE f.start_date_key = e.date_key
-        AND f.provider_key = e.provider_key
+        WHERE f.provider_key = e.provider_key
         AND f.start_time <= e.time
         AND COALESCE(f.end_time, cast('12/31/9999 23:59:59.9999' as datetime2)) >= e.time
         AND start_state = 'reserved'
@@ -103,8 +101,7 @@ fleet_stage_task = MsSqlOperator(
     OUTER APPLY (
         SELECT COUNT(DISTINCT f.vehicle_key) AS count
         FROM fact.state AS f
-        WHERE f.start_date_key = e.date_key
-        AND f.provider_key = e.provider_key
+        WHERE f.provider_key = e.provider_key
         AND f.start_time <= e.time
         AND COALESCE(f.end_time, cast('12/31/9999 23:59:59.9999' as datetime2)) >= e.time
         AND start_state = 'unavailable'
@@ -112,8 +109,7 @@ fleet_stage_task = MsSqlOperator(
     OUTER APPLY (
         SELECT COUNT(DISTINCT f.vehicle_key) AS count
         FROM fact.state AS f
-        WHERE f.start_date_key = e.date_key
-        AND f.provider_key = e.provider_key
+        WHERE f.provider_key = e.provider_key
         AND f.start_time <= e.time
         AND COALESCE(f.end_time, cast('12/31/9999 23:59:59.9999' as datetime2)) >= e.time
         AND start_state = 'removed'
