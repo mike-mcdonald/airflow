@@ -14,12 +14,8 @@ generate_tag_name: &generate_tag_name
   run:
     name: Generate tag name
     command: |
+      echo 'Using tag $(echo "${CIRCLE_BRANCH////-}")...'
       echo 'export TAG_NAME=$(echo "${CIRCLE_BRANCH////-}")' >> $BASH_ENV
-print_tag_name: &print_tag_name
-  run:
-    name: Print tag name
-    command: |
-      echo 'Using tag ${TAG_NAME}...'
 azure_login: &azure_login
   run:
     name: Login to Azure as CirleCI service principal
@@ -32,22 +28,17 @@ jobs:
       - checkout
       - setup_remote_docker:
           docker_layer_caching: true
-      - *generate_tag_name
-      - *print_tag_name
       - *restore_cache
       - run:
-          name: Build docker image
-          command: |
-          if [ ! -f "docker-cache/image.tar" ]; then
-            docker build -t $IMAGE_NAME:$TAG_NAME .
-          fi
-      - run:
-          name: Save docker image
+          name: Build full docker image
           command: |
             if [ ! -f "docker-cache/image.tar" ]; then
+              echo "Building full docker image..."
+              docker build -t airflow .
               mkdir -p docker-cache
-              echo 'Saving ${IMAGE_NAME}:${TAG_NAME}...'
-              docker save -o docker-cache/image.tar $IMAGE_NAME:$TAG_NAME
+              docker save -o docker-cache/image.tar airflow
+            else
+              echo "Docker image found! Skipping build..."
             fi
       - save_cache:
           key: *cache_key
@@ -72,22 +63,26 @@ jobs:
           command: |
             docker load < docker-cache/image.tar
       - run:
-          name: Push image to Azure Container Registry
+          name: Build partial image updates
           command: |
-            docker push $IMAGE_NAME:$TAG_NAME
+            docker build -f .circleci/Dockerfile -t airflow .
       - run:
           name: Tag as latest
           command: |
-            docker tag $IMAGE_NAME:$TAG_NAME $IMAGE_NAME:latest
+            docker tag airflow $IMAGE_NAME:latest
       - run:
-          name: Push latest tag image to Azure Container Registry
+          name: Tag as CircleCI tag
+          command: |
+            docker tag airflow $IMAGE_NAME:$TAG_NAME
+      - run:
+          name: Push images to Azure Container Registry
           command: |
             docker push $IMAGE_NAME:latest
+            docker push $IMAGE_NAME:$TAG_NAME
 
   update_aks:
     <<: *container_config
     steps:
-      - *generate_tag_name
       - *azure_login
       - run:
           name: Login to Kubernetes cluster
@@ -107,15 +102,24 @@ workflows:
               only:
                 - master
             tags:
-              only: /[0-9]+(\.[0-9]+)*/
+              only: /^[0-9]+(\.[0-9]+)*/
       - deploy_image:
           requires:
             - build_image
           filters:
             branches:
-              only:
+              ignore:
                 - master
             tags:
-              only: /[0-9]+(\.[0-9]+)*/
+              only: /^[0-9]+(\.[0-9]+)*/
+      - update_aks:
+          requires:
+            - deploy_image
+          filters:
+            branches:
+              ignore:
+                - master
+            tags:
+              only: /^[0-9]+(\.[0-9]+)*/
 
 
