@@ -15,7 +15,11 @@ generate_tag_name: &generate_tag_name
     name: Generate tag name
     command: |
       echo 'export TAG_NAME=$(echo "${CIRCLE_BRANCH////-}")' >> $BASH_ENV
-      
+azure_login: &azure_login
+  run:
+    name: Login to Azure
+    command: |
+      az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
 jobs:
   build_image:
     <<: *container_config
@@ -51,10 +55,7 @@ jobs:
           docker_layer_caching: true
       - *restore_cache
       - *generate_tag_name
-      - run:
-          name: Login to Azure
-          command: |
-            az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
+      - *azure_login
       - run:
           name: Login to Azure Container Registry
           command: |
@@ -76,6 +77,19 @@ jobs:
           command: |
             docker push $IMAGE_NAME:latest
 
+  update_aks:
+    <<: *container_config
+    steps:
+      - *generate_tag_name
+      - *azure_login
+      - run:
+          name: Login to Kubernetes cluster
+          command: |
+            az aks get-credentials --name $K8S_CLUSTER_NAME --resource-group $K8S_RESOURCE_GROUP
+      - run:
+          name: Apply Kubernetes configuration
+          command: |
+            kubectl apply -f k8s/
 workflows:
   version: 2
   build_and_deploy:
@@ -96,3 +110,11 @@ workflows:
                 - master
             tags:
               only: /[0-9]+(\.[0-9]+)*/
+      - update_aks:
+          requires:
+            - deploy_image
+          filters:
+            tags:
+              only: /[0-9]+(\.[0-9]+)*/
+
+
