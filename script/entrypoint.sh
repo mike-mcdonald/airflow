@@ -49,16 +49,19 @@ wait_for_port() {
 
 AIRFLOW__CORE__SQL_ALCHEMY_CONN="postgresql+psycopg2://$POSTGRES_USER:$POSTGRES_PASSWORD@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB"
 AIRFLOW__CELERY__RESULT_BACKEND="db+postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB"
-wait_for_port "Postgres" "$POSTGRES_HOST" "$POSTGRES_PORT"
 AIRFLOW__CELERY__BROKER_URL="redis://$REDIS_PREFIX$REDIS_HOST:$REDIS_PORT/1"
-wait_for_port "Redis" "$REDIS_HOST" "$REDIS_PORT"
+
+echo "Installing custom plugins..."
+pip install -e /usr/local/plugins
 
 case "$1" in
   webserver)
+    wait_for_port "Postgres" "$POSTGRES_HOST" "$POSTGRES_PORT"
     airflow initdb
     exec airflow webserver
     ;;
   worker|scheduler)
+    wait_for_port "Redis" "$REDIS_HOST" "$REDIS_PORT"
     # To give the webserver time to run initdb.
     sleep 10
     exec airflow "$@"
