@@ -52,7 +52,7 @@ AIRFLOW__CELERY__RESULT_BACKEND="db+postgresql://$POSTGRES_USER:$POSTGRES_PASSWO
 AIRFLOW__CELERY__BROKER_URL="redis://$REDIS_PREFIX$REDIS_HOST:$REDIS_PORT/1"
 
 echo "Installing custom plugins..."
-pip install -e /usr/local/plugins
+pip install -e plugins
 
 case "$1" in
   webserver)
