@@ -15,7 +15,8 @@ generate_tag_name: &generate_tag_name
     name: Generate tag name
     command: |
       echo 'export TAG_NAME=$(echo "${CIRCLE_BRANCH////-}")' >> $BASH_ENV
-  - run:
+print_tag_name: &print_tag_name
+  run:
     name: Print tag name
     command: |
       echo 'Using tag $TAG_NAME...'
@@ -32,6 +33,7 @@ jobs:
       - setup_remote_docker:
           docker_layer_caching: true
       - *generate_tag_name
+      - *print_tag_name
       - run:
           name: Build docker image
           command: |
