@@ -15,9 +15,13 @@ generate_tag_name: &generate_tag_name
     name: Generate tag name
     command: |
       echo 'export TAG_NAME=$(echo "${CIRCLE_BRANCH////-}")' >> $BASH_ENV
+  - run:
+    name: Print tag name
+    command: |
+      echo 'Using tag $TAG_NAME...'
 azure_login: &azure_login
   run:
-    name: Login to Azure
+    name: Login to Azure as CirleCI service principal
     command: |
       az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
 jobs:
@@ -40,7 +44,7 @@ jobs:
           name: Save docker image
           command: |
             mkdir -p docker-cache
-            echo "Saving $IMAGE_NAME:$TAG_NAME"
+            echo 'Saving $IMAGE_NAME:$TAG_NAME...'
             docker save -o docker-cache/image.tar $IMAGE_NAME:$TAG_NAME
       - save_cache:
           key: *cache_key
