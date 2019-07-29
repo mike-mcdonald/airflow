@@ -82,7 +82,7 @@ RUN set -ex \
     && pip install ndg-httpsclient \
     && pip install pyasn1 \
     && pip install apache-airflow[all]==${AIRFLOW_VERSION} \
-    && pip install redis \
+    && pip install redis>3.2.0 \
     && apt-get purge --auto-remove -yqq $buildDeps \
     && apt-get autoremove -yqq --purge \
     && apt-get clean \
@@ -95,14 +95,26 @@ RUN set -ex \
     /usr/share/doc-base
 
 # Install specific airflow dependencies
-COPY ./requirements.txt /requirements.txt
-RUN pip install -r /requirements.txt
+RUN { \
+    echo 'fiona'; \
+    echo 'geopandas'; \
+    echo 'numpy'; \
+    echo 'pandas'; \
+    echo 'psycopg2-binary'; \
+    echo 'pyodbc'; \
+    echo 'pyproj'; \
+    echo 'requests'; \
+    echo 'requests_oauthlib'; \
+    echo 'rtree'; \
+    echo 'shapely'; \
+    echo 'six'; \
+} > ${AIRFLOW_HOME}/requirements.txt
 
-# Install custom plugins as package
-COPY plugins /usr/local/plugins
-RUN pip install -e /usr/local/plugins
+RUN pip install -r ${AIRFLOW_HOME}/requirements.txt
 
-COPY ./dags /usr/local/airflow/dags
+# Custom plugins written as package
+COPY plugins ${AIRFLOW_HOME}/plugins
+COPY dags ${AIRFLOW_HOME}/dags
 COPY config/airflow.cfg ${AIRFLOW_HOME}/airflow.cfg
 
 RUN chown -R airflow: ${AIRFLOW_HOME}
