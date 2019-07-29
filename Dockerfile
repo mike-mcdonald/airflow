@@ -108,14 +108,13 @@ RUN { \
     echo 'rtree'; \
     echo 'shapely'; \
     echo 'six'; \
-} > /usr/local/airflow/requirements.txt
+} > ${AIRFLOW_HOME}/requirements.txt
 
-RUN pip install -r /usr/local/airflow/requirements.txt
+RUN pip install -r ${AIRFLOW_HOME}/requirements.txt
 
 # Custom plugins written as package
-COPY plugins /usr/local/plugins
-
-COPY ./dags ${AIRFLOW_HOME}/dags
+COPY plugins ${AIRFLOW_HOME}/plugins
+COPY dags ${AIRFLOW_HOME}/dags
 COPY config/airflow.cfg ${AIRFLOW_HOME}/airflow.cfg
 
 RUN chown -R airflow: ${AIRFLOW_HOME}
