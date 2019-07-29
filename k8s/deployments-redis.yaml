@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-redis
+  labels:
+    app: airflow
+    component: cache
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow
+      component: cache
+  template:
+    metadata:
+      labels:
+        app: airflow
+        component: cache
+    spec:
+      restartPolicy: Always
+      serviceAccountName: airflow
+      containers:
+        - name: redis
+          image: redis:5.0.5
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - configMapRef:
+                name: redis-env
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-redis
+                  key: redis-password
+          args: ["--requirepass", "$(REDIS_PASSWORD)"]

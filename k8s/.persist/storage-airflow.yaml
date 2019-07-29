@@ -1,0 +1,13 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: airflow-logs-pv-claim
+  labels:
+    app: airflow
+spec:
+  storageClassName: azure-file-retain
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1024Gi

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-env
+  labels:
+    app: airflow
+    component: database
+data:
+  POSTGRES_DB: airflow
+  POSTGRES_USER: airflowadmin
+  PGDATA: /var/lib/postgresql/data/pgdata

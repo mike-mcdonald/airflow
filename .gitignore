@@ -40,3 +40,4 @@ __pycache__
 ### Private ###
 /.certs/**/*.crt
 /.certs/**/*.pem
+/k8s/.secrets/

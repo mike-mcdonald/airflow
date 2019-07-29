@@ -1,0 +1,78 @@
+---
+# Source: airflow/templates/deployments-web.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-web
+  labels:
+    app: airflow
+    component: web
+spec:
+  replicas: 1
+  minReadySeconds: 120
+  strategy:
+    # Smooth rolling update of the Web UI
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: airflow
+      component: web
+  template:
+    metadata:
+      labels:
+        app: airflow
+        component: web
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: airflow-web
+          image: pudlmds.azurecr.io/airflow:1.10.2.1
+          imagePullPolicy: Always
+          ports:
+            - name: web
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: "airflow-env"
+          env:
+            - name: FERNET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-fernet
+                  key: fernet-key
+            - name: POSTGRES_USER
+              value: airflowadmin
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-postgresql
+                  key: postgres-password
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-redis
+                  key: redis-password
+          resources:
+            {}
+          args: ["webserver"]
+          livenessProbe:
+            httpGet:
+              path: "/health"
+              port: web
+            ## Keep 6 minutes the delay to allow clean wait of postgres and redis containers
+            initialDelaySeconds: 360
+            periodSeconds: 60
+            timeoutSeconds: 1
+            successThreshold: 1
+            failureThreshold: 5
+          volumeMounts:
+            - mountPath: /usr/local/airflow/logs
+              name: airflow-logs
+      volumes:
+        - name: airflow-logs
+          persistentVolumeClaim:
+            claimName: airflow-logs-pv-claim
