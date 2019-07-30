@@ -82,7 +82,7 @@ RUN set -ex \
     && pip install ndg-httpsclient \
     && pip install pyasn1 \
     && pip install apache-airflow[all]==${AIRFLOW_VERSION} \
-    && pip install redis>3.2.0 \
+    && pip install redis \
     && apt-get purge --auto-remove -yqq $buildDeps \
     && apt-get autoremove -yqq --purge \
     && apt-get clean \
@@ -103,6 +103,7 @@ RUN { \
     echo 'psycopg2-binary'; \
     echo 'pyodbc'; \
     echo 'pyproj'; \
+    echo 'redis>3.2.0'; \
     echo 'requests'; \
     echo 'requests_oauthlib'; \
     echo 'rtree'; \
