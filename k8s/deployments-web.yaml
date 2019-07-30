@@ -29,7 +29,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: airflow-web
-          image: pudlmds.azurecr.io/airflow:1.10.2.2
+          image: pudlmds.azurecr.io/airflow:1.10.2.3
           imagePullPolicy: Always
           ports:
             - name: web
