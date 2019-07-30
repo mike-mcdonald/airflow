@@ -47,6 +47,7 @@ jobs:
   deploy_image:
     <<: *container_config
     steps:
+      - checkout
       - setup_remote_docker:
           docker_layer_caching: true
       - *restore_cache
@@ -81,6 +82,7 @@ jobs:
   update_aks:
     <<: *container_config
     steps:
+      - checkout
       - *azure_login
       - run:
           name: Login to Kubernetes cluster
