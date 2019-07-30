@@ -100,8 +100,6 @@ workflows:
               only:
                 - master
       - deploy_image:
-          requires:
-            - build_image
           filters:
             branches:
               ignore:
