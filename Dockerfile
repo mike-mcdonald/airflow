@@ -34,7 +34,6 @@ RUN set -ex \
     gnupg2 \
     libkrb5-dev \
     libsasl2-dev \
-    libssl-dev \
     libffi-dev \
     libpq-dev \
     ' \
@@ -51,6 +50,7 @@ RUN set -ex \
     libgeos-dev \
     libproj-dev \
     libspatialindex-dev \
+    libssl-dev \
     netcat \
     proj-bin \
     proj-data \
