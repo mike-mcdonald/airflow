@@ -2,7 +2,7 @@ version: 2
 
 container_config: &container_config
   docker:
-    - image: mcdonaldmike/docker-azure:stable
+    - image: mcdonaldmike/circleci-azure:latest
   working_directory: /usr/local/lib
 cache_key: &cache_key
   docker_cache-{{ checksum "Dockerfile" }}
@@ -48,7 +48,6 @@ jobs:
   deploy_image:
     <<: *container_config
     steps:
-      - checkout
       - setup_remote_docker:
           docker_layer_caching: true
       - *restore_cache
@@ -73,12 +72,12 @@ jobs:
       - run:
           name: Tag as CircleCI tag
           command: |
-            docker tag airflow $IMAGE_NAME:$TAG_NAME
+            docker tag airflow $IMAGE_NAME:$CIRCLE_TAG
       - run:
           name: Push images to Azure Container Registry
           command: |
             docker push $IMAGE_NAME:latest
-            docker push $IMAGE_NAME:$TAG_NAME
+            docker push $IMAGE_NAME:$CIRCLE_TAG
 
   update_aks:
     <<: *container_config
@@ -101,8 +100,6 @@ workflows:
             branches:
               only:
                 - master
-            tags:
-              only: /^[0-9]+(\.[0-9]+)*/
       - deploy_image:
           requires:
             - build_image
