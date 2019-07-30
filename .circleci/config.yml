@@ -19,7 +19,7 @@ azure_login: &azure_login
   run:
     name: Login to Azure as CirleCI service principal
     command: |
-      az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID --allow-no-subscriptions
+      az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
 jobs:
   build_image:
     <<: *container_config
