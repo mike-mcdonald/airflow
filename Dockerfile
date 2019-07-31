@@ -50,7 +50,7 @@ RUN set -ex \
     libgeos-dev \
     libproj-dev \
     libspatialindex-dev \
-    libssl-dev \
+    libssl1.0.2 \
     netcat \
     proj-bin \
     proj-data \
