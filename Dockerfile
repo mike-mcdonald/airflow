@@ -94,22 +94,7 @@ RUN set -ex \
     /usr/share/doc-base
 
 # Install specific airflow dependencies
-RUN { \
-    echo 'fiona'; \
-    echo 'geopandas'; \
-    echo 'numpy'; \
-    echo 'pandas'; \
-    echo 'psycopg2-binary'; \
-    echo 'pyodbc'; \
-    echo 'pyproj'; \
-    echo 'redis>3.2.0'; \
-    echo 'requests'; \
-    echo 'requests_oauthlib'; \
-    echo 'rtree'; \
-    echo 'shapely'; \
-    echo 'six'; \
-} > ${AIRFLOW_HOME}/requirements.txt
-
+COPY requirements.txt ${AIRFLOW_HOME}/requirements.txt
 RUN pip install -r ${AIRFLOW_HOME}/requirements.txt
 
 # Custom plugins written as package
