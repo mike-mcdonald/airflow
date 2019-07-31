@@ -4,17 +4,11 @@ container_config: &container_config
   docker:
     - image: mcdonaldmike/circleci-azure:latest
 cache_key: &cache_key
-  v2-docker_cache-{{ checksum "Dockerfile" }}
+  v2-docker_cache-{{ checksum "Dockerfile" }}-{{ checksum "requirements.txt" }}
 restore_cache: &restore_cache
   restore_cache:
     name: Restore cache
     key: *cache_key
-generate_tag_name: &generate_tag_name
-  run:
-    name: Generate tag name
-    command: |
-      echo 'Using tag $(echo "${CIRCLE_BRANCH////-}")...'
-      echo 'export TAG_NAME=$(echo "${CIRCLE_BRANCH////-}")' >> $BASH_ENV
 azure_login: &azure_login
   run:
     name: Login to Azure as CirleCI service principal
@@ -26,32 +20,31 @@ jobs:
     steps:
       - checkout
       - setup_remote_docker:
-          docker_layer_caching: true
+          docker_layer_caching: false
       - *restore_cache
       - run:
           name: Build full docker image
           command: |
-            if [ ! -f "docker-cache/image.tar" ]; then
+            if [ ! -f "../docker-cache/image.tar" ]; then
               echo "Building full docker image..."
               docker build -t airflow .
-              mkdir -p docker-cache
-              docker save -o docker-cache/image.tar airflow
+              mkdir -p ../docker-cache
+              docker save -o ../docker-cache/image.tar airflow
             else
               echo "Docker image found! Skipping build..."
             fi
       - save_cache:
           key: *cache_key
           paths:
-            - docker-cache
+            - ../docker-cache
 
   deploy_image:
     <<: *container_config
     steps:
       - checkout
       - setup_remote_docker:
-          docker_layer_caching: true
+          docker_layer_caching: false
       - *restore_cache
-      - *generate_tag_name
       - *azure_login
       - run:
           name: Login to Azure Container Registry
@@ -60,7 +53,7 @@ jobs:
       - run:
           name: Load docker image
           command: |
-            docker load < docker-cache/image.tar
+            docker load < ../docker-cache/image.tar
       - run:
           name: Build partial image updates
           command: |
