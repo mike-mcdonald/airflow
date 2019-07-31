@@ -35,7 +35,7 @@ spec:
       containers:
         - name: airflow-worker
           imagePullPolicy: Always
-          image: pudlmds.azurecr.io/airflow:1.10.2.4
+          image: pudlmds.azurecr.io/airflow:1.10.2.5
           envFrom:
             - configMapRef:
                 name: "airflow-env"
