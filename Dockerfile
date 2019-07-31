@@ -1,4 +1,4 @@
-FROM python:3.7-slim
+FROM python:3.7-slim-stretch
 
 # Never prompts the user for choices on installation/configuration of packages
 ENV DEBIAN_FRONTEND noninteractive
@@ -82,7 +82,6 @@ RUN set -ex \
     && pip install ndg-httpsclient \
     && pip install pyasn1 \
     && pip install apache-airflow[all]==${AIRFLOW_VERSION} \
-    && pip install redis \
     && apt-get purge --auto-remove -yqq $buildDeps \
     && apt-get autoremove -yqq --purge \
     && apt-get clean \
