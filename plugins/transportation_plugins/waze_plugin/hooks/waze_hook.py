@@ -19,7 +19,8 @@ class WazeHook(BaseHook):
         self.session = requests.Session()
 
     def __request(self):
-        res = self.session.get(self.connection.host)
+        res = self.session.get(self.connection.host,
+                               params=self.connection.extra_dejson)
         res.raise_for_status()
 
         return res.json()
