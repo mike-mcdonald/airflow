@@ -96,7 +96,7 @@ extract_lost_states_task = MsSqlOperator(
             [start_battery_pct],
             [associated_trip],
             [duration],
-            [last_seen],
+            [seen],
             [batch]
         )
     select
@@ -254,6 +254,39 @@ stage_states_task = MsSqlOperator(
     """
 )
 
+update_null_end_states_task = MsSqlOperator(
+    task_id="update_null_end_states",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    update
+        etl.stage_maintenance_states
+    set
+        end_hash = 'unknown',
+        end_date_key = convert(int, convert(varchar(30), dateadd(hour, 48, start_time), 112)),
+        end_state = 'unknown',
+        end_event = 'unknown',
+        end_time = dateadd(hour, 48, start_time),
+        end_cell_key = start_cell_key,
+        end_census_block_group_key = start_census_block_group_key,
+        end_city_key = start_city_key,
+        end_county_key = start_county_key,
+        end_neighborhood_key = start_neighborhood_key,
+        end_park_key = start_park_key,
+        end_parking_district_key = start_parking_district_key,
+        end_pattern_area_key = start_pattern_area_key,
+        end_zipcode_key = start_zipcode_key,
+        end_battery_pct = start_battery_pct,
+        associated_trip = associated_trip,
+        duration = null,
+        last_seen = getdate()
+    where
+        batch = '{{ ts_nodash }}'
+        and end_hash is null
+        and start_state not in ('unknown', 'removed')
+        and (getdate() at time zone 'Pacific Standard Time') > dateadd(hour, 48, start_time)
+    """
+)
 
 warehouse_update_task = MsSqlOperator(
     task_id="update_warehouse_states",
@@ -290,7 +323,7 @@ warehouse_update_task = MsSqlOperator(
 )
 
 warehouse_insert_unknown_task = MsSqlOperator(
-    task_id="warehouse_insert_state",
+    task_id="insert_warehouse_unknown_state",
     dag=dag,
     mssql_conn_id="azure_sql_server_full",
     sql="""
@@ -361,4 +394,5 @@ warehouse_insert_unknown_task = MsSqlOperator(
 )
 
 extract_null_states_task >> stage_states_task << extract_lost_states_task
-stage_states_task >> warehouse_update_task
+stage_states_task >> update_null_end_states_task
+warehouse_update_task << update_null_end_states_task >> warehouse_insert_unknown_task
