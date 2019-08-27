@@ -50,8 +50,10 @@ clean_stage_task_before = MsSqlOperator(
     dag=dag,
     mssql_conn_id="azure_sql_server_full",
     sql="""
-    DELETE FROM etl.stage_fleet_count
-    WHERE batch = '{{ ts_nodash }}'
+    delete from
+        etl.stage_fleet_count
+    where
+        batch = '{{ ts_nodash }}'
     """
 )
 
@@ -60,61 +62,86 @@ fleet_stage_task = MsSqlOperator(
     dag=dag,
     mssql_conn_id="azure_sql_server_full",
     sql="""
-    INSERT INTO etl.stage_fleet_count (
-        date_key
-        ,provider_key
-        ,time
-        ,available
-        ,reserved
-        ,unavailable
-        ,removed
-        ,seen
-        ,batch
+    insert into
+        etl.stage_fleet_count (
+            date_key,
+            provider_key,
+            city_key,
+            pattern_area_key,
+            time,
+            available,
+            reserved,
+            unavailable,
+            removed,
+            unknown,
+            seen,
+            batch
     )
-    SELECT
-    date_key
-    ,provider_key
-    ,time
-    ,a.count
-    ,r.count
-    ,u.count
-    ,x.count
-    ,seen
-    ,batch
-    FROM etl.extract_fleet_count AS e
-    OUTER APPLY (
-        SELECT COUNT(DISTINCT f.vehicle_key) AS count
-        FROM fact.state AS f
-        WHERE f.provider_key = e.provider_key
-        AND f.start_time <= e.time
-        AND COALESCE(f.end_time, cast('12/31/9999 23:59:59.9999' as datetime2)) >= e.time
-        AND start_state = 'available'
-    ) AS a
-    OUTER APPLY (
-        SELECT COUNT(DISTINCT f.vehicle_key) AS count
-        FROM fact.state AS f
-        WHERE f.provider_key = e.provider_key
-        AND f.start_time <= e.time
-        AND COALESCE(f.end_time, cast('12/31/9999 23:59:59.9999' as datetime2)) >= e.time
-        AND start_state = 'reserved'
-    ) AS r
-    OUTER APPLY (
-        SELECT COUNT(DISTINCT f.vehicle_key) AS count
-        FROM fact.state AS f
-        WHERE f.provider_key = e.provider_key
-        AND f.start_time <= e.time
-        AND COALESCE(f.end_time, cast('12/31/9999 23:59:59.9999' as datetime2)) >= e.time
-        AND start_state = 'unavailable'
-    ) AS u
-    OUTER APPLY (
-        SELECT COUNT(DISTINCT f.vehicle_key) AS count
-        FROM fact.state AS f
-        WHERE f.provider_key = e.provider_key
-        AND f.start_time <= e.time
-        AND COALESCE(f.end_time, cast('12/31/9999 23:59:59.9999' as datetime2)) >= e.time
-        AND start_state = 'removed'
-    ) AS x
-    WHERE e.batch = '{{ ts_nodash }}'
+    select
+        date_key,
+        provider_key,
+        city_key,
+        pattern_area_key,
+        time,
+        available,
+        reserved,
+        unavailable,
+        removed,
+        seen,
+        batch
+    from
+    (
+        select
+            e.date_key,
+            e.provider_key,
+            e.time,
+            f.city_key,
+            f.pattern_area_key,
+            f.start_state,
+            f.count,
+            seen,
+            batch
+        from
+            etl.extract_fleet_count AS e
+        outer apply (
+            select
+                f.city_key,
+                f.pattern_area_key,
+                f.start_state,
+                count(distinct f.vehicle_key) as count
+            from
+                fact.state as f
+            where
+                f.provider_key = e.provider_key
+                and f.start_time <= e.time
+                and coalesce(
+                    f.end_time,
+                    cast('12/31/9999 23:59:59.9999' as datetime2)
+                ) >= e.time
+            group by
+                f.city_key,
+                f.pattern_area_key,
+                f.start_state
+        ) AS f
+        where
+            e.batch = '{{ ts_nodash }}'
+        group by
+            date_key,
+            provider_key,
+            time,
+            a.city_key,
+            a.pattern_area_key,
+            seen,
+            batch
+    ) p pivot (
+        max(count) for start_state IN (
+            [available],
+            [reserved],
+            [unavailable],
+            [removed],
+            [unknown]
+        )
+    ) as pvt
     """
 )
 
@@ -123,8 +150,10 @@ clean_stage_task_after = MsSqlOperator(
     dag=dag,
     mssql_conn_id="azure_sql_server_full",
     sql="""
-    DELETE FROM etl.stage_fleet_count
-    WHERE batch = '{{ ts_nodash }}'
+    delete from
+        etl.stage_fleet_count
+    where
+        batch = '{{ ts_nodash }}'
     """
 )
 
@@ -135,16 +164,20 @@ fleet_warehouse_update_task = MsSqlOperator(
     dag=dag,
     mssql_conn_id="azure_sql_server_full",
     sql="""
-    UPDATE fact.fleet_count
-    SET available = source.available,
+    update
+        fact.fleet_count
+    set
+        available = source.available,
     reserved = source.reserved,
     unavailable = source.unavailable,
     removed = source.removed,
     last_seen = source.seen
-    FROM etl.stage_fleet_count AS source
-    WHERE source.batch = '{{ ts_nodash }}'
-    AND source.provider_key = fact.fleet_count.provider_key
-    AND source.time = fact.fleet_count.time
+    from
+        etl.stage_fleet_count as source
+    where
+        source.batch = '{{ ts_nodash }}'
+        and source.provider_key = fact.fleet_count.provider_key
+        and source.time = fact.fleet_count.time
     """
 )
 fleet_warehouse_insert_task = MsSqlOperator(
@@ -152,18 +185,20 @@ fleet_warehouse_insert_task = MsSqlOperator(
     dag=dag,
     mssql_conn_id="azure_sql_server_full",
     sql="""
-    INSERT fact.fleet_count (
-        date_key
-        ,provider_key
-        ,time
-        ,available
-        ,reserved
-        ,unavailable
-        ,removed
-        ,first_seen
-        ,last_seen
+    insert
+        fact.fleet_count (
+            date_key,
+            provider_key,
+            time,
+            available,
+            reserved,
+            unavailable,
+            removed,
+            first_seen,
+            last_seen
     )
-    SELECT source.date_key
+    select
+        source.date_key
     ,source.provider_key
     ,source.time
     ,source.available
@@ -172,14 +207,16 @@ fleet_warehouse_insert_task = MsSqlOperator(
     ,source.removed
     ,source.seen
     ,source.seen
-    FROM etl.stage_fleet_count AS source
-    WHERE source.batch = '{{ ts_nodash }}'
-    AND NOT EXISTS
+    from
+        etl.stage_fleet_count as source
+    where
+        source.batch = '{{ ts_nodash }}'
+    and not exists
     (
-        SELECT 1
-        FROM fact.fleet_count AS target
-        WHERE source.provider_key = target.provider_key
-        AND source.time = target.time
+        select 1
+        from fact.fleet_count as target
+        where source.provider_key = target.provider_key
+        and source.time = target.time
     )
     """
 )
