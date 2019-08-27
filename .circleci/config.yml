@@ -87,27 +87,23 @@ jobs:
             kubectl apply -f k8s/
 workflows:
   version: 2
-  build_and_deploy:
-    jobs:
+  build:
+     jobs:
       - build_image:
           filters:
             branches:
               only:
                 - master
+  release:
+    job:
       - deploy_image:
           filters:
-            branches:
-              ignore:
-                - master
             tags:
               only: /^[0-9]+(\.[0-9]+)*/
       - update_aks:
           requires:
             - deploy_image
           filters:
-            branches:
-              ignore:
-                - master
             tags:
               only: /^[0-9]+(\.[0-9]+)*/
 
