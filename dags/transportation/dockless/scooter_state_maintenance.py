@@ -103,7 +103,14 @@ extract_lost_states_task = MsSqlOperator(
         [provider_key],
         [vehicle_key],
         [propulsion_type],
-        'unknown',
+        lower(
+            convert(
+                varchar(32), HashBytes(
+                    'MD5',
+                    concat(v.vehicle_id, dateadd(hour, 48, start_time), 'unknown')
+                )
+            )
+        ),
         convert(int, convert(varchar(30), dateadd(hour, 48, start_time), 112)),
         dateadd(hour, 48, start_time),
         'unknown',
@@ -124,6 +131,8 @@ extract_lost_states_task = MsSqlOperator(
         '{{ ts_nodash }}'
     from
         fact.state as source
+    inner join
+        dim.vehicle as v on v.[key] = vehicle_key
     where
         end_hash is null
         and start_state not in ('unknown', 'removed')
@@ -386,9 +395,7 @@ warehouse_insert_unknown_task = MsSqlOperator(
             from
                 fact.state as target
             where
-                target.vehicle_key = source.vehicle_key
-                and target.end_hash is null
-                and target.start_state = 'unknown'
+                target.start_hash = source.start_hash
         )
     """
 )
