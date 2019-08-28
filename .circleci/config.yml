@@ -95,15 +95,21 @@ workflows:
               only:
                 - master
   release:
-    job:
+    jobs:
       - deploy_image:
           filters:
+            branches:
+              ignore:
+                - /.*/
             tags:
               only: /^[0-9]+(\.[0-9]+)*/
       - update_aks:
           requires:
             - deploy_image
           filters:
+            branches:
+              ignore:
+                - /.*/
             tags:
               only: /^[0-9]+(\.[0-9]+)*/
 
