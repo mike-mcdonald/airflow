@@ -168,15 +168,18 @@ fleet_warehouse_update_task = MsSqlOperator(
         fact.fleet_count
     set
         available = source.available,
-    reserved = source.reserved,
-    unavailable = source.unavailable,
-    removed = source.removed,
-    last_seen = source.seen
+        reserved = source.reserved,
+        unavailable = source.unavailable,
+        removed = source.removed,
+        unknown = source.unknown
+        last_seen = source.seen
     from
         etl.stage_fleet_count as source
     where
         source.batch = '{{ ts_nodash }}'
         and source.provider_key = fact.fleet_count.provider_key
+        and coalesce(source.city_key, 'unknown') = coalesce(fact.fleet_count.city_key, 'unknown')
+        and coalesce(source.pattern_area_key, 'unknown') = coalesce(fact.fleet_count.pattern_area_key, 'unknown')
         and source.time = fact.fleet_count.time
     """
 )
@@ -194,29 +197,36 @@ fleet_warehouse_insert_task = MsSqlOperator(
             reserved,
             unavailable,
             removed,
+            unknown,
             first_seen,
             last_seen
     )
     select
-        source.date_key
-    ,source.provider_key
-    ,source.time
-    ,source.available
-    ,source.reserved
-    ,source.unavailable
-    ,source.removed
-    ,source.seen
-    ,source.seen
+        source.date_key,
+        source.provider_key,
+        source.time,
+        source.available,
+        source.reserved,
+        source.unavailable,
+        source.removed,
+        source.unknown,
+        source.seen,
+        source.seen
     from
         etl.stage_fleet_count as source
     where
         source.batch = '{{ ts_nodash }}'
     and not exists
     (
-        select 1
-        from fact.fleet_count as target
-        where source.provider_key = target.provider_key
-        and source.time = target.time
+        select
+            1
+        from
+            fact.fleet_count as target
+        where
+            source.provider_key = target.provider_key
+            and coalesce(source.city_key, 'unknown') = coalesce(target.city_key, 'unknown')
+            and coalesce(source.pattern_area_key, 'unknown') = coalesce(target.pattern_area_key, 'unknown')
+            and source.time = target.time
     )
     """
 )
