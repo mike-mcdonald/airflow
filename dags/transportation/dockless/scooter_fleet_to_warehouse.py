@@ -83,10 +83,11 @@ fleet_stage_task = MsSqlOperator(
         city_key,
         pattern_area_key,
         time,
-        available,
-        reserved,
-        unavailable,
-        removed,
+        coalesce(available, 0) as available,
+        coalesce(reserved, 0) as reserved,
+        coalesce(unavailable, 0) as unavailable,
+        coalesce(removed, 0) as removed,
+        coalesce(unknown, 0) as unknown,
         seen,
         batch
     from
@@ -98,7 +99,7 @@ fleet_stage_task = MsSqlOperator(
             f.city_key,
             f.pattern_area_key,
             f.start_state,
-            f.count,
+            coalesce(f.count, 0) as count,
             seen,
             batch
         from
