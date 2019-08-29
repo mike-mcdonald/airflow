@@ -105,10 +105,12 @@ extract_lost_states_task = MsSqlOperator(
         [propulsion_type],
         lower(
             convert(
-                varchar(32), HashBytes(
+                varchar(32),
+                HashBytes(
                     'MD5',
                     concat(v.vehicle_id, dateadd(hour, 48, start_time), 'unknown')
-                )
+                ),
+                2
             )
         ),
         convert(int, convert(varchar(30), dateadd(hour, 48, start_time), 112)),
@@ -263,37 +265,92 @@ stage_states_task = MsSqlOperator(
     """
 )
 
+delete_extract_task = MsSqlOperator(
+    task_id="delete_extract",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    delete
+    from
+        etl.extract_maintenance_states
+    where
+        batch = '{{ ts_nodash }}'
+    """
+)
+
 update_null_end_states_task = MsSqlOperator(
     task_id="update_null_end_states",
     dag=dag,
     mssql_conn_id="azure_sql_server_full",
     sql="""
-    update
+    create table [etl].[stage_maintenance_states_{{ ts_nodash }}]
+    with
+    (
+        distribution = round_robin,
+        heap
+    )
+    as
+    select
+        start_hash,
+        lead(start_hash) over(partition by vehicle_key order by start_time) as end_hash,
+        lead(start_date_key) over(partition by vehicle_key order by start_time) as end_date_key,
+        lead(start_state) over(partition by vehicle_key order by start_time) as end_state,
+        lead(start_event) over(partition by vehicle_key order by start_time) as end_event,
+        lead(start_time) over(partition by vehicle_key order by start_time) as end_time,
+        lead(start_cell_key) over(partition by vehicle_key order by start_time) as end_cell_key,
+        lead(start_census_block_group_key) over(partition by vehicle_key order by start_time) as end_census_block_group_key,
+        lead(start_city_key) over(partition by vehicle_key order by start_time) as end_city_key,
+        lead(start_county_key) over(partition by vehicle_key order by start_time) as end_county_key,
+        lead(start_neighborhood_key) over(partition by vehicle_key order by start_time) as end_neighborhood_key,
+        lead(start_park_key) over(partition by vehicle_key order by start_time) as end_park_key,
+        lead(start_parking_district_key) over(partition by vehicle_key order by start_time) as end_parking_district_key,
+        lead(start_pattern_area_key) over(partition by vehicle_key order by start_time) as end_pattern_area_key,
+        lead(start_zipcode_key) over(partition by vehicle_key order by start_time) as end_zipcode_key,
+        lead(start_battery_pct) over(partition by vehicle_key order by start_time) as end_battery_pct
+    from
         etl.stage_maintenance_states
-    set
-        end_hash = 'unknown',
-        end_date_key = convert(int, convert(varchar(30), dateadd(hour, 48, start_time), 112)),
-        end_state = 'unknown',
-        end_event = 'unknown',
-        end_time = dateadd(hour, 48, start_time),
-        end_cell_key = start_cell_key,
-        end_census_block_group_key = start_census_block_group_key,
-        end_city_key = start_city_key,
-        end_county_key = start_county_key,
-        end_neighborhood_key = start_neighborhood_key,
-        end_park_key = start_park_key,
-        end_parking_district_key = start_parking_district_key,
-        end_pattern_area_key = start_pattern_area_key,
-        end_zipcode_key = start_zipcode_key,
-        end_battery_pct = start_battery_pct,
-        associated_trip = associated_trip,
-        duration = null,
-        last_seen = getdate()
     where
         batch = '{{ ts_nodash }}'
         and end_hash is null
-        and start_state not in ('unknown', 'removed')
-        and (getdate() at time zone 'Pacific Standard Time') > dateadd(hour, 48, start_time)
+
+    update
+        etl.stage_maintenance_states
+    set
+        end_hash = source.end_hash,
+        end_date_key = source.end_date_key,
+        end_state = source.end_state,
+        end_event = source.end_event,
+        end_time = source.end_time,
+        end_cell_key = source.end_cell_key,
+        end_census_block_group_key = source.end_census_block_group_key,
+        end_city_key = source.end_city_key,
+        end_county_key = source.end_county_key,
+        end_neighborhood_key = source.end_neighborhood_key,
+        end_park_key = source.end_park_key,
+        end_parking_district_key = source.end_parking_district_key,
+        end_pattern_area_key = source.end_pattern_area_key,
+        end_zipcode_key = source.end_zipcode_key,
+        end_battery_pct = source.end_battery_pct
+    from
+        etl.stage_maintenance_states_{{ ts_nodash }} as source
+    where
+        source.start_hash = etl.stage_maintenance_states.start_hash
+        etl.stage_maintenance_states.batch = '{{ ts_nodash }}'
+
+    drop table [etl].[stage_maintenance_states_{{ ts_nodash }}]
+    """
+)
+
+delete_stage_task = MsSqlOperator(
+    task_id="delete_stage",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    delete
+    from
+        etl.stage_maintenance_states
+    where
+        batch = '{{ ts_nodash }}'
     """
 )
 
@@ -401,5 +458,6 @@ warehouse_insert_unknown_task = MsSqlOperator(
 )
 
 extract_null_states_task >> stage_states_task << extract_lost_states_task
-stage_states_task >> update_null_end_states_task
+delete_extract_task << stage_states_task >> update_null_end_states_task
 warehouse_update_task << update_null_end_states_task >> warehouse_insert_unknown_task
+warehouse_update_task >> delete_stage_task << warehouse_insert_unknown_task
