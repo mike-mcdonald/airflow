@@ -105,8 +105,8 @@ fleet_stage_task = MsSqlOperator(
             etl.extract_fleet_count AS e
         outer apply (
             select
-                f.city_key,
-                f.pattern_area_key,
+                f.start_city_key as city_key,
+                f.start_pattern_area_key as pattern_area_key,
                 f.start_state,
                 count(distinct f.vehicle_key) as count
             from
@@ -119,20 +119,12 @@ fleet_stage_task = MsSqlOperator(
                     cast('12/31/9999 23:59:59.9999' as datetime2)
                 ) >= e.time
             group by
-                f.city_key,
-                f.pattern_area_key,
+                f.start_city_key,
+                f.start_pattern_area_key,
                 f.start_state
         ) AS f
         where
             e.batch = '{{ ts_nodash }}'
-        group by
-            date_key,
-            provider_key,
-            time,
-            a.city_key,
-            a.pattern_area_key,
-            seen,
-            batch
     ) p pivot (
         max(count) for start_state IN (
             [available],
@@ -171,15 +163,15 @@ fleet_warehouse_update_task = MsSqlOperator(
         reserved = source.reserved,
         unavailable = source.unavailable,
         removed = source.removed,
-        unknown = source.unknown
+        unknown = source.unknown,
         last_seen = source.seen
     from
         etl.stage_fleet_count as source
     where
         source.batch = '{{ ts_nodash }}'
         and source.provider_key = fact.fleet_count.provider_key
-        and coalesce(source.city_key, 'unknown') = coalesce(fact.fleet_count.city_key, 'unknown')
-        and coalesce(source.pattern_area_key, 'unknown') = coalesce(fact.fleet_count.pattern_area_key, 'unknown')
+        and coalesce(source.city_key, -1) = coalesce(fact.fleet_count.city_key, -1)
+        and coalesce(source.pattern_area_key, -1) = coalesce(fact.fleet_count.pattern_area_key, -1)
         and source.time = fact.fleet_count.time
     """
 )
@@ -224,8 +216,8 @@ fleet_warehouse_insert_task = MsSqlOperator(
             fact.fleet_count as target
         where
             source.provider_key = target.provider_key
-            and coalesce(source.city_key, 'unknown') = coalesce(target.city_key, 'unknown')
-            and coalesce(source.pattern_area_key, 'unknown') = coalesce(target.pattern_area_key, 'unknown')
+            and coalesce(source.city_key, -1) = coalesce(target.city_key, -1)
+            and coalesce(source.pattern_area_key, -1) = coalesce(target.pattern_area_key, -1)
             and source.time = target.time
     )
     """
