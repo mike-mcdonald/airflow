@@ -140,6 +140,19 @@ extract_lost_states_task = MsSqlOperator(
     """
 )
 
+delete_extract_task = MsSqlOperator(
+    task_id="delete_extract",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    delete
+    from
+        etl.extract_maintenance_states
+    where
+        batch = '{{ ts_nodash }}'
+    """
+)
+
 stage_states_task = MsSqlOperator(
     task_id="stage_state_maintenance",
     dag=dag,
@@ -296,6 +309,20 @@ update_null_end_states_task = MsSqlOperator(
     """
 )
 
+
+delete_stage_task = MsSqlOperator(
+    task_id="delete_stage",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    delete
+    from
+        etl.stage_maintenance_states
+    where
+        batch = '{{ ts_nodash }}'
+    """
+)
+
 warehouse_update_task = MsSqlOperator(
     task_id="update_warehouse_states",
     dag=dag,
@@ -400,5 +427,6 @@ warehouse_insert_unknown_task = MsSqlOperator(
 )
 
 extract_null_states_task >> stage_states_task << extract_lost_states_task
-stage_states_task >> update_null_end_states_task
+delete_extract_task << stage_states_task >> update_null_end_states_task
 warehouse_update_task << update_null_end_states_task >> warehouse_insert_unknown_task
+warehouse_update_task >> delete_stage_task << warehouse_insert_unknown_task
