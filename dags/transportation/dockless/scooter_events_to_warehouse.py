@@ -39,7 +39,7 @@ dag = DAG(
     schedule_interval="@hourly",
 )
 
-providers = ["lime", "spin", "bolt", "shared", "razor"]
+providers = ["lime", "spin", "bolt", "shared", "razor", "bird"]
 
 task1 = DummyOperator(
     task_id="provider_extract_start",
