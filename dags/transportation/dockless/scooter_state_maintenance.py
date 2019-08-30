@@ -287,8 +287,7 @@ update_null_end_states_task = MsSqlOperator(
         end_zipcode_key = start_zipcode_key,
         end_battery_pct = start_battery_pct,
         associated_trip = associated_trip,
-        duration = null,
-        last_seen = getdate()
+        duration = null
     where
         batch = '{{ ts_nodash }}'
         and end_hash is null
