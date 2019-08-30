@@ -103,7 +103,7 @@ fleet_stage_task = MsSqlOperator(
             seen,
             batch
         from
-            etl.extract_fleet_count AS e
+            etl.extract_fleet_count as e
         outer apply (
             select
                 f.start_city_key as city_key,
@@ -123,7 +123,7 @@ fleet_stage_task = MsSqlOperator(
                 f.start_city_key,
                 f.start_pattern_area_key,
                 f.start_state
-        ) AS f
+        ) as f
         where
             e.batch = '{{ ts_nodash }}'
     ) p pivot (
@@ -185,6 +185,8 @@ fleet_warehouse_insert_task = MsSqlOperator(
         fact.fleet_count (
             date_key,
             provider_key,
+            city_key,
+            pattern_area_key,
             time,
             available,
             reserved,
@@ -193,10 +195,12 @@ fleet_warehouse_insert_task = MsSqlOperator(
             unknown,
             first_seen,
             last_seen
-    )
+        )
     select
         source.date_key,
         source.provider_key,
+        source.city_key,
+        source.pattern_area_key,
         source.time,
         source.available,
         source.reserved,
