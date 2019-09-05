@@ -73,7 +73,6 @@ fleet_stage_task = MsSqlOperator(
             reserved,
             unavailable,
             removed,
-            unknown,
             seen,
             batch
     )
@@ -87,7 +86,6 @@ fleet_stage_task = MsSqlOperator(
         coalesce(reserved, 0) as reserved,
         coalesce(unavailable, 0) as unavailable,
         coalesce(removed, 0) as removed,
-        coalesce(unknown, 0) as unknown,
         seen,
         batch
     from
@@ -131,8 +129,7 @@ fleet_stage_task = MsSqlOperator(
             [available],
             [reserved],
             [unavailable],
-            [removed],
-            [unknown]
+            [removed]
         )
     ) as pvt
     """
@@ -164,7 +161,6 @@ fleet_warehouse_update_task = MsSqlOperator(
         reserved = source.reserved,
         unavailable = source.unavailable,
         removed = source.removed,
-        unknown = source.unknown,
         last_seen = source.seen
     from
         etl.stage_fleet_count as source
@@ -190,7 +186,6 @@ fleet_warehouse_insert_task = MsSqlOperator(
             reserved,
             unavailable,
             removed,
-            unknown,
             first_seen,
             last_seen
     )
@@ -202,7 +197,6 @@ fleet_warehouse_insert_task = MsSqlOperator(
         source.reserved,
         source.unavailable,
         source.removed,
-        source.unknown,
         source.seen,
         source.seen
     from
