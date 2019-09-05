@@ -69,77 +69,6 @@ extract_null_states_task = MsSqlOperator(
     """
 )
 
-extract_lost_states_task = MsSqlOperator(
-    task_id="extract_lost_end_states",
-    dag=dag,
-    mssql_conn_id="azure_sql_server_full",
-    sql="""
-    insert into
-        etl.extract_maintenance_states (
-            [provider_key],
-            [vehicle_key],
-            [propulsion_type],
-            [start_hash],
-            [start_date_key],
-            [start_time],
-            [start_state],
-            [start_event],
-            [start_cell_key],
-            [start_census_block_group_key],
-            [start_city_key],
-            [start_county_key],
-            [start_neighborhood_key],
-            [start_park_key],
-            [start_parking_district_key],
-            [start_pattern_area_key],
-            [start_zipcode_key],
-            [start_battery_pct],
-            [associated_trip],
-            [duration],
-            [seen],
-            [batch]
-        )
-    select
-        [provider_key],
-        [vehicle_key],
-        [propulsion_type],
-        lower(
-            convert(
-                varchar(32), HashBytes(
-                    'MD5',
-                    concat(v.vehicle_id, dateadd(hour, 48, start_time), 'unknown')
-                )
-            )
-        ),
-        convert(int, convert(varchar(30), dateadd(hour, 48, start_time), 112)),
-        dateadd(hour, 48, start_time),
-        'unknown',
-        'unknown',
-        [start_cell_key],
-        [start_census_block_group_key],
-        [start_city_key],
-        [start_county_key],
-        [start_neighborhood_key],
-        [start_park_key],
-        [start_parking_district_key],
-        [start_pattern_area_key],
-        [start_zipcode_key],
-        [start_battery_pct],
-        [associated_trip],
-        null,
-        getdate(),
-        '{{ ts_nodash }}'
-    from
-        fact.state as source
-    inner join
-        dim.vehicle as v on v.[key] = vehicle_key
-    where
-        end_hash is null
-        and start_state not in ('unknown', 'removed')
-        and (getdate() at time zone 'Pacific Standard Time') > dateadd(hour, 48, start_time)
-    """
-)
-
 delete_extract_task = MsSqlOperator(
     task_id="delete_extract",
     dag=dag,
@@ -246,8 +175,8 @@ stage_states_task = MsSqlOperator(
     from
         etl.extract_maintenance_states as s1
         outer apply (
-            select
-                top 1 start_hash,
+            select top 1
+                start_hash,
                 start_date_key,
                 start_state,
                 start_event,
@@ -275,40 +204,6 @@ stage_states_task = MsSqlOperator(
         batch = '{{ ts_nodash }}'
     """
 )
-
-update_null_end_states_task = MsSqlOperator(
-    task_id="update_null_end_states",
-    dag=dag,
-    mssql_conn_id="azure_sql_server_full",
-    sql="""
-    update
-        etl.stage_maintenance_states
-    set
-        end_hash = 'unknown',
-        end_date_key = convert(int, convert(varchar(30), dateadd(hour, 48, start_time), 112)),
-        end_state = 'unknown',
-        end_event = 'unknown',
-        end_time = dateadd(hour, 48, start_time),
-        end_cell_key = start_cell_key,
-        end_census_block_group_key = start_census_block_group_key,
-        end_city_key = start_city_key,
-        end_county_key = start_county_key,
-        end_neighborhood_key = start_neighborhood_key,
-        end_park_key = start_park_key,
-        end_parking_district_key = start_parking_district_key,
-        end_pattern_area_key = start_pattern_area_key,
-        end_zipcode_key = start_zipcode_key,
-        end_battery_pct = start_battery_pct,
-        associated_trip = associated_trip,
-        duration = null
-    where
-        batch = '{{ ts_nodash }}'
-        and end_hash is null
-        and start_state not in ('unknown', 'removed')
-        and (getdate() at time zone 'Pacific Standard Time') > dateadd(hour, 48, start_time)
-    """
-)
-
 
 delete_stage_task = MsSqlOperator(
     task_id="delete_stage",
@@ -357,76 +252,5 @@ warehouse_update_task = MsSqlOperator(
     """
 )
 
-warehouse_insert_unknown_task = MsSqlOperator(
-    task_id="insert_warehouse_unknown_state",
-    dag=dag,
-    mssql_conn_id="azure_sql_server_full",
-    sql="""
-    insert into
-        [fact].[state] (
-            [provider_key],
-            [vehicle_key],
-            [propulsion_type],
-            [start_hash],
-            [start_date_key],
-            [start_time],
-            [start_state],
-            [start_event],
-            [start_cell_key],
-            [start_census_block_group_key],
-            [start_city_key],
-            [start_county_key],
-            [start_neighborhood_key],
-            [start_park_key],
-            [start_parking_district_key],
-            [start_pattern_area_key],
-            [start_zipcode_key],
-            [start_battery_pct],
-            [associated_trip],
-            [duration],
-            [first_seen],
-            [last_seen]
-        )
-    select
-        [provider_key],
-        [vehicle_key],
-        [propulsion_type],
-        [start_hash],
-        [start_date_key],
-        [start_time],
-        [start_state],
-        [start_event],
-        [start_cell_key],
-        [start_census_block_group_key],
-        [start_city_key],
-        [start_county_key],
-        [start_neighborhood_key],
-        [start_park_key],
-        [start_parking_district_key],
-        [start_pattern_area_key],
-        [start_zipcode_key],
-        [start_battery_pct],
-        [associated_trip],
-        [duration],
-        [seen],
-        [seen]
-    from
-        etl.stage_maintenance_states as source
-    where
-        batch = '{{ ts_nodash }}'
-        and start_state = 'unknown'
-        and not exists (
-            select
-                1
-            from
-                fact.state as target
-            where
-                target.start_hash = source.start_hash
-        )
-    """
-)
-
-extract_null_states_task >> stage_states_task << extract_lost_states_task
-delete_extract_task << stage_states_task >> update_null_end_states_task
-warehouse_update_task << update_null_end_states_task >> warehouse_insert_unknown_task
-warehouse_update_task >> delete_stage_task << warehouse_insert_unknown_task
+extract_null_states_task >> stage_states_task >> delete_extract_task
+stage_states_task >> warehouse_update_task >> delete_stage_task
