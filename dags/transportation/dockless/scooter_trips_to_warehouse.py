@@ -264,26 +264,6 @@ clean_extract_task = MsSqlOperator(
 trip_external_stage_task >> clean_stage_task_before
 segment_hit_external_stage_task >> clean_stage_task_before
 
-provider_sync_task = MobilityProviderSyncOperator(
-    task_id="provider_sync",
-    source_table="etl.extract_trip",
-    mssql_conn_id="azure_sql_server_full",
-    dag=dag
-)
-
-trip_external_stage_task >> provider_sync_task
-segment_hit_external_stage_task >> provider_sync_task
-
-vehicle_sync_task = MobilityVehicleSyncOperator(
-    task_id="vehicle_sync",
-    source_table="etl.extract_trip",
-    mssql_conn_id="azure_sql_server_full",
-    dag=dag
-)
-
-trip_external_stage_task >> vehicle_sync_task
-segment_hit_external_stage_task >> vehicle_sync_task
-
 trip_stage_task = MsSqlOperator(
     task_id="stage_trips",
     dag=dag,
@@ -371,8 +351,6 @@ trip_stage_task = MsSqlOperator(
 )
 
 clean_stage_task_before >> trip_stage_task
-provider_sync_task >> trip_stage_task
-vehicle_sync_task >> trip_stage_task
 
 trip_stage_task >> clean_extract_task
 
@@ -532,8 +510,6 @@ route_stage_task = MsSqlOperator(
     """
 )
 clean_stage_task_before >> route_stage_task
-provider_sync_task >> route_stage_task
-vehicle_sync_task >> route_stage_task
 
 route_stage_task >> clean_extract_task
 
