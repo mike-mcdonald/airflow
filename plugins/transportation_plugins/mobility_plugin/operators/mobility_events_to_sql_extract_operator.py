@@ -119,7 +119,7 @@ class MobilityEventsToSqlExtractOperator(BaseOperator):
 
         events['event_hash'] = events.apply(
             lambda x: hashlib.md5(
-                f"{x.device_id}{x.event_type_reason}{x.event_time.strftime('%d%m%Y%H%M%S%f')}".encode(
+                f"{x.device_id}{x.vehicle_id}{x.event_type_reason}{x.event_time.strftime('%d%m%Y%H%M%S%f')}".encode(
                     'utf-8')
             ).hexdigest(), axis=1)
 
