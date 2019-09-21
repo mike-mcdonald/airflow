@@ -35,11 +35,11 @@ spec:
       containers:
         - name: airflow-worker
           imagePullPolicy: Always
-          image: pudlmds.azurecr.io/airflow:1.10.2.6
+          image: pudlmds.azurecr.io/airflow:1.10.2.8
           envFrom:
             - configMapRef:
                 name: "airflow-env"
-          env:          
+          env:
             - name: FERNET_KEY
               valueFrom:
                 secretKeyRef:

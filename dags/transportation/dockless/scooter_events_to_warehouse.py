@@ -101,59 +101,62 @@ event_external_stage_task = MsSqlOperator(
     dag=dag,
     mssql_conn_id="azure_sql_server_full",
     sql="""
-    INSERT INTO etl.extract_event (
-        [event_hash]
-        ,[provider_id]
-        ,[provider_name]
-        ,[device_id]
-        ,[vehicle_id]
-        ,[vehicle_type]
-        ,[propulsion_type]
-        ,[date_key]
-        ,[event_time]
-        ,[state]
-        ,[event]
-        ,[cell_key]
-        ,[census_block_group_key]
-        ,[city_key]
-        ,[county_key]
-        ,[neighborhood_key]
-        ,[park_key]
-        ,[parking_district_key]
-        ,[pattern_area_key]
-        ,[zipcode_key]
-        ,[battery_pct]
-        ,[associated_trip]
-        ,[seen]
-        ,[batch]
-    )
-    SELECT
-    [event_hash]
-    ,[provider_id]
-    ,[provider_name]
-    ,[device_id]
-    ,[vehicle_id]
-    ,[vehicle_type]
-    ,[propulsion_type]
-    ,[date_key]
-    ,[event_time]
-    ,[state]
-    ,[event]
-    ,[cell_key]
-    ,[census_block_group_key]
-    ,[city_key]
-    ,[county_key]
-    ,[neighborhood_key]
-    ,[park_key]
-    ,[parking_district_key]
-    ,[pattern_area_key]
-    ,[zipcode_key]
-    ,[battery_pct]
-    ,[associated_trip]
-    ,[seen]
-    ,[batch]
-    FROM etl.external_event
-    WHERE batch = '{{ ts_nodash }}'
+    insert into
+        etl.extract_event (
+            [event_hash],
+            [provider_id],
+            [provider_name],
+            [device_id],
+            [vehicle_id],
+            [vehicle_type],
+            [propulsion_type],
+            [date_key],
+            [event_time],
+            [state],
+            [event],
+            [cell_key],
+            [census_block_group_key],
+            [city_key],
+            [county_key],
+            [neighborhood_key],
+            [park_key],
+            [parking_district_key],
+            [pattern_area_key],
+            [zipcode_key],
+            [battery_pct],
+            [associated_trip],
+            [seen],
+            [batch]
+        )
+    select
+        [event_hash],
+        [provider_id],
+        [provider_name],
+        [device_id],
+        [vehicle_id],
+        [vehicle_type],
+        [propulsion_type],
+        [date_key],
+        [event_time],
+        [state],
+        [event],
+        [cell_key],
+        [census_block_group_key],
+        [city_key],
+        [county_key],
+        [neighborhood_key],
+        [park_key],
+        [parking_district_key],
+        [pattern_area_key],
+        [zipcode_key],
+        [battery_pct],
+        [associated_trip],
+        [seen],
+        [batch]
+    from
+        etl.external_event
+    where
+        batch = '{{ ts_nodash }}'
     """
 )
 
@@ -165,87 +168,95 @@ event_stage_task = MsSqlOperator(
     dag=dag,
     mssql_conn_id="azure_sql_server_full",
     sql="""
-        INSERT INTO etl.stage_state (
-            provider_key
-            ,vehicle_key
-            ,propulsion_type
-            ,start_hash
-            ,start_date_key
-            ,start_state
-            ,start_event
-            ,start_time
-            ,start_cell_key
-            ,start_census_block_group_key
-            ,start_city_key
-            ,start_county_key
-            ,start_neighborhood_key
-            ,start_park_key
-            ,start_parking_district_key
-            ,start_pattern_area_key
-            ,start_zipcode_key
-            ,start_battery_pct
-            ,end_hash
-            ,end_date_key
-            ,end_state
-            ,end_event
-            ,end_time
-            ,end_cell_key
-            ,end_census_block_group_key
-            ,end_city_key
-            ,end_county_key
-            ,end_neighborhood_key
-            ,end_park_key
-            ,end_parking_district_key
-            ,end_pattern_area_key
-            ,end_zipcode_key
-            ,end_battery_pct
-            ,associated_trip
-            ,duration
-            ,seen
-            ,batch
+    insert into
+        etl.stage_state (
+            provider_key,
+            vehicle_key,
+            propulsion_type,
+            start_hash,
+            start_date_key,
+            start_state,
+            start_event,
+            start_time,
+            start_cell_key,
+            start_census_block_group_key,
+            start_city_key,
+            start_county_key,
+            start_neighborhood_key,
+            start_park_key,
+            start_parking_district_key,
+            start_pattern_area_key,
+            start_zipcode_key,
+            start_battery_pct,
+            end_hash,
+            end_date_key,
+            end_state,
+            end_event,
+            end_time,
+            end_cell_key,
+            end_census_block_group_key,
+            end_city_key,
+            end_county_key,
+            end_neighborhood_key,
+            end_park_key,
+            end_parking_district_key,
+            end_pattern_area_key,
+            end_zipcode_key,
+            end_battery_pct,
+            associated_trip,
+            duration,
+            seen,
+            batch
         )
-        SELECT
-        p.[key]
-        ,v.[key]
-        ,propulsion_type
-        ,event_hash
-        ,date_key
-        ,state
-        ,event
-        ,event_time
-        ,cell_key
-        ,census_block_group_key
-        ,city_key
-        ,county_key
-        ,neighborhood_key
-        ,park_key
-        ,parking_district_key
-        ,pattern_area_key
-        ,zipcode_key
-        ,battery_pct
-        ,LEAD(event_hash) OVER(PARTITION BY e.device_id ORDER BY event_time)
-        ,LEAD(date_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
-        ,LEAD(state) OVER(PARTITION BY e.device_id ORDER BY event_time)
-        ,LEAD(event) OVER(PARTITION BY e.device_id ORDER BY event_time)
-        ,LEAD(event_time) OVER(PARTITION BY e.device_id ORDER BY event_time)
-        ,LEAD(cell_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
-        ,LEAD(census_block_group_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
-        ,LEAD(city_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
-        ,LEAD(county_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
-        ,LEAD(neighborhood_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
-        ,LEAD(park_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
-        ,LEAD(parking_district_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
-        ,LEAD(pattern_area_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
-        ,LEAD(zipcode_key) OVER(PARTITION BY e.device_id ORDER BY event_time)
-        ,LEAD(battery_pct) OVER(PARTITION BY e.device_id ORDER BY event_time)
-        ,COALESCE(associated_trip, LEAD(associated_trip) OVER(PARTITION BY e.device_id ORDER BY event_time))
-        ,DATEDIFF(SECOND, event_time, LEAD(event_time) OVER(PARTITION BY e.device_id ORDER BY event_time))
-        ,seen
-        ,batch
-        FROM etl.extract_event AS e
-        LEFT JOIN dim.provider AS p ON p.provider_id = e.provider_id
-        LEFT JOIN dim.vehicle AS v ON v.device_id = e.device_id
-        WHERE e.batch = '{{ ts_nodash }}'
+    select
+        p.[key],
+        v.[key],
+        propulsion_type,
+        event_hash,
+        date_key,
+        state,
+        event,
+        event_time,
+        cell_key,
+        census_block_group_key,
+        city_key,
+        county_key,
+        neighborhood_key,
+        park_key,
+        parking_district_key,
+        pattern_area_key,
+        zipcode_key,
+        battery_pct,
+        lead(event_hash) over(partition by e.device_id, e.vehicle_id order by event_time),
+        lead(date_key) over(partition by e.device_id, e.vehicle_id order by event_time),
+        lead(state) over(partition by e.device_id, e.vehicle_id order by event_time),
+        lead(event) over(partition by e.device_id, e.vehicle_id order by event_time),
+        lead(event_time) over(partition by e.device_id, e.vehicle_id order by event_time),
+        lead(cell_key) over(partition by e.device_id, e.vehicle_id order by event_time),
+        lead(census_block_group_key) over(partition by e.device_id, e.vehicle_id order by event_time),
+        lead(city_key) over(partition by e.device_id, e.vehicle_id order by event_time),
+        lead(county_key) over(partition by e.device_id, e.vehicle_id order by event_time),
+        lead(neighborhood_key) over(partition by e.device_id, e.vehicle_id order by event_time),
+        lead(park_key) over(partition by e.device_id, e.vehicle_id order by event_time),
+        lead(parking_district_key) over(partition by e.device_id, e.vehicle_id order by event_time),
+        lead(pattern_area_key) over(partition by e.device_id, e.vehicle_id order by event_time),
+        lead(zipcode_key) over(partition by e.device_id, e.vehicle_id order by event_time),
+        lead(battery_pct) over(partition by e.device_id, e.vehicle_id order by event_time),
+        coalesce(associated_trip, lead(associated_trip) over(partition by e.device_id, e.vehicle_id order by event_time)),
+        datediff(second, event_time, lead(event_time) over(partition by e.device_id, e.vehicle_id order by event_time)),
+        seen,
+        batch
+    from
+        etl.extract_event as e
+    left join
+        dim.provider as p on p.provider_id = e.provider_id
+    left join
+        dim.vehicle as v on (
+            v.device_id = e.device_id
+            and v.vehicle_id = e.vehicle_id
+        )
+    where
+        e.batch = '{{ ts_nodash }}'
         """
 )
 
@@ -254,7 +265,11 @@ clean_extract_table_task = MsSqlOperator(
     dag=dag,
     mssql_conn_id="azure_sql_server_full",
     sql="""
-    DELETE FROM etl.extract_event WHERE batch = '{{ ts_nodash }}'
+    delete
+    from
+        etl.extract_event
+    where
+        batch = '{{ ts_nodash }}'
     """
 )
 
@@ -283,7 +298,11 @@ clean_stage_task_before = MsSqlOperator(
     dag=dag,
     mssql_conn_id="azure_sql_server_full",
     sql="""
-    DELETE FROM etl.stage_state WHERE batch = '{{ ts_nodash }}'
+    delete
+    from
+        etl.stage_state
+    where
+        batch = '{{ ts_nodash }}'
     """
 )
 
@@ -292,7 +311,11 @@ clean_stage_task_after = MsSqlOperator(
     dag=dag,
     mssql_conn_id="azure_sql_server_full",
     sql="""
-    DELETE FROM etl.stage_state WHERE batch = '{{ ts_nodash }}'
+    delete
+    from
+        etl.stage_state
+    where
+        batch = '{{ ts_nodash }}'
     """
 )
 event_external_stage_task >> clean_stage_task_before >> event_stage_task
@@ -303,29 +326,33 @@ state_warehouse_update_task = MsSqlOperator(
     dag=dag,
     mssql_conn_id="azure_sql_server_full",
     sql="""
-    UPDATE fact.state
-    SET last_seen = source.seen,
-    [start_cell_key] = source.start_cell_key,
-    [start_census_block_group_key] = source.start_census_block_group_key,
-    [start_city_key] = source.start_city_key,
-    [start_county_key] = source.start_county_key,
-    [start_neighborhood_key] = source.start_neighborhood_key,
-    [start_park_key] = source.start_park_key,
-    [start_parking_district_key] = source.start_parking_district_key,
-    [start_pattern_area_key] = source.start_pattern_area_key,
-    [start_zipcode_key] = source.start_zipcode_key,
-    [end_cell_key] = source.end_cell_key,
-    [end_census_block_group_key] = source.end_census_block_group_key,
-    [end_city_key] = source.end_city_key,
-    [end_county_key] = source.end_county_key,
-    [end_neighborhood_key] = source.end_neighborhood_key,
-    [end_park_key] = source.end_park_key,
-    [end_parking_district_key] = source.end_parking_district_key,
-    [end_pattern_area_key] = source.end_pattern_area_key,
-    [end_zipcode_key] = source.end_zipcode_key
-    FROM etl.stage_state AS source
-    WHERE source.start_hash = fact.state.start_hash
-    AND source.batch = '{{ ts_nodash }}'
+    update
+        fact.state
+    set
+        last_seen = source.seen,
+        [start_cell_key] = source.start_cell_key,
+        [start_census_block_group_key] = source.start_census_block_group_key,
+        [start_city_key] = source.start_city_key,
+        [start_county_key] = source.start_county_key,
+        [start_neighborhood_key] = source.start_neighborhood_key,
+        [start_park_key] = source.start_park_key,
+        [start_parking_district_key] = source.start_parking_district_key,
+        [start_pattern_area_key] = source.start_pattern_area_key,
+        [start_zipcode_key] = source.start_zipcode_key,
+        [end_cell_key] = source.end_cell_key,
+        [end_census_block_group_key] = source.end_census_block_group_key,
+        [end_city_key] = source.end_city_key,
+        [end_county_key] = source.end_county_key,
+        [end_neighborhood_key] = source.end_neighborhood_key,
+        [end_park_key] = source.end_park_key,
+        [end_parking_district_key] = source.end_parking_district_key,
+        [end_pattern_area_key] = source.end_pattern_area_key,
+        [end_zipcode_key] = source.end_zipcode_key
+    from
+        etl.stage_state as source
+    where
+        source.start_hash = fact.state.start_hash
+    and source.batch = '{{ ts_nodash }}'
     """
 )
 
@@ -336,7 +363,47 @@ state_warehouse_insert_task = MsSqlOperator(
     dag=dag,
     mssql_conn_id="azure_sql_server_full",
     sql="""
-    INSERT INTO [fact].[state] (
+    insert into
+        [fact].[state] (
+            [provider_key],
+            [vehicle_key],
+            [propulsion_type],
+            [start_hash],
+            [start_date_key],
+            [start_time],
+            [start_state],
+            [start_event],
+            [start_cell_key],
+            [start_census_block_group_key],
+            [start_city_key],
+            [start_county_key],
+            [start_neighborhood_key],
+            [start_park_key],
+            [start_parking_district_key],
+            [start_pattern_area_key],
+            [start_zipcode_key],
+            [start_battery_pct],
+            [end_hash],
+            [end_date_key],
+            [end_time],
+            [end_state],
+            [end_event],
+            [end_cell_key],
+            [end_census_block_group_key],
+            [end_city_key],
+            [end_county_key],
+            [end_neighborhood_key],
+            [end_park_key],
+            [end_parking_district_key],
+            [end_pattern_area_key],
+            [end_zipcode_key],
+            [end_battery_pct],
+            [associated_trip],
+            [duration],
+            [first_seen],
+            [last_seen]
+        )
+    select
         [provider_key],
         [vehicle_key],
         [propulsion_type],
@@ -372,53 +439,19 @@ state_warehouse_insert_task = MsSqlOperator(
         [end_battery_pct],
         [associated_trip],
         [duration],
-        [first_seen],
-        [last_seen]
-    )
-    SELECT
-    [provider_key],
-    [vehicle_key],
-    [propulsion_type],
-    [start_hash],
-    [start_date_key],
-    [start_time],
-    [start_state],
-    [start_event],
-    [start_cell_key],
-    [start_census_block_group_key],
-    [start_city_key],
-    [start_county_key],
-    [start_neighborhood_key],
-    [start_park_key],
-    [start_parking_district_key],
-    [start_pattern_area_key],
-    [start_zipcode_key],
-    [start_battery_pct],
-    [end_hash],
-    [end_date_key],
-    [end_time],
-    [end_state],
-    [end_event],
-    [end_cell_key],
-    [end_census_block_group_key],
-    [end_city_key],
-    [end_county_key],
-    [end_neighborhood_key],
-    [end_park_key],
-    [end_parking_district_key],
-    [end_pattern_area_key],
-    [end_zipcode_key],
-    [end_battery_pct],
-    [associated_trip],
-    [duration],
-    [seen],
-    [seen]
-    FROM [etl].[stage_state] AS source
-    WHERE batch = '{{ ts_nodash }}'
-    AND NOT EXISTS (
-        SELECT 1
-        FROM fact.state AS target
-        WHERE target.start_hash = source.start_hash
+        [seen],
+        [seen]
+    from
+        [etl].[stage_state] as source
+    where
+        batch = '{{ ts_nodash }}'
+    and not exists (
+        select
+            1
+        from
+            fact.state as target
+        where
+            target.start_hash = source.start_hash
     )
     """
 )
