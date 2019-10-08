@@ -8,18 +8,22 @@ import pathlib
 import os
 import time
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+from math import atan2, fabs, pi, pow, sqrt
 from multiprocessing import cpu_count, Pool
 
 import geopandas as gpd
+import pandas as pd
 
+from pytz import timezone
 from requests import Session
 from shapely.wkt import dumps
 
 import airflow
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
-from airflow.hooks.mobility_plugin import MobilityHook
+from airflow.hooks.mobility_plugin import MobilityProviderHook
 
 SHAREDSTREETS_API_URL = 'http://sharedstreets:3000/api/v1/match/point/bike'
 
@@ -38,10 +42,11 @@ default_args = {
 dag = DAG(
     dag_id="shst_segments_to_data_lake",
     default_args=default_args,
-    schedule_interval=None
+    catchup=True,
+    schedule_interval="@hourly",
 )
 
-providers = ["lime", "spin", "bolt", "shared", "razor", "bird"]
+providers = ["lime", "spin", "bolt", "shared", "razor"]
 
 
 def extract_shst_hits_datalake(**kwargs):
@@ -50,20 +55,20 @@ def extract_shst_hits_datalake(**kwargs):
 
     trips = []
     for provider in providers:
-        hook = MobilityHook(
+        hook = MobilityProviderHook(
             mobility_provider_conn_id=f'mobility_provider_{provider}',
             mobility_provider_token_conn_id=f'mobility_provider_{provider}_token'
         )
 
-        trips.extend(hook.get_trips(
+        trips.append(hook.get_trips(
             min_end_time=start_time, max_end_time=end_time))
 
     # Get trips as a GeoDataFrame
-    trips = gpd.GeoDataFrame(trips)
+    trips = gpd.GeoDataFrame(pd.concat(trips))
     trips.crs = {'init': 'epsg:4326'}
 
     if len(trips) <= 0:
-        self.log.warning(
+        print(
             f"Received no trips for time period {start_time} to {end_time}")
         return
 
@@ -86,6 +91,7 @@ def extract_shst_hits_datalake(**kwargs):
                 if retries > 3:
                     print(
                         f"Unable to retrieve response from {url} after 3 tries.  Aborting...")
+                    return res
 
                 print(
                     f"Error while retrieving: {err}. Retrying in 10 seconds... (retry {retries}/3)")
@@ -93,19 +99,24 @@ def extract_shst_hits_datalake(**kwargs):
 
         return res
 
+    session = Session()
+
     session.headers.update({"Content-Type": "application/json"})
     session.headers.update({"Accept": "application/json"})
 
     cores = cpu_count()  # Number of CPU cores on your system
     executor = ThreadPoolExecutor(max_workers=cores*4)
     shst = trips.route.map(lambda x: executor.submit(
-        _request, session, 'http://sharedstreets:3000/api/v1/match/point/bike', data=json.dumps(x)))
+        _request, session, SHAREDSTREETS_API_URL, data=json.dumps(x)))
 
     def safe_result(x):
         try:
             return x.result().json()
         except:
             return None
+
+    trips['propulsion_type'] = trips.propulsion_type.map(
+        lambda x: ','.join(sorted(x)))
 
     trips['shst'] = shst.map(safe_result)
 
@@ -120,11 +131,11 @@ def extract_shst_hits_datalake(**kwargs):
         route['vehicle_id'] = trip.vehicle_id
         route['device_id'] = trip.device_id
         route['vehicle_type'] = trip.vehicle_type
-        route['propulstion_type'] = list(trip.propulsion_type)
+        route['propulsion_type'] = trip.propulsion_type
         return route
 
     route_df = gpd.GeoDataFrame(
-        pd.concat(df.apply(parse_route, axis=1).values, sort=False).sort_values(
+        pd.concat(trips.apply(parse_route, axis=1).values, sort=False).sort_values(
             by=['trip_id', 'timestamp'], ascending=True
         )
     ).reset_index(drop=True)
@@ -138,7 +149,7 @@ def extract_shst_hits_datalake(**kwargs):
         lambda x: int(x.strftime('%Y%m%d')))
     # Generate a hash to aid in merge operations
     route_df['hash'] = route_df.apply(lambda x: hashlib.md5((
-        x.trip_id + x.device_id + x.provider_id + x.timestamp
+        x.trip_id + x.device_id + x.provider_id + str(x.timestamp)
     ).encode('utf-8')).hexdigest(), axis=1)
     route_df['datetime'] = route_df.datetime.map(
         lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
@@ -187,10 +198,14 @@ def extract_shst_hits_datalake(**kwargs):
     def expand_candidates(p):
         df = p.shstCandidates.rename(
             index=str, columns={'bearing': 'shstBearing'})
+        df['provider_id'] = p.provider_id
+        df['date_key'] = p.date_key
         df['hash'] = p.hash
+        df['datetime'] = p.datetime
         df['trip_id'] = p.trip_id
         df['timestamp'] = p.timestamp
         df['vehicle_type'] = p.vehicle_type
+        df['propulsion_type'] = p.propulsion_type
         df['bearing'] = p.bearing
         df['speed'] = p.speed
 
@@ -213,6 +228,9 @@ def extract_shst_hits_datalake(**kwargs):
     shst_df['seen'] = shst_df.seen.dt.round("L")
     shst_df['seen'] = shst_df.seen.map(
         lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
+
+    pathlib.Path(os.path.dirname(kwargs.get('templates_dict').get('local_path'))
+                 ).mkdir(parents=True, exist_ok=True)
 
     shst_df.sort_values(
         by=['hash', 'bearing_diff', 'score']
@@ -240,24 +258,25 @@ def extract_shst_hits_datalake(**kwargs):
         'speed',
         'seen',
         'batch'
-    ]].to_csv(kwargs.get('local_path'))
+    ]].to_csv(kwargs.get('templates_dict').get('local_path'), index=False)
 
-    # hook = AzureDataLakeHook(
-    #     azure_data_lake_conn_id=kwargs.get('azure_data_lake_conn_id'))
+    hook = AzureDataLakeHook(
+        azure_data_lake_conn_id=kwargs.get('azure_datalake_conn_id'))
 
-    # hook.upload_file(kwargs.get('local_path'), kwargs.get('remote_path'))
-
-    # os.remove(kwargs.get('local_path'))
+    hook.upload_file(kwargs.get('templates_dict').get(
+        'local_path'), kwargs.get('templates_dict').get('remote_path'))
 
 
 parse_datalake_files_task = PythonOperator(
-    task_id='process_segments_to_geojson_files',
+    task_id='process_segments_to_csv_files',
     dag=dag,
     provide_context=True,
-    python_callable=process_segments_geojson,
-    op_kwargs={
-        'azure_datalake_conn_id': 'azure_datalake_default',
+    python_callable=extract_shst_hits_datalake,
+    templates_dict={
         'local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/{{ ts_nodash }}.csv',
         'remote_path': '/transportation/mobility/etl/shst_hits/{{ ts_nodash }}.csv'
+    },
+    op_kwargs={
+        'azure_datalake_conn_id': 'azure_datalake_default'
     },
 )
