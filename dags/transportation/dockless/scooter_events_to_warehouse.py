@@ -270,7 +270,7 @@ for provider in providers:
     mobility_provider_conn_id = f'mobility_provider_{provider}'
     mobility_provider_token_conn_id = f'mobility_provider_{provider}_token'
 
-    events_remote_path = f'/transportation/mobility/etl/event/{provider}-{{{{ ts_nodash }}}}.csv',
+    events_remote_path = f'/transportation/mobility/etl/event/{provider}-{{{{ ts_nodash }}}}.csv'
 
     event_extract_task = PythonOperator(
         task_id=f'loading_{provider}_events',
@@ -412,7 +412,7 @@ stage_event_task = MsSqlOperator(
             date_key,
             state,
             event,
-            time,
+            datetime,
             cell_key,
             census_block_group_key,
             city_key,
@@ -446,6 +446,7 @@ stage_event_task = MsSqlOperator(
         pattern_area_key,
         zipcode_key,
         battery_pct,
+        associated_trip,
         seen,
         batch
     from
@@ -632,7 +633,7 @@ event_warehouse_update_task = MsSqlOperator(
         park_key = source.park_key,
         parking_district_key = source.parking_district_key,
         pattern_area_key = source.pattern_area_key,
-        zipcode_key = source.zipcode_key,
+        zipcode_key = source.zipcode_key
     from
         etl.stage_event as source
     where
@@ -653,7 +654,7 @@ event_warehouse_insert_task = MsSqlOperator(
             propulsion_type,
             hash,
             date_key,
-            time,
+            datetime,
             state,
             event,
             cell_key,
@@ -667,7 +668,6 @@ event_warehouse_insert_task = MsSqlOperator(
             zipcode_key,
             battery_pct,
             associated_trip,
-            duration,
             first_seen,
             last_seen
         )
@@ -677,7 +677,7 @@ event_warehouse_insert_task = MsSqlOperator(
         propulsion_type,
         hash,
         date_key,
-        time,
+        datetime,
         state,
         event,
         cell_key,
@@ -691,7 +691,6 @@ event_warehouse_insert_task = MsSqlOperator(
         zipcode_key,
         battery_pct,
         associated_trip,
-        duration,
         seen,
         seen
     from
