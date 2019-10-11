@@ -115,7 +115,6 @@ extract_state_task = MsSqlOperator(
         datetime,
         {case_statement},
         propulsion_type,
-        weight,
         cell_key,
         census_block_group_key,
         city_key,
@@ -203,27 +202,27 @@ stage_state_task = MsSqlOperator(
         pattern_area_key,
         zipcode_key,
         battery_pct,
-        lead(hash) over(partition by e.device_id, e.vehicle_id order by datetime, weight),
-        lead(date_key) over(partition by e.device_id, e.vehicle_id order by datetime, weight),
-        lead(state) over(partition by e.device_id, e.vehicle_id order by datetime, weight),
-        lead(event) over(partition by e.device_id, e.vehicle_id order by datetime, weight),
-        lead(datetime) over(partition by e.device_id, e.vehicle_id order by datetime, weight),
-        lead(cell_key) over(partition by e.device_id, e.vehicle_id order by datetime, weight),
-        lead(census_block_group_key) over(partition by e.device_id, e.vehicle_id order by datetime, weight),
-        lead(city_key) over(partition by e.device_id, e.vehicle_id order by datetime, weight),
-        lead(county_key) over(partition by e.device_id, e.vehicle_id order by datetime, weight),
-        lead(neighborhood_key) over(partition by e.device_id, e.vehicle_id order by datetime, weight),
-        lead(park_key) over(partition by e.device_id, e.vehicle_id order by datetime, weight),
-        lead(parking_district_key) over(partition by e.device_id, e.vehicle_id order by datetime, weight),
-        lead(pattern_area_key) over(partition by e.device_id, e.vehicle_id order by datetime, weight),
-        lead(zipcode_key) over(partition by e.device_id, e.vehicle_id order by datetime, weight),
-        lead(battery_pct) over(partition by e.device_id, e.vehicle_id order by datetime, weight),
-        coalesce(associated_trip, lead(associated_trip) over(partition by e.device_id, e.vehicle_id order by datetime, weight)),
-        datediff(second, datetime, lead(datetime) over(partition by e.device_id, e.vehicle_id order by datetime, weight)),
+        lead(hash) over(partition by e.vehicle_key order by datetime, weight),
+        lead(date_key) over(partition by e.vehicle_key order by datetime, weight),
+        lead(state) over(partition by e.vehicle_key order by datetime, weight),
+        lead(event) over(partition by e.vehicle_key order by datetime, weight),
+        lead(datetime) over(partition by e.vehicle_key order by datetime, weight),
+        lead(cell_key) over(partition by e.vehicle_key order by datetime, weight),
+        lead(census_block_group_key) over(partition by e.vehicle_key order by datetime, weight),
+        lead(city_key) over(partition by e.vehicle_key order by datetime, weight),
+        lead(county_key) over(partition by e.vehicle_key order by datetime, weight),
+        lead(neighborhood_key) over(partition by e.vehicle_key order by datetime, weight),
+        lead(park_key) over(partition by e.vehicle_key order by datetime, weight),
+        lead(parking_district_key) over(partition by e.vehicle_key order by datetime, weight),
+        lead(pattern_area_key) over(partition by e.vehicle_key order by datetime, weight),
+        lead(zipcode_key) over(partition by e.vehicle_key order by datetime, weight),
+        lead(battery_pct) over(partition by e.vehicle_key order by datetime, weight),
+        coalesce(associated_trip, lead(associated_trip) over(partition by e.vehicle_key order by datetime, weight)),
+        datediff(second, datetime, lead(datetime) over(partition by e.vehicle_key order by datetime, weight)),
         seen,
         '{{ ts_nodash }}'
     from
-        etl.stage_state as e
+        etl.extract_state as e
     where
         e.batch = '{{ ts_nodash }}'
         '''
@@ -264,6 +263,19 @@ state_warehouse_update_task = MsSqlOperator(
     where
         source.start_hash = fact.state.start_hash
     and source.batch = '{{ ts_nodash }}'
+    '''
+)
+
+clean_stage_before_task = MsSqlOperator(
+    task_id='clean_stage_before',
+    dag=dag,
+    mssql_conn_id='azure_sql_server_full',
+    sql='''
+    delete
+    from
+        etl.stage_state
+    where
+        batch = '{{ ts_nodash }}'
     '''
 )
 
@@ -366,3 +378,16 @@ state_warehouse_insert_task = MsSqlOperator(
 )
 
 state_warehouse_insert_task << stage_state_task >> state_warehouse_update_task
+
+clean_stage_after_task = MsSqlOperator(
+    task_id='clean_stage_after',
+    dag=dag,
+    mssql_conn_id='azure_sql_server_full',
+    sql='''
+    delete
+    from
+        etl.stage_state
+    where
+        batch = '{{ ts_nodash }}'
+    '''
+)
