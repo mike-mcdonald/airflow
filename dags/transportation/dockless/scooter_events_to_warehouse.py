@@ -3,6 +3,7 @@ DAG for ETL Processing of Dockless Mobility Provider Data
 '''
 import hashlib
 import json
+import logging
 import pathlib
 import os
 
@@ -99,7 +100,7 @@ def scooter_events_to_datalake(**kwargs):
         start_time=start_time, end_time=end_time))
 
     if len(events) <= 0:
-        log.warning(
+        logging.warning(
             f'Received no events for time period {start_time} to {end_time}')
         return
 
