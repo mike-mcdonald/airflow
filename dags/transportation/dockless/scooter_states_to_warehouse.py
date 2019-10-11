@@ -279,6 +279,8 @@ clean_stage_before_task = MsSqlOperator(
     '''
 )
 
+clean_stage_before_task >> stage_state_task
+
 state_warehouse_insert_task = MsSqlOperator(
     task_id='warehouse_insert_state',
     dag=dag,
@@ -391,3 +393,5 @@ clean_stage_after_task = MsSqlOperator(
         batch = '{{ ts_nodash }}'
     '''
 )
+
+state_warehouse_insert_task >> clean_stage_after_task << state_warehouse_update_task
