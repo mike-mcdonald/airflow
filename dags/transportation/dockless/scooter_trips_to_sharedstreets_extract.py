@@ -23,6 +23,7 @@ from shapely.wkt import dumps
 import airflow
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
+from airflow.hooks.azure_plugin import AzureDataLakeHook
 from airflow.hooks.mobility_plugin import MobilityProviderHook
 
 SHAREDSTREETS_API_URL = 'http://sharedstreets:3000/api/v1/match/point/bike'
@@ -36,7 +37,6 @@ default_args = {
     "retries": 9,
     "retry_delay": timedelta(minutes=1),
     "concurrency": 1,
-    "max_active_runs": 1
 }
 
 dag = DAG(
@@ -44,6 +44,7 @@ dag = DAG(
     default_args=default_args,
     catchup=True,
     schedule_interval="@hourly",
+    max_active_runs=3,
 )
 
 providers = ["lime", "spin", "bolt", "shared", "razor"]
@@ -166,7 +167,7 @@ def extract_shst_hits_datalake(**kwargs):
     route_df['ny'] = route_by_trip.y.shift(-1)
 
     # drop destination
-    route_df = route_df.dropna()
+    route_df = route_df.dropna().copy()
 
     route_df['dx'] = route_df.apply(
         lambda x: x.nx - x.x, axis=1)
@@ -277,6 +278,6 @@ parse_datalake_files_task = PythonOperator(
         'remote_path': '/transportation/mobility/etl/shst_hits/{{ ts_nodash }}.csv'
     },
     op_kwargs={
-        'azure_datalake_conn_id': 'azure_datalake_default'
+        'azure_datalake_conn_id': 'azure_data_lake_default'
     },
 )
