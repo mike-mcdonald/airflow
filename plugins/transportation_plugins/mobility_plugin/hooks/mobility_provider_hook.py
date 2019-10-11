@@ -82,14 +82,20 @@ class MobilityProviderHook(BaseHook):
                 res = self.session.get(url, params=params)
                 res.raise_for_status()
             except Exception as err:
-                res = None
+                if res.status_code == 403:
+                    # Bird passes forbidden if you are out of bounds for their feed
+                    # adapt for that to not return an exception
+                    # TODO: understand when another company might pass 403 instead of 401, which is a credentials error
+                    return results
+
                 retries = retries + 1
                 if retries > self.max_retries:
                     raise AirflowException(
                         f"Unable to retrieve response from {url} after {self.max_retries}.  Aborting...")
 
                 self.log.warning(
-                    f"Error while retrieving {url}?{params}: {err}. Retrying in 10 seconds... (retry {retries}/{self.max_retries})")
+                    f"Error while retrieving {url}: {err}.  Error object returned: {res.json()} Retrying in 10 seconds... (retry {retries}/{self.max_retries})")
+                res = None
                 time.sleep(10)
 
         self.log.debug(f"Received response from {url}")
