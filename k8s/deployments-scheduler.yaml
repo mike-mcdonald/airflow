@@ -3,63 +3,62 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: airflow-scheduler
-  labels:
-    app: airflow
-    component: scheduler
-spec:
-  replicas: 1
-  strategy:
-    # Kill the scheduler as soon as possible. It will restart quickly with all the workers,
-    # minimizing the time they are not synchronized.
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 0
-      maxUnavailable: 100%
-  selector:
-    matchLabels:
-      app: airflow
-      component: scheduler
-  template:
-    metadata:
-      labels:
+    name: airflow-scheduler
+    labels:
         app: airflow
         component: scheduler
-    spec:
-      restartPolicy: Always
-      serviceAccountName: airflow
-      containers:
-        - name: airflow-scheduler
-          image: pudlmds.azurecr.io/airflow:1.10.2.6
-          imagePullPolicy: Always
-          envFrom:
-          - configMapRef:
-              name: "airflow-env"
-          env:
-            - name: FERNET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: airflow-fernet
-                  key: fernet-key
-            - name: POSTGRES_USER
-              value: airflowadmin
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: airflow-postgresql
-                  key: postgres-password
-            - name: REDIS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: airflow-redis
-                  key: redis-password
-          resources:
-            {}
-          args: ["scheduler"]
-          volumeMounts:
-            - mountPath: /usr/local/airflow/logs
-              name: airflow-logs
-      volumes:
-        - name: airflow-logs
-          persistentVolumeClaim:
-            claimName: airflow-logs-pv-claim
+spec:
+    replicas: 1
+    strategy:
+        # Kill the scheduler as soon as possible. It will restart quickly with all the workers,
+        # minimizing the time they are not synchronized.
+        type: RollingUpdate
+        rollingUpdate:
+            maxSurge: 0
+            maxUnavailable: 100%
+    selector:
+        matchLabels:
+            app: airflow
+            component: scheduler
+    template:
+        metadata:
+            labels:
+                app: airflow
+                component: scheduler
+        spec:
+            restartPolicy: Always
+            serviceAccountName: airflow
+            containers:
+                - name: airflow-scheduler
+                  image: pudlmds.azurecr.io/airflow:1.10.5.1
+                  imagePullPolicy: Always
+                  envFrom:
+                      - configMapRef:
+                            name: 'airflow-env'
+                  env:
+                      - name: FERNET_KEY
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-fernet
+                                key: fernet-key
+                      - name: POSTGRES_USER
+                        value: airflowadmin
+                      - name: POSTGRES_PASSWORD
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-postgresql
+                                key: postgres-password
+                      - name: REDIS_PASSWORD
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-redis
+                                key: redis-password
+                  resources: {}
+                  args: ['scheduler']
+                  volumeMounts:
+                      - mountPath: /usr/local/airflow/logs
+                        name: airflow-logs
+            volumes:
+                - name: airflow-logs
+                  persistentVolumeClaim:
+                      claimName: airflow-logs-pv-claim

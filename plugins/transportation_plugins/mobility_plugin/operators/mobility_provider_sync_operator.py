@@ -10,19 +10,25 @@ class MobilityProviderSyncOperator(MsSqlOperator):
                  source_table=None,
                  * args, **kwargs):
         sql = f"""
-        INSERT INTO dim.provider (
-            provider_id
-            ,provider_name
-        )
-        SELECT DISTINCT
-        provider_id
-        ,provider_name
-        FROM {source_table} AS e
-        WHERE batch = '{{{{ ts_nodash }}}}'
-        AND NOT EXISTS (
-            SELECT 1
-            FROM dim.provider AS p
-            WHERE p.provider_id = e.provider_id
+        insert into
+            dim.provider (
+                provider_id,
+                provider_name
+            )
+        select distinct
+            provider_id,
+            provider_name
+        from
+            {source_table} as e
+        where
+            batch = '{{{{ ts_nodash }}}}'
+        and not exists (
+            select
+                1
+            from
+                dim.provider as p
+            where
+                p.provider_id = e.provider_id
         )
         """
         super().__init__(sql, *args, **kwargs)
