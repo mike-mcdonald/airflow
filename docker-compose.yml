@@ -1,105 +1,110 @@
 version: '2.1'
 services:
-  redis:
-    image: 'redis:5.0.5'
-    # command: redis-server --requirepass redispass
+    redis:
+        image: 'redis:5.0.5'
+        # command: redis-server --requirepass redispass
 
-  postgres:
-    image: postgres:9.6
-    environment:
-      - POSTGRES_USER=airflow
-      - POSTGRES_PASSWORD=airflow
-      - POSTGRES_DB=airflow
-      - PGDATA=/var/lib/postgresql/data/pgdata
-    volumes:
-      - pgdata:/var/lib/postgresql/data/pgdata
-      - ./artifacts:/docker-entrypoint-initdb.d
+    postgres:
+        image: postgres:9.6
+        environment:
+            - POSTGRES_USER=airflow
+            - POSTGRES_PASSWORD=airflow
+            - POSTGRES_DB=airflow
+            - PGDATA=/var/lib/postgresql/data/pgdata
+        volumes:
+            - pgdata:/var/lib/postgresql/data/pgdata
+            - ./artifacts:/docker-entrypoint-initdb.d
 
-  webserver:
-    image: pbotapps.azurecr.io/airflow
-    restart: always
-    depends_on:
-      - postgres
-      - redis
-    environment:
-      - LOAD_EX=n
-      - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
-      - EXECUTOR=Celery
-      # - POSTGRES_USER=airflow
-      # - POSTGRES_PASSWORD=airflow
-      # - POSTGRES_DB=airflow
-      # - REDIS_PASSWORD=redispass
-    volumes:
-      - ./.output:/usr/local/airflow/tmp
-      - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
-      - ./dags:/usr/local/airflow/dags
-      - ./logs:/usr/local/airflow/logs
-    ports:
-      - '8080:8080'
-    command: webserver
-    healthcheck:
-      test: ['CMD-SHELL', '[ -f /usr/local/airflow/airflow-webserver.pid ]']
-      interval: 30s
-      timeout: 30s
-      retries: 3
+    webserver:
+        image: pbotapps.azurecr.io/airflow
+        restart: always
+        depends_on:
+            - postgres
+            - redis
+        environment:
+            - LOAD_EX=n
+            - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+            - EXECUTOR=Celery
+            # - POSTGRES_USER=airflow
+            # - POSTGRES_PASSWORD=airflow
+            # - POSTGRES_DB=airflow
+            # - REDIS_PASSWORD=redispass
+        volumes:
+            - ./.output:/usr/local/airflow/tmp
+            - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
+            - ./dags:/usr/local/airflow/dags
+            - ./logs:/usr/local/airflow/logs
+        ports:
+            - '8080:8080'
+        command: webserver
+        healthcheck:
+            test:
+                ['CMD-SHELL', '[ -f /usr/local/airflow/airflow-webserver.pid ]']
+            interval: 30s
+            timeout: 30s
+            retries: 3
 
-  scheduler:
-    image: pbotapps.azurecr.io/airflow
-    restart: always
-    depends_on:
-      - webserver
-    volumes:
-      - ./.output:/usr/local/airflow/tmp
-      - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
-      - ./dags:/usr/local/airflow/dags
-      - ./logs:/usr/local/airflow/logs
-    environment:
-      - LOAD_EX=n
-      - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
-      - EXECUTOR=Celery
-      # - POSTGRES_USER=airflow
-      # - POSTGRES_PASSWORD=airflow
-      # - POSTGRES_DB=airflow
-      # - REDIS_PASSWORD=redispass
-    command: scheduler
+    scheduler:
+        image: pbotapps.azurecr.io/airflow
+        restart: always
+        depends_on:
+            - webserver
+        volumes:
+            - ./.output:/usr/local/airflow/tmp
+            - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
+            - ./dags:/usr/local/airflow/dags
+            - ./logs:/usr/local/airflow/logs
+        environment:
+            - LOAD_EX=n
+            - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+            - EXECUTOR=Celery
+            # - POSTGRES_USER=airflow
+            # - POSTGRES_PASSWORD=airflow
+            # - POSTGRES_DB=airflow
+            # - REDIS_PASSWORD=redispass
+        command: scheduler
 
-  worker:
-    image: pbotapps.azurecr.io/airflow
-    restart: always
-    depends_on:
-      - scheduler
-    volumes:
-      - ./.output:/usr/local/airflow/tmp
-      - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
-      - ./dags:/usr/local/airflow/dags
-      - ./logs:/usr/local/airflow/logs
-    environment:
-      - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
-      - EXECUTOR=Celery
-      # - POSTGRES_USER=airflow
-      # - POSTGRES_PASSWORD=airflow
-      # - POSTGRES_DB=airflow
-      # - REDIS_PASSWORD=redispass
-    command: worker
+    worker:
+        image: pbotapps.azurecr.io/airflow
+        restart: always
+        depends_on:
+            - scheduler
+        volumes:
+            - ./.output:/usr/local/airflow/tmp
+            - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
+            - ./dags:/usr/local/airflow/dags
+            - ./logs:/usr/local/airflow/logs
+        environment:
+            - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+            - EXECUTOR=Celery
+            # - POSTGRES_USER=airflow
+            # - POSTGRES_PASSWORD=airflow
+            # - POSTGRES_DB=airflow
+            # - REDIS_PASSWORD=redispass
+        command: worker
 
-  flower:
-    image: pbotapps.azurecr.io/airflow
-    restart: always
-    depends_on:
-      - webserver
-    volumes:
-      - ./.output:/usr/local/airflow/tmp
-      - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
-      - ./dags:/usr/local/airflow/dags
-      - ./logs:/usr/local/airflow/logs
-    ports:
-      - '5555:5555'
-    environment:
-      - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
-      # - POSTGRES_USER=airflow
-      # - POSTGRES_PASSWORD=airflow
-      # - POSTGRES_DB=airflow
-      # - REDIS_PASSWORD=redispass
-    command: flower
+    flower:
+        image: pbotapps.azurecr.io/airflow
+        restart: always
+        depends_on:
+            - webserver
+        volumes:
+            - ./.output:/usr/local/airflow/tmp
+            - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
+            - ./dags:/usr/local/airflow/dags
+            - ./logs:/usr/local/airflow/logs
+        ports:
+            - '5555:5555'
+        environment:
+            - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+            # - POSTGRES_USER=airflow
+            # - POSTGRES_PASSWORD=airflow
+            # - POSTGRES_DB=airflow
+            # - REDIS_PASSWORD=redispass
+        command: flower
+
+    sharedstreets:
+        image: pbotapps.azurecr.io/sharedstreets-api
+        restart: always
 volumes:
-  pgdata:
+    pgdata:
