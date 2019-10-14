@@ -34,7 +34,7 @@ default_args = {
 }
 
 dag = DAG(
-    dag_id='waze_feeds_to_data_lake',
+    dag_id='waze_jams_geoevents_raw_sql_to_warehoused_sql',
     catchup=False,
     default_args=default_args,
     schedule_interval=timedelta(minutes=2)
