@@ -63,7 +63,7 @@ def add_default_columns(context, dataframe, hash_columns):
     return dataframe
 
 
-def stage_jams(**kwargs):
+def extract_jams(**kwargs):
     hook = MsSqlDataFrameHook(
         mssql_conn_id=kwargs['sql_server_conn_id']
     )
@@ -115,10 +115,10 @@ def stage_jams(**kwargs):
                          method=None)
 
 
-jams_to_extract_task = PythonOperator(
+jams_extract_task = PythonOperator(
     task_id="stage_jams_sql",
     dag=dag,
-    python_callable=stage_jams,
+    python_callable=extract_jams,
     provide_context=True,
     op_kwargs={
         'sql_server_conn_id': 'local_sql_waze'
@@ -130,17 +130,10 @@ jams_to_extract_task = PythonOperator(
     }
 )
 
-irregularities_to_data_lake_task = PythonOperator(
-    task_id="waze_irregularities_to_data_lake",
-    dag=dag,
-    python_callable=irregularities_to_data_lake,
-    provide_context=True,
-    op_kwargs={
-        'waze_conn_id': 'waze_portland',
-        'azure_data_lake_conn_id': 'azure_data_lake_default',
-    },
-    templates_dict={
-        'local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/{{ ts_nodash }}.csv',
-        'remote_path': '/transportation/waze/etl/irregularity/raw/{{ ts_nodash }}.csv',
-    }
-)
+clean_extract_task = MsSqlOperator()
+
+clean_stage_before_task = MsSqlOperator()
+
+clean_stage_after_task = MsSqlOperator()
+
+jams_stage_task = MsSqlOperator()
