@@ -1,6 +1,6 @@
-"""
+'''
 DAG for ETL Processing of PDX GIS Open Data Counties, from Metro
-"""
+'''
 import hashlib
 import json
 import logging
@@ -29,25 +29,25 @@ from airflow.hooks.mobility_plugin import MobilityProviderHook
 SHAREDSTREETS_API_URL = 'http://sharedstreets:3000/api/v1/match/point/bike'
 
 default_args = {
-    "owner": "airflow",
-    "start_date":  datetime(2019, 4, 26),
-    "email": ["pbotsqldbas@portlandoregon.gov"],
-    "email_on_failure": True,
-    "email_on_retry": False,
-    "retries": 9,
-    "retry_delay": timedelta(minutes=1),
-    "concurrency": 1,
+    'owner': 'airflow',
+    'start_date':  datetime(2019, 4, 26),
+    'email': ['pbotsqldbas@portlandoregon.gov'],
+    'email_on_failure': True,
+    'email_on_retry': False,
+    'retries': 9,
+    'retry_delay': timedelta(minutes=1),
+    'concurrency': 1,
 }
 
 dag = DAG(
-    dag_id="shst_segments_to_data_lake",
+    dag_id='scooter_shst_hits_to_data_lake',
     default_args=default_args,
     catchup=True,
-    schedule_interval="@hourly",
+    schedule_interval='@hourly',
     max_active_runs=3,
 )
 
-providers = ["lime", "spin", "bolt", "shared", "razor"]
+providers = ['lime', 'spin', 'bolt', 'shared', 'razor', 'bird']
 
 
 def extract_shst_hits_datalake(**kwargs):
@@ -70,15 +70,15 @@ def extract_shst_hits_datalake(**kwargs):
 
     if len(trips) <= 0:
         print(
-            f"Received no trips for time period {start_time} to {end_time}")
+            f'Received no trips for time period {start_time} to {end_time}')
         return
 
     def _request(session, url, data=None):
-        """
+        '''
         Internal helper for sending requests.
 
         Returns payload(s).
-        """
+        '''
         retries = 0
         res = None
 
@@ -91,19 +91,19 @@ def extract_shst_hits_datalake(**kwargs):
                 retries = retries + 1
                 if retries > 3:
                     print(
-                        f"Unable to retrieve response from {url} after 3 tries.  Aborting...")
+                        f'Unable to retrieve response from {url} after 3 tries.  Aborting...')
                     return res
 
                 print(
-                    f"Error while retrieving: {err}. Retrying in 10 seconds... (retry {retries}/3)")
+                    f'Error while retrieving: {err}. Retrying in 10 seconds... (retry {retries}/3)')
                 time.sleep(10)
 
         return res
 
     session = Session()
 
-    session.headers.update({"Content-Type": "application/json"})
-    session.headers.update({"Accept": "application/json"})
+    session.headers.update({'Content-Type': 'application/json'})
+    session.headers.update({'Accept': 'application/json'})
 
     cores = cpu_count()  # Number of CPU cores on your system
     executor = ThreadPoolExecutor(max_workers=cores*4)
@@ -142,8 +142,8 @@ def extract_shst_hits_datalake(**kwargs):
     ).reset_index(drop=True)
     route_df.crs = {'init': 'epsg:4326'}
     route_df['datetime'] = route_df.timestamp.map(
-        lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone("US/Pacific")))
-    route_df['datetime'] = route_df.datetime.dt.round("L")
+        lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
+    route_df['datetime'] = route_df.datetime.dt.round('L')
     route_df['datetime'] = route_df.datetime.map(
         lambda x: datetime.replace(x, tzinfo=None))
     route_df['date_key'] = route_df.datetime.map(
@@ -224,9 +224,9 @@ def extract_shst_hits_datalake(**kwargs):
     shst_df['bearing_diff'] = shst_df.apply(lambda x: fabs(
         normalizeAngle(x.bearing) - normalizeAngle(x.shstBearing)), axis=1)
 
-    shst_df['batch'] = kwargs.get("ts_nodash")
+    shst_df['batch'] = kwargs.get('ts_nodash')
     shst_df['seen'] = datetime.now()
-    shst_df['seen'] = shst_df.seen.dt.round("L")
+    shst_df['seen'] = shst_df.seen.dt.round('L')
     shst_df['seen'] = shst_df.seen.map(
         lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
 
