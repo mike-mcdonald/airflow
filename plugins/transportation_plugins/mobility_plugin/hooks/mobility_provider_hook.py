@@ -94,7 +94,7 @@ class MobilityProviderHook(BaseHook):
                         f"Unable to retrieve response from {url} after {self.max_retries}.  Aborting...")
 
                 self.log.warning(
-                    f"Error while retrieving {url}: {err}.  Error object returned: {res.json()} Retrying in 10 seconds... (retry {retries}/{self.max_retries})")
+                    f"Error while retrieving {url}: {err}.  Retrying in 10 seconds... (retry {retries}/{self.max_retries})")
                 res = None
                 time.sleep(10)
 
