@@ -2,97 +2,115 @@ version: 2
 
 container_config: &container_config
   docker:
-    - image: mcdonaldmike/docker-azure:stable
-  working_directory: /usr/local/lib
+    - image: mcdonaldmike/circleci-azure:latest
 cache_key: &cache_key
-  docker_cache-{{ .Branch }}-{{ .Revision   }}
+  v2-docker_cache-{{ checksum "Dockerfile" }}-{{ checksum "requirements.txt" }}
 restore_cache: &restore_cache
   restore_cache:
     name: Restore cache
     key: *cache_key
-generate_tag_name: &generate_tag_name
+azure_login: &azure_login
   run:
-    name: Generate tag name
+    name: Login to Azure as CirleCI service principal
     command: |
-      echo 'export TAG_NAME=$(echo "${CIRCLE_BRANCH////-}")' >> $BASH_ENV
-      
+      az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
 jobs:
   build_image:
     <<: *container_config
     steps:
       - checkout
       - setup_remote_docker:
-          docker_layer_caching: true
-      - *generate_tag_name
+          docker_layer_caching: false
+      - *restore_cache
       - run:
-          name: Build docker image
+          name: Build full docker image
           command: |
-            docker build -t $IMAGE_NAME:$TAG_NAME .
-      - run:
-          name: Test docker image
-          command: |
-            docker run $IMAGE_NAME:$TAG_NAME version | grep '1.10.2'
-      - run:
-          name: Save docker image
-          command: |
-            mkdir -p docker-cache
-            echo "Saving $IMAGE_NAME:$TAG_NAME"
-            docker save -o docker-cache/image.tar $IMAGE_NAME:$TAG_NAME
+            if [ ! -f "../docker-cache/image.tar" ]; then
+              echo "Building full docker image..."
+              docker build -t airflow .
+              mkdir -p ../docker-cache
+              docker save -o ../docker-cache/image.tar airflow
+            else
+              echo "Docker image found! Skipping build..."
+            fi
       - save_cache:
           key: *cache_key
           paths:
-            - docker-cache
+            - ../docker-cache
 
   deploy_image:
     <<: *container_config
     steps:
       - checkout
       - setup_remote_docker:
-          docker_layer_caching: true
+          docker_layer_caching: false
       - *restore_cache
-      - *generate_tag_name
-      - run:
-          name: Login to Azure
-          command: |
-            az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
+      - *azure_login
       - run:
           name: Login to Azure Container Registry
           command: |
-            az acr login --name $AZURE_CONTAINER_REGISTRY
+            az acr login --name $AZURE_CONTAINER_REGISTRY --subscription $AZURE_SUBSCRIPTION
       - run:
           name: Load docker image
           command: |
-            docker load < docker-cache/image.tar
+            docker load < ../docker-cache/image.tar
       - run:
-          name: Push image to Azure Container Registry
+          name: Build partial image updates
           command: |
-            docker push $IMAGE_NAME:$TAG_NAME
+            docker build -f .circleci/Dockerfile -t airflow .
       - run:
           name: Tag as latest
           command: |
-            docker tag $IMAGE_NAME:$TAG_NAME $IMAGE_NAME:latest
+            docker tag airflow $IMAGE_NAME:latest
       - run:
-          name: Push latest tag image to Azure Container Registry
+          name: Tag as CircleCI tag
+          command: |
+            docker tag airflow $IMAGE_NAME:$CIRCLE_TAG
+      - run:
+          name: Push images to Azure Container Registry
           command: |
             docker push $IMAGE_NAME:latest
+            docker push $IMAGE_NAME:$CIRCLE_TAG
 
+  update_aks:
+    <<: *container_config
+    steps:
+      - checkout
+      - *azure_login
+      - run:
+          name: Login to Kubernetes cluster
+          command: |
+            az aks get-credentials --name $K8S_CLUSTER_NAME --resource-group $K8S_RESOURCE_GROUP --subscription $AZURE_SUBSCRIPTION
+      - run:
+          name: Apply Kubernetes configuration
+          command: |
+            kubectl apply -f k8s/
 workflows:
   version: 2
-  build_and_deploy:
-    jobs:
+  build:
+     jobs:
       - build_image:
           filters:
             branches:
               only:
                 - master
-            tags:
-              only: /[0-9]+(\.[0-9]+)*/
+  release:
+    jobs:
       - deploy_image:
-          requires:
-            - build_image
           filters:
             branches:
-              only:
-                - master
+              ignore:
+                - /.*/
             tags:
-              only: /[0-9]+(\.[0-9]+)*/
+              only: /^[0-9]+(\.[0-9]+)*/
+      - update_aks:
+          requires:
+            - deploy_image
+          filters:
+            branches:
+              ignore:
+                - /.*/
+            tags:
+              only: /^[0-9]+(\.[0-9]+)*/
+
+

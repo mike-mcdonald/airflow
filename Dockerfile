@@ -1,11 +1,11 @@
-FROM python:3.7-slim
+FROM python:3.7-slim-stretch
 
 # Never prompts the user for choices on installation/configuration of packages
 ENV DEBIAN_FRONTEND noninteractive
 ENV TERM linux
 
 # Airflow
-ARG AIRFLOW_VERSION=1.10.2
+ARG AIRFLOW_VERSION=1.10.5
 ARG AIRFLOW_HOME=/usr/local/airflow
 ARG AIRFLOW_DEPS=""
 ARG PYTHON_DEPS=""
@@ -34,7 +34,6 @@ RUN set -ex \
     gnupg2 \
     libkrb5-dev \
     libsasl2-dev \
-    libssl-dev \
     libffi-dev \
     libpq-dev \
     ' \
@@ -51,6 +50,7 @@ RUN set -ex \
     libgeos-dev \
     libproj-dev \
     libspatialindex-dev \
+    libssl1.0.2 \
     netcat \
     proj-bin \
     proj-data \
@@ -69,7 +69,7 @@ RUN set -ex \
     && update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 \
     # Install Microsoft ODBC driver
     && curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
-    && curl https://packages.microsoft.com/config/debian/9/prod.list > /etc/apt/sources.list.d/mssql-release.list \
+    && curl https://packages.microsoft.com/config/debian/10/prod.list > /etc/apt/sources.list.d/mssql-release.list \
     && apt-get update \
     && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql17 \
     && useradd -ms /bin/bash -d ${AIRFLOW_HOME} airflow \
@@ -82,7 +82,6 @@ RUN set -ex \
     && pip install ndg-httpsclient \
     && pip install pyasn1 \
     && pip install apache-airflow[all]==${AIRFLOW_VERSION} \
-    && pip install redis \
     && apt-get purge --auto-remove -yqq $buildDeps \
     && apt-get autoremove -yqq --purge \
     && apt-get clean \
@@ -95,14 +94,12 @@ RUN set -ex \
     /usr/share/doc-base
 
 # Install specific airflow dependencies
-COPY ./requirements.txt /requirements.txt
-RUN pip install -r /requirements.txt
+COPY requirements.txt ${AIRFLOW_HOME}/requirements.txt
+RUN pip install -r ${AIRFLOW_HOME}/requirements.txt
 
-# Install custom plugins as package
-COPY plugins /usr/local/plugins
-RUN pip install -e /usr/local/plugins
-
-COPY ./dags /usr/local/airflow/dags
+# Custom plugins written as package
+COPY plugins ${AIRFLOW_HOME}/plugins
+COPY dags ${AIRFLOW_HOME}/dags
 COPY config/airflow.cfg ${AIRFLOW_HOME}/airflow.cfg
 
 RUN chown -R airflow: ${AIRFLOW_HOME}

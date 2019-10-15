@@ -24,12 +24,8 @@ export \
   AIRFLOW__CORE__LOAD_EXAMPLES \
   AIRFLOW__CORE__SQL_ALCHEMY_CONN \
 
-
-# Load DAGs exemples (default: Yes)
-if [[ -z "$AIRFLOW__CORE__LOAD_EXAMPLES" && "${LOAD_EX:=n}" == n ]]
-then
-  AIRFLOW__CORE__LOAD_EXAMPLES=False
-fi
+AIRFLOW__CORE__LOAD_EXAMPLES=False
+AIRFLOW__CORE__EXECUTOR=CeleryExecutor
 
 if [ -n "$REDIS_PASSWORD" ]; then
     REDIS_PREFIX=:${REDIS_PASSWORD}@
@@ -51,27 +47,21 @@ wait_for_port() {
   done
 }
 
-if [ "$AIRFLOW__CORE__EXECUTOR" != "SequentialExecutor" ]; then
-  AIRFLOW__CORE__SQL_ALCHEMY_CONN="postgresql+psycopg2://$POSTGRES_USER:$POSTGRES_PASSWORD@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB"
-  AIRFLOW__CELERY__RESULT_BACKEND="db+postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB"
-  wait_for_port "Postgres" "$POSTGRES_HOST" "$POSTGRES_PORT"
-fi
+AIRFLOW__CORE__SQL_ALCHEMY_CONN="postgresql+psycopg2://$POSTGRES_USER:$POSTGRES_PASSWORD@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB"
+AIRFLOW__CELERY__RESULT_BACKEND="db+postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB"
+AIRFLOW__CELERY__BROKER_URL="redis://$REDIS_PREFIX$REDIS_HOST:$REDIS_PORT/1"
 
-if [ "$AIRFLOW__CORE__EXECUTOR" = "CeleryExecutor" ]; then
-  AIRFLOW__CELERY__BROKER_URL="redis://$REDIS_PREFIX$REDIS_HOST:$REDIS_PORT/1"
-  wait_for_port "Redis" "$REDIS_HOST" "$REDIS_PORT"
-fi
+echo "Installing custom plugins..."
+pip install --user -e plugins
 
 case "$1" in
   webserver)
+    wait_for_port "Postgres" "$POSTGRES_HOST" "$POSTGRES_PORT"
     airflow initdb
-    if [ "$AIRFLOW__CORE__EXECUTOR" = "LocalExecutor" ]; then
-      # With the "Local" executor it should all run in one container.
-      airflow scheduler &
-    fi
     exec airflow webserver
     ;;
   worker|scheduler)
+    wait_for_port "Redis" "$REDIS_HOST" "$REDIS_PORT"
     # To give the webserver time to run initdb.
     sleep 10
     exec airflow "$@"
