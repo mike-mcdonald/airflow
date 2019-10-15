@@ -6,10 +6,10 @@ ENV TERM linux
 
 # Airflow
 ARG AIRFLOW_VERSION=1.10.5
-ARG AIRFLOW_HOME=/usr/local/airflow
+ARG AIRFLOW_USER_HOME=/usr/local/airflow
 ARG AIRFLOW_DEPS=""
 ARG PYTHON_DEPS=""
-ENV AIRFLOW_GPL_UNIDECODE yes
+ENV AIRFLOW_HOME=${AIRFLOW_USER_HOME}
 
 # Define en_US.
 ENV LANGUAGE en_US.UTF-8
@@ -72,7 +72,7 @@ RUN set -ex \
     && curl https://packages.microsoft.com/config/debian/10/prod.list > /etc/apt/sources.list.d/mssql-release.list \
     && apt-get update \
     && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql17 \
-    && useradd -ms /bin/bash -d ${AIRFLOW_HOME} airflow \
+    && useradd -ms /bin/bash -d ${AIRFLOW_USER_HOME} airflow \
     # Clean up any bad line endings
     && dos2unix /entrypoint.sh \
     # Install Airflow python dependencies
@@ -94,15 +94,15 @@ RUN set -ex \
     /usr/share/doc-base
 
 # Install specific airflow dependencies
-COPY requirements.txt ${AIRFLOW_HOME}/requirements.txt
-RUN pip install -r ${AIRFLOW_HOME}/requirements.txt
+COPY requirements.txt ${AIRFLOW_USER_HOME}/requirements.txt
+RUN pip install -r ${AIRFLOW_USER_HOME}/requirements.txt
 
 # Custom plugins written as package
-COPY plugins ${AIRFLOW_HOME}/plugins
-COPY dags ${AIRFLOW_HOME}/dags
-COPY config/airflow.cfg ${AIRFLOW_HOME}/airflow.cfg
+COPY plugins ${AIRFLOW_USER_HOME}/plugins
+COPY dags ${AIRFLOW_USER_HOME}/dags
+COPY config/airflow.cfg ${AIRFLOW_USER_HOME}/airflow.cfg
 
-RUN chown -R airflow: ${AIRFLOW_HOME}
+RUN chown -R airflow: ${AIRFLOW_USER_HOME}
 
 EXPOSE 8080 5555 8793
 
