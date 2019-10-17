@@ -44,8 +44,6 @@ default_args = {
     'email_on_retry': False,
     'retries': 9,
     'retry_delay': timedelta(minutes=1),
-    'concurrency': 1,
-    'max_active_runs': 1
     # 'queue': 'bash_queue',
     # 'pool': 'backfill',
     # 'priority_weight': 10,
@@ -57,6 +55,7 @@ dag = DAG(
     default_args=default_args,
     catchup=True,
     schedule_interval='@hourly',
+    max_active_runs=3,
 )
 
 providers = ['lime', 'spin', 'bolt', 'shared', 'razor', 'bird']
