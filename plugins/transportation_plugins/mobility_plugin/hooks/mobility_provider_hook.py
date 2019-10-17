@@ -82,10 +82,9 @@ class MobilityProviderHook(BaseHook):
                 res = self.session.get(url, params=params)
                 res.raise_for_status()
             except Exception as err:
-                if res.status_code == 403:
-                    # Bird passes forbidden if you are out of bounds for their feed
-                    # adapt for that to not return an exception
-                    # TODO: understand when another company might pass 403 instead of 401, which is a credentials error
+                if res.status_code == 404:
+                    # This is supposed to mean there are no objects for the requested time period
+                    # TODO: Hides an actual change of address for the API or other more serious issues
                     return results
 
                 retries = retries + 1
