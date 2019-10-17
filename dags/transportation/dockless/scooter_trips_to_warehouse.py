@@ -17,7 +17,7 @@ from airflow.operators.mobility_plugin import (
 
 default_args = {
     "owner": "airflow",
-    "depends_on_past": True,
+    "depends_on_past": False,
     "start_date":  datetime(2019, 4, 26),
     "email": ["pbotsqldbas@portlandoregon.gov"],
     "email_on_failure": True,
