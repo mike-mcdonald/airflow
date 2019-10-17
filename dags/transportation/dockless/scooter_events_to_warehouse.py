@@ -60,16 +60,6 @@ dag = DAG(
 
 providers = ['lime', 'spin', 'bolt', 'shared', 'razor', 'bird']
 
-task1 = DummyOperator(
-    task_id='provider_extract_start',
-    dag=dag
-)
-
-task2 = DummyOperator(
-    task_id='provider_extract_complete',
-    dag=dag
-)
-
 EVENT_WEIGHT = {
     'service_start': 1,
     'user_drop_off': 2,
@@ -264,6 +254,7 @@ def scooter_events_to_datalake(**kwargs):
 
 
 remote_paths_delete_tasks = []
+api_extract_tasks = []
 
 # Extract data from providers and stage in tables
 for provider in providers:
@@ -272,46 +263,44 @@ for provider in providers:
 
     events_remote_path = f'/transportation/mobility/etl/event/{provider}-{{{{ ts_nodash }}}}.csv'
 
-    event_extract_task = PythonOperator(
-        task_id=f'loading_{provider}_events',
-        dag=dag,
-        provide_context=True,
-        python_callable=scooter_events_to_datalake,
-        op_kwargs={
-            'mobility_provider_conn_id': mobility_provider_conn_id,
-            'mobility_provider_token_conn_id': mobility_provider_token_conn_id,
-            'sql_conn_id': 'azure_sql_server_default',
-            'data_lake_conn_id': 'azure_data_lake_default',
-        },
-        templates_dict={
-            'events_local_path': f'/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/{provider}-{{{{ ts_nodash }}}}.csv',
-            'events_remote_path': f'/transportation/mobility/etl/event/{provider}-{{{{ ts_nodash }}}}.csv',
-            'cities_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/cities-{{ ts_nodash }}.csv',
-            'cities_remote_path': '/transportation/mobility/dim/cities.csv',
-            'parking_districts_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/parking_districts-{{ ts_nodash }}.csv',
-            'parking_districts_remote_path': '/transportation/mobility/dim/parking_districts.csv',
-            'pattern_areas_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/pattern_areas-{{ ts_nodash }}.csv',
-            'pattern_areas_remote_path': '/transportation/mobility/dim/pattern_areas.csv',
-            'census_blocks_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/census_block_groups-{{ ts_nodash }}.csv',
-            'census_blocks_remote_path': '/transportation/mobility/dim/census_block_groups.csv',
-            'counties_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/counties-{{ ts_nodash }}.csv',
-            'counties_remote_path': '/transportation/mobility/dim/counties.csv',
-            'neighborhoods_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/neighborhoods-{{ ts_nodash }}.csv',
-            'neighborhoods_remote_path': '/transportation/mobility/dim/neighborhoods.csv',
-            'parks_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/parks-{{ ts_nodash }}.csv',
-            'parks_remote_path': '/transportation/mobility/dim/parks.csv',
-            'zipcodes_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/zipcodes-{{ ts_nodash }}.csv',
-            'zipcodes_remote_path': '/transportation/mobility/dim/zipcodes.csv',
-        })
+    api_extract_tasks.append(
+        PythonOperator(
+            task_id=f'loading_{provider}_events',
+            dag=dag,
+            provide_context=True,
+            python_callable=scooter_events_to_datalake,
+            op_kwargs={
+                'mobility_provider_conn_id': mobility_provider_conn_id,
+                'mobility_provider_token_conn_id': mobility_provider_token_conn_id,
+                'sql_conn_id': 'azure_sql_server_default',
+                'data_lake_conn_id': 'azure_data_lake_default',
+            },
+            templates_dict={
+                'events_local_path': f'/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/{provider}-{{{{ ts_nodash }}}}.csv',
+                'events_remote_path': f'/transportation/mobility/etl/event/{provider}-{{{{ ts_nodash }}}}.csv',
+                'cities_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/cities-{{ ts_nodash }}.csv',
+                'cities_remote_path': '/transportation/mobility/dim/cities.csv',
+                'parking_districts_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/parking_districts-{{ ts_nodash }}.csv',
+                'parking_districts_remote_path': '/transportation/mobility/dim/parking_districts.csv',
+                'pattern_areas_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/pattern_areas-{{ ts_nodash }}.csv',
+                'pattern_areas_remote_path': '/transportation/mobility/dim/pattern_areas.csv',
+                'census_blocks_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/census_block_groups-{{ ts_nodash }}.csv',
+                'census_blocks_remote_path': '/transportation/mobility/dim/census_block_groups.csv',
+                'counties_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/counties-{{ ts_nodash }}.csv',
+                'counties_remote_path': '/transportation/mobility/dim/counties.csv',
+                'neighborhoods_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/neighborhoods-{{ ts_nodash }}.csv',
+                'neighborhoods_remote_path': '/transportation/mobility/dim/neighborhoods.csv',
+                'parks_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/parks-{{ ts_nodash }}.csv',
+                'parks_remote_path': '/transportation/mobility/dim/parks.csv',
+                'zipcodes_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/zipcodes-{{ ts_nodash }}.csv',
+                'zipcodes_remote_path': '/transportation/mobility/dim/zipcodes.csv',
+            }))
 
     remote_paths_delete_tasks.append(
         AzureDataLakeRemoveOperator(task_id=f'delete_{provider}_extract',
                                     dag=dag,
                                     azure_data_lake_conn_id='azure_data_lake_default',
                                     remote_path=events_remote_path))
-
-    event_extract_task.set_upstream(task1)
-    event_extract_task.set_downstream(task2)
 
 event_extract_task = MsSqlOperator(
     task_id='extract_external_batch',
@@ -379,8 +368,8 @@ event_extract_task = MsSqlOperator(
     '''
 )
 
-task2 >> event_extract_task
-
+for task in api_extract_tasks:
+    task >> event_extract_task
 
 provider_sync_task = MobilityProviderSyncOperator(
     task_id='provider_sync',
