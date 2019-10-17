@@ -63,7 +63,7 @@ class MobilityProviderHook(BaseHook):
             "Accept": f"application/vnd.mds.provider+json;version={self.version}"
         })
 
-    def _date_format(dt):
+    def _date_format(self, dt):
         return int(dt.timestamp()) * 1000
 
     def _request(self, url, payload_key, params=None, results=[]):
@@ -151,9 +151,9 @@ class MobilityProviderHook(BaseHook):
             f"Retrieving trips for period {min_end_time} to {max_end_time}")
 
         if min_end_time is not None:
-            min_end_time = _date_format(min_end_time)
+            min_end_time = self._date_format(min_end_time)
         if max_end_time is not None:
-            max_end_time = _date_format(max_end_time)
+            max_end_time = self._date_format(max_end_time)
 
         # gather all the params togethers
         params = dict(min_end_time=min_end_time, max_end_time=max_end_time)
@@ -183,9 +183,9 @@ class MobilityProviderHook(BaseHook):
 
         # convert datetimes to querystring friendly format
         if start_time is not None:
-            start_time = _date_format(start_time)
+            start_time = self._date_format(start_time)
         if end_time is not None:
-            end_time = _date_format(end_time)
+            end_time = self._date_format(end_time)
 
         # gather all the params together
         params = dict(start_time=start_time, end_time=end_time)
