@@ -47,7 +47,7 @@ def process_datalake_files(azure_datalake_conn_id, **kwargs):
     for file in files:
         # create local_path
         local_path = f'/usr/local/airflow/tmp/waze/traffic_jam/raw/{file}'
-        pathlib.Path(os.path.dirname(kwargs['templates_dict']['local_path'])
+        pathlib.Path(os.path.dirname(kwargs["templates_dict"]['local_path'])
                      ).mkdir(parents=True, exist_ok=True)
         # download file
         hook.download_file(local_path, f'{remote_path}/{file}')
@@ -71,9 +71,9 @@ def process_datalake_files(azure_datalake_conn_id, **kwargs):
     df['times_seen'] = grouped.count()['uuid']
 
     # write processed output
-    local_path = f'/usr/local/airflow/tmp/waze/traffic_jam/{kwargs['execution_date']}.csv'
+    local_path = f'/usr/local/airflow/tmp/waze/traffic_jam/{kwargs["execution_date"]}.csv'
     df.to_csv(local_path)
-    remote_path = f'/transportation/waze/etl/traffic_jam/processed/{kwargs['execution_date']}.csv'
+    remote_path = f'/transportation/waze/etl/traffic_jam/processed/{kwargs["execution_date"]}.csv'
     hook.upload_file(local_path, remote_path)
     os.remove(local_path)
 
