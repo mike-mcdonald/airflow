@@ -37,7 +37,7 @@ from airflow.operators.mobility_plugin import (
 
 default_args = {
     'owner': 'airflow',
-    'depends_on_past': True,
+    'depends_on_past': False,
     'start_date':  datetime(2019, 4, 26),
     'email': ['pbotsqldbas@portlandoregon.gov'],
     'email_on_failure': True,
@@ -387,14 +387,16 @@ provider_sync_task = MobilityProviderSyncOperator(
     task_id='provider_sync',
     source_table='etl.extract_event',
     mssql_conn_id='azure_sql_server_full',
-    dag=dag
+    dag=dag,
+    depends_on_past=True,
 )
 
 vehicle_sync_task = MobilityVehicleSyncOperator(
     task_id='vehicle_sync',
     source_table='etl.extract_event',
     mssql_conn_id='azure_sql_server_full',
-    dag=dag
+    dag=dag,
+    depends_on_past=True,
 )
 
 provider_sync_task << event_extract_task >> vehicle_sync_task
