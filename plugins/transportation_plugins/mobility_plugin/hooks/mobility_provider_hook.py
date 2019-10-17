@@ -63,7 +63,7 @@ class MobilityProviderHook(BaseHook):
             "Accept": f"application/vnd.mds.provider+json;version={self.version}"
         })
 
-    def _date_format(self, dt):
+    def _date_format(dt):
         return int(dt.timestamp()) * 1000
 
     def _request(self, url, payload_key, params=None, results=[]):
@@ -94,9 +94,9 @@ class MobilityProviderHook(BaseHook):
                         f"Unable to retrieve response from {url} after {self.max_retries}.  Aborting...")
 
                 self.log.warning(
-                    f"Error while retrieving {url}: {err}.  Retrying in 10 seconds... (retry {retries}/{self.max_retries})")
+                    f"Error while retrieving {url}: {err}.  Retrying in {10 * retries} seconds... (retry {retries}/{self.max_retries})")
                 res = None
-                time.sleep(10)
+                time.sleep(10 * retries)
 
         self.log.debug(f"Received response from {url}")
 
@@ -122,6 +122,8 @@ class MobilityProviderHook(BaseHook):
 
         if "links" in page:
             next_page = page["links"].get("next")
+            if "rate_limit" in self.connection.extra_dejson:
+                time.sleep(int(self.connection.extra_dejson["rate_limit"]))
             if next_page is not None:
                 results = self._request(url=next_page, payload_key=payload_key,
                                         results=results)
@@ -149,9 +151,9 @@ class MobilityProviderHook(BaseHook):
             f"Retrieving trips for period {min_end_time} to {max_end_time}")
 
         if min_end_time is not None:
-            min_end_time = self._date_format(min_end_time)
+            min_end_time = _date_format(min_end_time)
         if max_end_time is not None:
-            max_end_time = self._date_format(max_end_time)
+            max_end_time = _date_format(max_end_time)
 
         # gather all the params togethers
         params = dict(min_end_time=min_end_time, max_end_time=max_end_time)
@@ -181,9 +183,9 @@ class MobilityProviderHook(BaseHook):
 
         # convert datetimes to querystring friendly format
         if start_time is not None:
-            start_time = self._date_format(start_time)
+            start_time = _date_format(start_time)
         if end_time is not None:
-            end_time = self._date_format(end_time)
+            end_time = _date_format(end_time)
 
         # gather all the params together
         params = dict(start_time=start_time, end_time=end_time)
