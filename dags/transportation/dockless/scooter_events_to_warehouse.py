@@ -9,7 +9,6 @@ import os
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from tempfile import NamedTemporaryFile
 
 import geopandas as gpd
 import numpy as np
