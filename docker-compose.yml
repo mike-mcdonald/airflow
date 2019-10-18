@@ -1,7 +1,7 @@
-version: '2.1'
+version: "2.1"
 services:
     redis:
-        image: 'redis:5.0.5'
+        image: "redis:5.0.5"
         # command: redis-server --requirepass redispass
 
     postgres:
@@ -31,15 +31,14 @@ services:
             # - REDIS_PASSWORD=redispass
         volumes:
             - ./.output:/usr/local/airflow/tmp
-            - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
             - ./dags:/usr/local/airflow/dags
             - ./logs:/usr/local/airflow/logs
         ports:
-            - '8080:8080'
+            - "8080:8080"
         command: webserver
         healthcheck:
             test:
-                ['CMD-SHELL', '[ -f /usr/local/airflow/airflow-webserver.pid ]']
+                ["CMD-SHELL", "[ -f /usr/local/airflow/airflow-webserver.pid ]"]
             interval: 30s
             timeout: 30s
             retries: 3
@@ -51,7 +50,6 @@ services:
             - webserver
         volumes:
             - ./.output:/usr/local/airflow/tmp
-            - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
             - ./dags:/usr/local/airflow/dags
             - ./logs:/usr/local/airflow/logs
         environment:
@@ -71,7 +69,6 @@ services:
             - scheduler
         volumes:
             - ./.output:/usr/local/airflow/tmp
-            - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
             - ./dags:/usr/local/airflow/dags
             - ./logs:/usr/local/airflow/logs
         environment:
@@ -90,11 +87,10 @@ services:
             - webserver
         volumes:
             - ./.output:/usr/local/airflow/tmp
-            - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
             - ./dags:/usr/local/airflow/dags
             - ./logs:/usr/local/airflow/logs
         ports:
-            - '5555:5555'
+            - "5555:5555"
         environment:
             - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
             # - POSTGRES_USER=airflow
