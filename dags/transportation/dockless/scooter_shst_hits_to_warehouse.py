@@ -1,0 +1,429 @@
+'''
+dag for etl processing of pdx gis open data counties, from metro
+'''
+import hashlib
+import json
+import logging
+import pathlib
+import os
+import time
+
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
+from math import atan2, fabs, pi, pow, sqrt
+from multiprocessing import cpu_count, pool
+
+import geopandas as gpd
+import numpy as np
+import pandas as pd
+
+from pytz import timezone
+from requests import session
+from shapely.geometry import point
+from shapely.wkt import dumps
+
+import airflow
+from airflow import DAG
+from airflow.operators.python_operator import PythonOperator
+
+from airflow.hooks.azure_plugin import AzureDataLakeHook
+from airflow.hooks.mobility_plugin import MobilityProviderHook
+
+from airflow.operators.mssql_plugin import MsSqlOperator
+
+SHAREDSTREETS_API_URL = 'http://sharedstreets:3000/api/v1/match/point/bike'
+
+default_args = {
+    'owner': 'airflow',
+    'start_date':  datetime(2019, 4, 26),
+    'email': ['pbotsqldbas@portlandoregon.gov'],
+    'email_on_failure': True,
+    'email_on_retry': False,
+    'retries': 9,
+    'retry_delay': timedelta(minutes=1),
+    'concurrency': 1,
+}
+
+dag = DAG(
+    dag_id='scooter_shst_hits_to_warehouse',
+    default_args=default_args,
+    catchup=True,
+    schedule_interval='@hourly',
+    max_active_runs=3,
+)
+
+providers = ['lime', 'spin', 'bolt', 'shared', 'razor', 'bird']
+
+
+def extract_shst_hits_datalake(**kwargs):
+    end_time = kwargs.get('execution_date') - timedelta(hours=24)
+    start_time = end_time - timedelta(hours=1)
+
+    trips = []
+    for provider in providers:
+        hook = MobilityProviderHook(
+            mobility_provider_conn_id=f'mobility_provider_{provider}',
+            mobility_provider_token_conn_id=f'mobility_provider_{provider}_token'
+        )
+
+        trips.append(hook.get_trips(
+            min_end_time=start_time, max_end_time=end_time))
+
+    # get trips as a geodataframe
+    trips = gpd.GeoDataFrame(pd.concat(trips))
+    trips.crs = {'init': 'epsg:4326'}
+
+    if len(trips) <= 0:
+        print(
+            f'received no trips for time period {start_time} to {end_time}')
+        return
+
+    def _request(session, url, data=None):
+        '''
+        internal helper for sending requests.
+
+        returns payload(s).
+        '''
+        retries = 0
+        res = None
+
+        while res is None:
+            try:
+                res = session.post(url, data=data)
+                res.raise_for_status()
+            except exception as err:
+                res = None
+                retries = retries + 1
+                if retries > 3:
+                    logging.warning(
+                        f'unable to retrieve response from {url} after 3 tries.  aborting...')
+                    return res
+
+                logging.info(
+                    f'error while retrieving: {err}. retrying in 10 seconds... (retry {retries}/3)')
+                time.sleep(10)
+
+        return res
+
+    session = session()
+
+    session.headers.update({'content-type': 'application/json'})
+    session.headers.update({'accept': 'application/json'})
+
+    cores = cpu_count()  # number of cpu cores on your system
+    executor = ThreadPoolExecutor(max_workers=cores*4)
+    shst = trips.route.map(lambda x: executor.submit(
+        _request, session, SHAREDSTREETS_API_URL, data=json.dumps(x)))
+
+    def safe_result(x):
+        try:
+            return x.result().json()
+        except:
+            return None
+
+    trips['propulsion_type'] = trips.propulsion_type.map(
+        lambda x: ','.join(sorted(x)))
+
+    trips['shst'] = shst.map(safe_result)
+
+    # convert the route to a dataframe now to make mapping easier
+    trips['route'] = trips.apply(
+        lambda x: x.shst['features'] if x.shst is not None else x.route['features'], axis=1)
+
+    lens = [len(item) for item in trips['route']]
+
+    route_df = pd.dataframe({
+        "trip_id": np.repeat(trips['trip_id'].values, lens),
+        "provider_id": np.repeat(trips['provider_id'].values, lens),
+        "device_id": np.repeat(trips['device_id'].values, lens),
+        "vehicle_type": np.repeat(trips['vehicle_type'].values, lens),
+        "propulsion_type": np.repeat(trips['propulsion_type'].values, lens),
+        "feature": np.concatenate(trips['route'].values)
+    })
+
+    route_df['timestamp'] = route_df.feature.map(
+        lambda x: x['properties']['timestamp'])
+    route_df['geometry'] = route_df.feature.map(
+        lambda x: point(x['geometry']['coordinates']))
+
+    route_df = gpd.GeoDataFrame(route_df.sort_values(
+        by=['trip_id', 'timestamp'], ascending=True
+    ).reset_index(drop=True).copy())
+    route_df.crs = {'init': 'epsg:4326'}
+    route_df['datetime'] = route_df.timestamp.map(
+        lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('us/pacific')))
+    route_df['datetime'] = route_df.datetime.dt.round('l')
+    route_df['datetime'] = route_df.datetime.map(
+        lambda x: datetime.replace(x, tzinfo=None))
+    route_df['date_key'] = route_df.datetime.map(
+        lambda x: int(x.strftime('%y%m%d')))
+    # generate a hash to aid in merge operations
+    route_df['hash'] = route_df.apply(lambda x: hashlib.md5((
+        x.trip_id + x.device_id + x.provider_id + str(x.timestamp)
+    ).encode('utf-8')).hexdigest(), axis=1)
+    route_df['datetime'] = route_df.datetime.map(
+        lambda x: x.strftime('%y-%m-%d %h:%m:%s.%f')[:-3])
+
+    route_df = route_df.to_crs(epsg=3857)
+
+    route_df['x'] = route_df.geometry.map(lambda g: g.x)
+    route_df['y'] = route_df.geometry.map(lambda g: g.y)
+
+    route_by_trip = route_df.groupby(['trip_id'])
+
+    route_df['nt'] = route_by_trip.timestamp.shift(-1)
+    route_df['nx'] = route_by_trip.x.shift(-1)
+    route_df['ny'] = route_by_trip.y.shift(-1)
+
+    # drop destination
+    route_df = route_df.dropna().copy()
+
+    route_df['dx'] = route_df.apply(
+        lambda x: x.nx - x.x, axis=1)
+    route_df['dy'] = route_df.apply(
+        lambda x: x.ny - x.y, axis=1)
+    route_df['dt'] = route_df.apply(
+        lambda x: (x.nt - x.timestamp) / 1000, axis=1)
+
+    def find_bearing(hit):
+        deg = atan2(hit.dx, hit.dy) / pi * 180
+        if deg < 0:
+            deg = deg + 360
+        return deg
+
+    def find_speed(hit):
+        if hit['dt'] <= 0:
+            return 0
+
+        d = sqrt(pow((hit.dx), 2) + pow((hit.dy), 2))
+
+        return d / hit['dt']
+
+    route_df['bearing'] = route_df.apply(find_bearing, axis=1)
+    route_df['speed'] = route_df.apply(find_speed, axis=1)
+
+    route_df['candidates'] = route_df.feature.map(
+        lambda x: x['properties']['shstcandidates'] if 'shstCandidates' in x['properties'] else [])
+
+    lens = [len(item) for item in route_df['candidates']]
+    shst_df = pd.DataFrame({
+        "date_key": np.repeat(route_df['date_key'].values, lens),
+        "hash": np.repeat(route_df['hash'].values, lens),
+        "datetime": np.repeat(route_df['datetime'].values, lens),
+        "trip_id": np.repeat(route_df['trip_id'].values, lens),
+        "provider_id": np.repeat(route_df['provider_id'].values, lens),
+        "vehicle_type": np.repeat(route_df['vehicle_type'].values, lens),
+        "propulsion_type": np.repeat(route_df['propulsion_type'].values, lens),
+        "bearing": np.repeat(route_df['bearing'].values, lens),
+        "speed": np.repeat(route_df['speed'].values, lens),
+        "candidate": np.concatenate(route_df['candidates'].values),
+    })
+
+    shst_df['shstbearing'] = shst_df.candidate.map(lambda x: x['bearing'])
+    shst_df['shst_geometry_id'] = shst_df.candidate.map(
+        lambda x: x['geometryid'])
+    shst_df['shst_reference_id'] = shst_df.candidate.map(
+        lambda x: x['referenceid'])
+    shst_df['score'] = shst_df.candidate.map(
+        lambda x: x['score'] if 'score' in x else 0)
+
+    def normalizeangle(angle):
+        if angle < 0:
+            angle = angle + 360
+        return angle
+
+    shst_df['bearing_diff'] = shst_df.apply(lambda x: fabs(
+        normalizeangle(x.bearing) - normalizeangle(x.shstbearing)), axis=1)
+
+    shst_df['batch'] = kwargs.get('ts_nodash')
+    shst_df['seen'] = datetime.now()
+    shst_df['seen'] = shst_df.seen.dt.round('l')
+    shst_df['seen'] = shst_df.seen.map(
+        lambda x: x.strftime('%y-%m-%d %h:%m:%s.%f')[:-3])
+
+    pathlib.path(os.path.dirname(kwargs.get('templates_dict').get('local_path'))
+                 ).mkdir(parents=True, exist_ok=True)
+
+    shst_df.sort_values(
+        by=['hash', 'bearing_diff', 'score']
+    ).drop_duplicates(
+        subset=['hash'],
+        keep='first'
+    ).drop_duplicates(
+        subset=['trip_id', 'shst_geometry_id'],
+        keep='last'
+    )[[
+        'provider_id',
+        'date_key',
+        'shst_geometry_id',
+        'shst_reference_id',
+        'hash',
+        'datetime',
+        'vehicle_type',
+        'propulsion_type',
+        'bearing',
+        'speed',
+        'seen',
+        'batch'
+    ]].to_csv(kwargs.get('templates_dict').get('local_path'), index=False)
+
+    hook = AzureDataLakeHook(
+        azure_data_lake_conn_id=kwargs.get('azure_datalake_conn_id'))
+
+    hook.upload_file(kwargs.get('templates_dict').get(
+        'local_path'), kwargs.get('templates_dict').get('remote_path'))
+
+
+parse_datalake_files_task = PythonOperator(
+    task_id='process_segments_to_csv_files',
+    dag=dag,
+    provide_context=True,
+    python_callable=extract_shst_hits_datalake,
+    templates_dict={
+        'local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/{{ ts_nodash }}.csv',
+        'remote_path': '/transportation/mobility/etl/shst_hits/{{ ts_nodash }}.csv'
+    },
+    op_kwargs={
+        'azure_datalake_conn_id': 'azure_data_lake_default'
+    },
+)
+
+route_stage_task = MsSqlOperator(
+    task_id="stage_route",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    insert into etl.stage_shst_segment_hit (
+        provider_key,
+        date_key,
+        geometry_id,
+        reference_id,
+        hash,
+        datetime,
+        vehicle_type,
+        propulsion_type,
+        bearing,
+        speed,
+        seen,
+        batch
+    )
+    select
+        p.[key],
+        date_key,
+        shst_geometry_id,
+        shst_reference_id,
+        hash,
+        datetime,
+        vehicle_type,
+        propulsion_type,
+        bearing,
+        speed,
+        seen,
+        batch
+    from
+        etl.external_shst_segment_hit as e
+    left join
+        dim.provider as p on p.provider_id = e.provider_id
+    where
+        batch = '{{ ts_nodash }}'
+    """
+)
+
+parse_datalake_files_task >> route_stage_task
+
+clean_stage_task_before = MsSqlOperator(
+    task_id="clean_stage_task_before",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql='''
+    delete
+    from
+        etl.stage_shst_segment_hit
+    where
+        batch = '{{ ts_nodash }}'
+    '''
+)
+
+clean_stage_task_before >> route_stage_task
+
+route_warehouse_update_task = MsSqlOperator(
+    task_id="warehouse_update_route",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    update
+        fact.shst_segment_hit
+    set
+        last_seen = source.seen
+    from
+        etl.stage_shst_segment_hit as source
+    where
+        source.hash = fact.segment_hit.hash
+    and source.batch = '{{ ts_nodash }}'
+    """
+)
+
+clean_stage_task_after = MsSqlOperator(
+    task_id="clean_stage_task_after",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql='''
+    delete
+    from
+        etl.stage_shst_segment_hit
+    where
+        batch = '{{ ts_nodash }}'
+    '''
+)
+
+route_stage_task >> route_warehouse_update_task >> clean_stage_task_after
+
+route_warehouse_insert_task = MsSqlOperator(
+    task_id="warehouse_insert_route",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql="""
+    insert into
+        fact.shst_segment_hit
+        (
+            provider_key,
+            date_key,
+            geometry_id,
+            reference_id,
+            hash,
+            datetime,
+            vehicle_type,
+            propulsion_type,
+            bearing,
+            speed,
+            first_seen,
+            last_seen
+        )
+    select
+        provider_key,
+        date_key,
+        geometry_id,
+        reference_id,
+        hash,
+        datetime,
+        vehicle_type,
+        propulsion_type,
+        bearing,
+        speed,
+        seen,
+        seen
+    from
+        etl.stage_shst_segment_hit as source
+    where
+        batch = '{{ ts_nodash }}'
+    and not exists (
+        select 1
+        from
+            fact.shst_segment_hit as target
+        where
+            target.hash = source.hash
+    )
+    """
+)
+
+route_stage_task >> route_warehouse_insert_task >> clean_stage_task_after
