@@ -49,7 +49,7 @@ dag = DAG(
     max_active_runs=3,
 )
 
-providers = ["lime", "spin", "bolt"]
+providers = ["lime", "spin", "bolt", "razor", "shared", "bird"]
 
 
 def extract_shst_hits_datalake(**kwargs):
