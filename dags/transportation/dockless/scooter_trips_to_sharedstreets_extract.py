@@ -14,10 +14,12 @@ from math import atan2, fabs, pi, pow, sqrt
 from multiprocessing import cpu_count, Pool
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 
 from pytz import timezone
 from requests import Session
+from shapely.geometry import Point
 from shapely.wkt import dumps
 
 import airflow
@@ -123,23 +125,27 @@ def extract_shst_hits_datalake(**kwargs):
 
     # Convert the route to a DataFrame now to make mapping easier
     trips['route'] = trips.apply(
-        lambda x: gpd.GeoDataFrame.from_features(x.shst['features']) if x.shst is not None else gpd.GeoDataFrame.from_features(x.route['features']), axis=1)
+        lambda x: x.shst['features'] if x.shst is not None else x.route['features'], axis=1)
 
-    def parse_route(trip):
-        route = trip.route
-        route['trip_id'] = trip.trip_id
-        route['provider_id'] = trip.provider_id
-        route['vehicle_id'] = trip.vehicle_id
-        route['device_id'] = trip.device_id
-        route['vehicle_type'] = trip.vehicle_type
-        route['propulsion_type'] = trip.propulsion_type
-        return route
+    lens = [len(item) for item in trips['route']]
 
-    route_df = gpd.GeoDataFrame(
-        pd.concat(trips.apply(parse_route, axis=1).values, sort=False).sort_values(
-            by=['trip_id', 'timestamp'], ascending=True
-        )
-    ).reset_index(drop=True)
+    route_df = pd.DataFrame({
+        "trip_id": np.repeat(trips['trip_id'].values, lens),
+        "provider_id": np.repeat(trips['provider_id'].values, lens),
+        "device_id": np.repeat(trips['device_id'].values, lens),
+        "vehicle_type": np.repeat(trips['vehicle_type'].values, lens),
+        "propulsion_type": np.repeat(trips['propulsion_type'].values, lens),
+        "feature": np.concatenate(trips['route'].values)
+    })
+
+    route_df['timestamp'] = route_df.feature.map(
+        lambda x: x['properties']['timestamp'])
+    route_df['geometry'] = route_df.feature.map(
+        lambda x: Point(x['geometry']['coordinates']))
+
+    route_df = gpd.GeoDataFrame(route_df.sort_values(
+        by=['trip_id', 'timestamp'], ascending=True
+    ).reset_index(drop=True).copy())
     route_df.crs = {'init': 'epsg:4326'}
     route_df['datetime'] = route_df.timestamp.map(
         lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
@@ -192,29 +198,31 @@ def extract_shst_hits_datalake(**kwargs):
 
     route_df['bearing'] = route_df.apply(find_bearing, axis=1)
     route_df['speed'] = route_df.apply(find_speed, axis=1)
-    route_df['shstCandidates'] = route_df.shstCandidates.map(
-        lambda x: pd.DataFrame(x)
-    )
 
-    def expand_candidates(p):
-        df = p.shstCandidates.rename(
-            index=str, columns={'bearing': 'shstBearing'})
-        df['provider_id'] = p.provider_id
-        df['date_key'] = p.date_key
-        df['hash'] = p.hash
-        df['datetime'] = p.datetime
-        df['trip_id'] = p.trip_id
-        df['timestamp'] = p.timestamp
-        df['vehicle_type'] = p.vehicle_type
-        df['propulsion_type'] = p.propulsion_type
-        df['bearing'] = p.bearing
-        df['speed'] = p.speed
+    route_df['candidates'] = route_df.feature.map(
+        lambda x: x['properties']['shstCandidates'])
 
-        return df
+    lens = [len(item) for item in route_df['candidates']]
+    shst_df = pd.DataFrame({
+        "date_key": np.repeat(route_df['date_key'].values, lens),
+        "hash": np.repeat(route_df['hash'].values, lens),
+        "datetime": np.repeat(route_df['datetime'].values, lens),
+        "trip_id": np.repeat(route_df['trip_id'].values, lens),
+        "provider_id": np.repeat(route_df['provider_id'].values, lens),
+        "vehicle_type": np.repeat(route_df['vehicle_type'].values, lens),
+        "propulsion_type": np.repeat(route_df['propulsion_type'].values, lens),
+        "bearing": np.repeat(route_df['bearing'].values, lens),
+        "speed": np.repeat(route_df['speed'].values, lens),
+        "candidate": np.concatenate(route_df['candidates'].values),
+    })
 
-    shst_df = pd.concat(route_df.apply(expand_candidates, axis=1).values, sort=False).sort_values(
-        by=['trip_id', 'timestamp'], ascending=True
-    )
+    shst_df['shstBearing'] = shst_df.candidate.map(lambda x: x['bearing'])
+    shst_df['shst_geometry_id'] = shst_df.candidate.map(
+        lambda x: x['geometryId'])
+    shst_df['shst_reference_id'] = shst_df.candidate.map(
+        lambda x: x['referenceId'])
+    shst_df['score'] = shst_df.candidate.map(
+        lambda x: x['score'] if 'score' in x else 0)
 
     def normalizeAngle(angle):
         if angle < 0:
@@ -236,16 +244,11 @@ def extract_shst_hits_datalake(**kwargs):
     shst_df.sort_values(
         by=['hash', 'bearing_diff', 'score']
     ).drop_duplicates(
-        subset=['hash']
+        subset=['hash'],
+        keep='first'
     ).drop_duplicates(
-        subset=['trip_id', 'geometryId'],
+        subset=['trip_id', 'shst_geometry_id'],
         keep='last'
-    ).rename(
-        index=str,
-        columns={
-            'geometryId': 'shst_geometry_id',
-            'referenceId': 'shst_reference_id'
-        }
     )[[
         'provider_id',
         'date_key',
