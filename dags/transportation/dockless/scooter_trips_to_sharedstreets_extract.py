@@ -14,10 +14,12 @@ from math import atan2, fabs, pi, pow, sqrt
 from multiprocessing import cpu_count, Pool
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 
 from pytz import timezone
 from requests import Session
+from shapely.geometry import Point
 from shapely.wkt import dumps
 
 import airflow
@@ -132,6 +134,7 @@ def extract_shst_hits_datalake(**kwargs):
         "provider_id": np.repeat(trips['provider_id'].values, lens),
         "device_id": np.repeat(trips['device_id'].values, lens),
         "vehicle_type": np.repeat(trips['vehicle_type'].values, lens),
+        "propulsion_type": np.repeat(trips['propulsion_type'].values, lens),
         "feature": np.concatenate(trips['route'].values)
     })
 
@@ -207,6 +210,7 @@ def extract_shst_hits_datalake(**kwargs):
         "trip_id": np.repeat(route_df['trip_id'].values, lens),
         "provider_id": np.repeat(route_df['provider_id'].values, lens),
         "vehicle_type": np.repeat(route_df['vehicle_type'].values, lens),
+        "propulsion_type": np.repeat(route_df['propulsion_type'].values, lens),
         "bearing": np.repeat(route_df['bearing'].values, lens),
         "speed": np.repeat(route_df['speed'].values, lens),
         "candidate": np.concatenate(route_df['candidates'].values),
@@ -240,16 +244,11 @@ def extract_shst_hits_datalake(**kwargs):
     shst_df.sort_values(
         by=['hash', 'bearing_diff', 'score']
     ).drop_duplicates(
-        subset=['hash']
+        subset=['hash'],
+        keep='first'
     ).drop_duplicates(
-        subset=['trip_id', 'geometryId'],
+        subset=['trip_id', 'shst_geometry_id'],
         keep='last'
-    ).rename(
-        index=str,
-        columns={
-            'geometryId': 'shst_geometry_id',
-            'referenceId': 'shst_reference_id'
-        }
     )[[
         'provider_id',
         'date_key',
