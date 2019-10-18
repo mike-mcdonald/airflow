@@ -55,7 +55,7 @@ dag = DAG(
     default_args=default_args,
     catchup=True,
     schedule_interval='@hourly',
-    concurrency=3,
+    max_active_runs=5,
 )
 
 providers = ['lime', 'spin', 'bolt', 'shared', 'razor', 'bird']
