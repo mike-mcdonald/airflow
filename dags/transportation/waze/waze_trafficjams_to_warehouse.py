@@ -71,9 +71,9 @@ def process_datalake_files(azure_datalake_conn_id, **kwargs):
     df['times_seen'] = grouped.count()['uuid']
 
     # write processed output
-    local_path = f'/usr/local/airflow/tmp/waze/traffic_jam/{kwargs['execution_date']}.csv'
+    local_path = f'/usr/local/airflow/tmp/waze/traffic_jam/{kwargs["execution_date"]}.csv'
     df.to_csv(local_path)
-    remote_path = f'/transportation/waze/etl/traffic_jam/processed/{kwargs['execution_date']}.csv'
+    remote_path = f'/transportation/waze/etl/traffic_jam/processed/{kwargs["execution_date"]}.csv'
     hook.upload_file(local_path, remote_path)
     os.remove(local_path)
 
@@ -88,7 +88,7 @@ parse_datalake_files_task = PythonOperator(
     provide_context=True,
     python_callable=process_datalake_files,
     op_kwargs={'azure_datalake_conn_id': 'azure_datalake_default'},
-    templates_dict
+    templates_dict={}
 )
 
 
