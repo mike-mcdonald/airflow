@@ -30,7 +30,7 @@ spec:
             serviceAccountName: airflow
             containers:
                 - name: airflow-scheduler
-                  image: pudlmds.azurecr.io/airflow:1.10.5.4
+                  image: pudlmds.azurecr.io/airflow:1.10.5.7
                   imagePullPolicy: Always
                   envFrom:
                       - configMapRef:
