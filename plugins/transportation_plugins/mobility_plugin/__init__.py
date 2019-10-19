@@ -1,6 +1,7 @@
 from airflow.plugins_manager import AirflowPlugin
 
 from transportation_plugins.mobility_plugin.hooks.mobility_provider_hook import MobilityProviderHook
+from transportation_plugins.mobility_plugin.hooks.gbfs_hook import GBFSFeedHook
 from transportation_plugins.mobility_plugin.operators.mobility_trips_to_sql_extract_operator import MobilityTripsToSqlExtractOperator
 from transportation_plugins.mobility_plugin.operators.mobility_events_to_sql_extract_operator import MobilityEventsToSqlExtractOperator
 from transportation_plugins.mobility_plugin.operators.mobility_provider_sync_operator import MobilityProviderSyncOperator
@@ -16,7 +17,7 @@ class MobilityPlugin(AirflowPlugin):
                  MobilityProviderSyncOperator,
                  MobilityVehicleSyncOperator,
                  MobilityFleetToSqlExtractOperator]
-    hooks = [MobilityProviderHook]
+    hooks = [MobilityProviderHook, GBFSFeedHook]
     executors = []
     macros = []
     admin_views = []
