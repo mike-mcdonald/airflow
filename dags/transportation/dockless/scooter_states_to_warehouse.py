@@ -101,7 +101,6 @@ extract_state_task = MsSqlOperator(
             zipcode_key,
             battery_pct,
             associated_trip,
-            duration,
             seen,
             batch
         )
