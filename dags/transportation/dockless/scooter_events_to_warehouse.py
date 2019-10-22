@@ -379,22 +379,63 @@ for provider in providers:
         '''
     ))
 
-    provider_sync_tasks.append(MobilityProviderSyncOperator(
+    provider_sync_tasks.append(MsSqlOperator(
         task_id=f'{provider}_provider_sync',
-        provider=provider,
-        source_table='etl.extract_event',
         mssql_conn_id='azure_sql_server_full',
         dag=dag,
-        depends_on_past=True,
+        sql=f'''
+        insert into
+            dim.provider (
+                provider_id,
+                provider_name
+            )
+        select distinct
+            provider_id,
+            provider_name
+        from
+            etl.extract_event as e
+        where
+            batch = '{provider}-{{{{ ts_nodash }}}}'
+        and not exists (
+            select
+                1
+            from
+                dim.provider as p
+            where
+                p.provider_id = e.provider_id
+        )
+        '''
     ))
 
-    vehicle_sync_tasks.append(MobilityVehicleSyncOperator(
+    vehicle_sync_tasks.append(MsSqlOperator(
         task_id=f'{provider}_vehicle_sync',
-        provider=provider,
-        source_table='etl.extract_event',
         mssql_conn_id='azure_sql_server_full',
         dag=dag,
-        depends_on_past=True,
+        sql=f'''
+        insert into
+            dim.vehicle (
+                device_id,
+                vehicle_id,
+                vehicle_type
+            )
+        select distinct
+            device_id,
+            vehicle_id,
+            vehicle_type
+        from
+            etl.extract_event as e
+        where
+            batch = '{provider}-{{{{ ts_nodash }}}}'
+        and not exists (
+            select
+                1
+            from
+                dim.vehicle as v
+            where
+                v.device_id = e.device_id
+            and v.vehicle_id = e.vehicle_id
+        )
+        '''
     ))
 
     stage_tasks.append(MsSqlOperator(
