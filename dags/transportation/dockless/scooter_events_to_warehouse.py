@@ -43,7 +43,7 @@ default_args = {
     'email_on_failure': True,
     'email_on_retry': False,
     'retries': 9,
-    'retry_delay': timedelta(minutes=1),
+    'retry_delay': timedelta(seconds=10),
     # 'queue': 'bash_queue',
     # 'pool': 'backfill',
     # 'priority_weight': 10,
