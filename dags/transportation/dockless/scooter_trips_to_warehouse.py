@@ -39,7 +39,7 @@ default_args = {
     'email_on_failure': True,
     'email_on_retry': False,
     'retries': 9,
-    'retry_delay': timedelta(minutes=1),
+    'retry_delay': timedelta(seconds=10),
     'concurrency': 1,
     'max_active_runs': 1,
     # 'queue': 'bash_queue',
@@ -431,7 +431,7 @@ for provider in providers:
 
     sql_extract_tasks.append(
         MsSqlOperator(
-            task_id='extract_external_trips',
+            task_id=f'{provider}_extract_external_trips',
             dag=dag,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
@@ -519,7 +519,7 @@ for provider in providers:
 
     clean_stage_before_tasks.append(
         MsSqlOperator(
-            task_id='clean_stage_table_before',
+            task_id=f'{provider}_clean_stage_table_before',
             dag=dag,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
@@ -529,7 +529,7 @@ for provider in providers:
 
     clean_stage_after_tasks.append(
         MsSqlOperator(
-            task_id='clean_stage_table_after',
+            task_id=f'{provider}_clean_stage_table_after',
             dag=dag,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
@@ -539,7 +539,7 @@ for provider in providers:
 
     clean_extract_tasks.append(
         MsSqlOperator(
-            task_id='clean_extract_table',
+            task_id=f'{provider}_clean_extract_table',
             dag=dag,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
@@ -549,7 +549,7 @@ for provider in providers:
 
     stage_tasks.append(
         MsSqlOperator(
-            task_id='stage_trips',
+            task_id=f'{provider}_stage_trips',
             dag=dag,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
@@ -636,7 +636,7 @@ for provider in providers:
 
     warehouse_update_tasks.append(
         MsSqlOperator(
-            task_id='warehouse_update_trip',
+            task_id=f'{provider}_warehouse_update_trip',
             dag=dag,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
@@ -668,7 +668,7 @@ for provider in providers:
 
     warehouse_insert_tasks.append(
         MsSqlOperator(
-            task_id='warehouse_insert_trip',
+            task_id=f'{provider}_warehouse_insert_trip',
             dag=dag,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
