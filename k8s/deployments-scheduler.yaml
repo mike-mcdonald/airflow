@@ -30,7 +30,7 @@ spec:
             serviceAccountName: airflow
             containers:
                 - name: airflow-scheduler
-                  image: pudlmds.azurecr.io/airflow:1.10.5.11
+                  image: pudlmds.azurecr.io/airflow:1.10.5.12
                   imagePullPolicy: Always
                   envFrom:
                       - configMapRef:
@@ -55,10 +55,3 @@ spec:
                                 key: redis-password
                   resources: {}
                   args: ['scheduler']
-                  volumeMounts:
-                      - mountPath: /usr/local/airflow/logs
-                        name: airflow-logs
-            volumes:
-                - name: airflow-logs
-                  persistentVolumeClaim:
-                      claimName: airflow-logs-pv-claim

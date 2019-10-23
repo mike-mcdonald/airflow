@@ -18,7 +18,7 @@ spec:
     ## Use experimental burst mode for faster StatefulSet scaling
     ##   https://github.com/kubernetes/kubernetes/commit/c2c5051adf096ffd48bf1dcf5b11cb47e464ecdd
     podManagementPolicy: Parallel
-    replicas: 16
+    replicas: 3
     selector:
         matchLabels:
             app: airflow
@@ -35,7 +35,7 @@ spec:
             containers:
                 - name: airflow-worker
                   imagePullPolicy: Always
-                  image: pudlmds.azurecr.io/airflow:1.10.5.11
+                  image: pudlmds.azurecr.io/airflow:1.10.5.12
                   envFrom:
                       - configMapRef:
                             name: 'airflow-env'
@@ -63,10 +63,3 @@ spec:
                         containerPort: 8793
                         protocol: TCP
                   resources: {}
-                  volumeMounts:
-                      - mountPath: /usr/local/airflow/logs
-                        name: airflow-logs
-            volumes:
-                - name: airflow-logs
-                  persistentVolumeClaim:
-                      claimName: airflow-logs-pv-claim
