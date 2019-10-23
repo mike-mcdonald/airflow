@@ -34,7 +34,7 @@ from airflow.operators.mssql_plugin import MsSqlOperator
 default_args = {
     'owner': 'airflow',
     'depends_on_past': True,
-    'start_date':  datetime(2019, 4, 27),
+    'start_date':  datetime(2019, 7, 1),
     'email': ['pbotsqldbas@portlandoregon.gov'],
     'email_on_failure': True,
     'email_on_retry': False,
@@ -367,7 +367,8 @@ api_extract_tasks = []
 delete_data_lake_extract_tasks = []
 sql_extract_tasks = []
 stage_tasks = []
-clean_extract_tasks = []
+clean_extract_before_tasks = []
+clean_extract_after_tasks = []
 clean_stage_before_tasks = []
 clean_stage_after_tasks = []
 warehouse_update_tasks = []
@@ -435,85 +436,86 @@ for provider in providers:
             dag=dag,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
-            INSERT INTO etl.extract_trip (
-                [trip_id]
-                ,[provider_id]
-                ,[provider_name]
-                ,[device_id]
-                ,[vehicle_id]
-                ,[vehicle_type]
-                ,[propulsion_type]
-                ,[start_time]
-                ,[start_date_key]
-                ,[start_cell_key]
-                ,[start_census_block_group_key]
-                ,[start_city_key]
-                ,[start_county_key]
-                ,[start_neighborhood_key]
-                ,[start_park_key]
-                ,[start_parking_district_key]
-                ,[start_pattern_area_key]
-                ,[start_zipcode_key]
-                ,[end_time]
-                ,[end_date_key]
-                ,[end_cell_key]
-                ,[end_census_block_group_key]
-                ,[end_city_key]
-                ,[end_county_key]
-                ,[end_neighborhood_key]
-                ,[end_park_key]
-                ,[end_parking_district_key]
-                ,[end_pattern_area_key]
-                ,[end_zipcode_key]
-                ,[distance]
-                ,[duration]
-                ,[accuracy]
-                ,[standard_cost]
-                ,[actual_cost]
-                ,[parking_verification_url]
-                ,[seen]
-                ,[batch]
+            create table
+                etl.extract_trip_{provider}_{{{{ ts_nodash }}}}
+            with
+            (
+                distribution = round_robin,
+                heap
             )
-            SELECT
-            [trip_id]
-            ,[provider_id]
-            ,[provider_name]
-            ,[device_id]
-            ,[vehicle_id]
-            ,[vehicle_type]
-            ,[propulsion_type]
-            ,[start_time]
-            ,[start_date_key]
-            ,[start_cell_key]
-            ,[start_census_block_group_key]
-            ,[start_city_key]
-            ,[start_county_key]
-            ,[start_neighborhood_key]
-            ,[start_park_key]
-            ,[start_parking_district_key]
-            ,[start_pattern_area_key]
-            ,[start_zipcode_key]
-            ,[end_time]
-            ,[end_date_key]
-            ,[end_cell_key]
-            ,[end_census_block_group_key]
-            ,[end_city_key]
-            ,[end_county_key]
-            ,[end_neighborhood_key]
-            ,[end_park_key]
-            ,[end_parking_district_key]
-            ,[end_pattern_area_key]
-            ,[end_zipcode_key]
-            ,[distance]
-            ,[duration]
-            ,[accuracy]
-            ,[standard_cost]
-            ,[actual_cost]
-            ,[parking_verification_url]
-            ,[seen]
-            ,[batch]
-            FROM etl.external_trip
-            WHERE batch = '{provider}-{{{{ ts_nodash }}}}'
+            as
+            select
+                trip_id,
+                provider_id,
+                provider_name,
+                device_id,
+                vehicle_id,
+                vehicle_type,
+                propulsion_type,
+                start_time,
+                start_date_key,
+                start_cell_key,
+                start_census_block_group_key,
+                start_city_key,
+                start_county_key,
+                start_neighborhood_key,
+                start_park_key,
+                start_parking_district_key,
+                start_pattern_area_key,
+                start_zipcode_key,
+                end_time,
+                end_date_key,
+                end_cell_key,
+                end_census_block_group_key,
+                end_city_key,
+                end_county_key,
+                end_neighborhood_key,
+                end_park_key,
+                end_parking_district_key,
+                end_pattern_area_key,
+                end_zipcode_key,
+                distance,
+                duration,
+                accuracy,
+                standard_cost,
+                actual_cost,
+                parking_verification_url,
+                seen,
+                batch
+            from
+                etl.external_trip
+            where
+                batch = '{provider}-{{{{ ts_nodash }}}}'
+            '''
+        ))
+
+    clean_extract_before_tasks.append(
+        MsSqlOperator(
+            task_id=f'{provider}_clean_extract_table_before',
+            dag=dag,
+            mssql_conn_id='azure_sql_server_full',
+            sql=f'''
+            if exists (
+                select 1
+                from sysobjects
+                where name = 'extract_trip_{provider}_{{{{ ts_nodash }}}}'
+            )
+            drop table etl.extract_trip_{provider}_{{{{ ts_nodash }}}}
+            '''
+        ))
+
+    clean_extract_after_tasks.append(
+        MsSqlOperator(
+            task_id=f'{provider}_clean_extract_table_after',
+            dag=dag,
+            mssql_conn_id='azure_sql_server_full',
+            sql=f'''
+            if exists (
+                select 1
+                from sysobjects
+                where name = 'extract_trip_{provider}_{{{{ ts_nodash }}}}'
+            )
+            drop table etl.extract_trip_{provider}_{{{{ ts_nodash }}}}
             '''
         ))
 
@@ -523,7 +525,12 @@ for provider in providers:
             dag=dag,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
-            DELETE FROM etl.stage_trip WHERE batch = '{provider}-{{{{ ts_nodash }}}}'
+            if exists (
+                select 1
+                from sysobjects
+                where name = 'stage_trip_{provider}_{{{{ ts_nodash }}}}'
+            )
+            drop table etl.stage_trip_{provider}_{{{{ ts_nodash }}}}
             '''
         ))
 
@@ -533,17 +540,12 @@ for provider in providers:
             dag=dag,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
-            DELETE FROM etl.stage_trip WHERE batch = '{provider}-{{{{ ts_nodash }}}}'
-            '''
-        ))
-
-    clean_extract_tasks.append(
-        MsSqlOperator(
-            task_id=f'{provider}_clean_extract_table',
-            dag=dag,
-            mssql_conn_id='azure_sql_server_full',
-            sql=f'''
-            DELETE FROM etl.extract_trip WHERE batch = '{provider}-{{{{ ts_nodash }}}}'
+            if exists (
+                select 1
+                from sysobjects
+                where name = 'stage_trip_{provider}_{{{{ ts_nodash }}}}'
+            )
+            drop table etl.stage_trip_{provider}_{{{{ ts_nodash }}}}
             '''
         ))
 
@@ -553,84 +555,57 @@ for provider in providers:
             dag=dag,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
-            INSERT INTO [etl].[stage_trip] (
-                [provider_key]
-                ,[vehicle_key]
-                ,[propulsion_type]
-                ,[trip_id]
-                ,[start_cell_key]
-                ,[start_census_block_group_key]
-                ,[start_city_key]
-                ,[start_county_key]
-                ,[start_neighborhood_key]
-                ,[start_park_key]
-                ,[start_parking_district_key]
-                ,[start_pattern_area_key]
-                ,[start_zipcode_key]
-                ,[end_cell_key]
-                ,[end_census_block_group_key]
-                ,[end_city_key]
-                ,[end_county_key]
-                ,[end_neighborhood_key]
-                ,[end_park_key]
-                ,[end_parking_district_key]
-                ,[end_pattern_area_key]
-                ,[end_zipcode_key]
-                ,[start_time]
-                ,[start_date_key]
-                ,[end_time]
-                ,[end_date_key]
-                ,[distance]
-                ,[duration]
-                ,[accuracy]
-                ,[standard_cost]
-                ,[actual_cost]
-                ,[parking_verification_url]
-                ,[seen]
-                ,[batch]
+            create table etl.stage_trip_{provider}_{{{{ ts_nodash }}}}
+            with
+            (
+                distribution = round_robin,
+                heap
             )
-            SELECT
-            p.[key]
-            ,v.[key]
-            ,[propulsion_type]
-            ,[trip_id]
-            ,[start_cell_key]
-            ,[start_census_block_group_key]
-            ,[start_city_key]
-            ,[start_county_key]
-            ,[start_neighborhood_key]
-            ,[start_park_key]
-            ,[start_parking_district_key]
-            ,[start_pattern_area_key]
-            ,[start_zipcode_key]
-            ,[end_cell_key]
-            ,[end_census_block_group_key]
-            ,[end_city_key]
-            ,[end_county_key]
-            ,[end_neighborhood_key]
-            ,[end_park_key]
-            ,[end_parking_district_key]
-            ,[end_pattern_area_key]
-            ,[end_zipcode_key]
-            ,[start_time]
-            ,[start_date_key]
-            ,[end_time]
-            ,[end_date_key]
-            ,[distance]
-            ,[duration]
-            ,[accuracy]
-            ,[standard_cost]
-            ,[actual_cost]
-            ,[parking_verification_url]
-            ,[seen]
-            ,[batch]
-            FROM etl.extract_trip AS source
-            LEFT JOIN dim.provider AS p ON p.provider_id = source.provider_id
-            LEFT JOIN dim.vehicle AS v ON (
-                v.vehicle_id = source.vehicle_id
-                AND v.device_id = source.device_id
-            )
-            WHERE batch = '{provider}-{{{{ ts_nodash }}}}'
+            as
+            select
+                p.[key] as provider_key,
+                v.[key] as vehicle_key,
+                propulsion_type,
+                trip_id,
+                start_cell_key,
+                start_census_block_group_key,
+                start_city_key,
+                start_county_key,
+                start_neighborhood_key,
+                start_park_key,
+                start_parking_district_key,
+                start_pattern_area_key,
+                start_zipcode_key,
+                end_cell_key,
+                end_census_block_group_key,
+                end_city_key,
+                end_county_key,
+                end_neighborhood_key,
+                end_park_key,
+                end_parking_district_key,
+                end_pattern_area_key,
+                end_zipcode_key,
+                start_time,
+                start_date_key,
+                end_time,
+                end_date_key,
+                distance,
+                duration,
+                accuracy,
+                standard_cost,
+                actual_cost,
+                parking_verification_url,
+                seen,
+                batch
+            from
+                etl.extract_trip_{provider}_{{{{ ts_nodash }}}} as source
+            left join
+                dim.provider as p on p.provider_id = source.provider_id
+            left join
+                dim.vehicle as v on (
+                    v.vehicle_id = source.vehicle_id
+                    and v.device_id = source.device_id
+                )
             '''
         ))
 
@@ -640,29 +615,32 @@ for provider in providers:
             dag=dag,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
-            UPDATE fact.trip
-            SET last_seen = source.seen,
-            start_cell_key = source.start_cell_key,
-            start_census_block_group_key = source.start_census_block_group_key,
-            start_city_key = source.start_city_key,
-            start_county_key = source.start_county_key,
-            start_neighborhood_key = source.start_neighborhood_key,
-            start_park_key = source.start_park_key,
-            start_parking_district_key = source.start_parking_district_key,
-            start_pattern_area_key = source.start_pattern_area_key,
-            start_zipcode_key = source.start_zipcode_key,
-            end_cell_key = source.end_cell_key,
-            end_census_block_group_key = source.end_census_block_group_key,
-            end_city_key = source.end_city_key,
-            end_county_key = source.end_county_key,
-            end_neighborhood_key = source.end_neighborhood_key,
-            end_park_key = source.end_park_key,
-            end_parking_district_key = source.end_parking_district_key,
-            end_pattern_area_key = source.end_pattern_area_key,
-            end_zipcode_key = source.end_zipcode_key
-            FROM etl.stage_trip AS source
-            WHERE source.trip_id = fact.trip.trip_id
-            AND source.batch = '{provider}-{{{{ ts_nodash }}}}'
+            update
+                fact.trip
+            set
+                last_seen = source.seen,
+                start_cell_key = source.start_cell_key,
+                start_census_block_group_key = source.start_census_block_group_key,
+                start_city_key = source.start_city_key,
+                start_county_key = source.start_county_key,
+                start_neighborhood_key = source.start_neighborhood_key,
+                start_park_key = source.start_park_key,
+                start_parking_district_key = source.start_parking_district_key,
+                start_pattern_area_key = source.start_pattern_area_key,
+                start_zipcode_key = source.start_zipcode_key,
+                end_cell_key = source.end_cell_key,
+                end_census_block_group_key = source.end_census_block_group_key,
+                end_city_key = source.end_city_key,
+                end_county_key = source.end_county_key,
+                end_neighborhood_key = source.end_neighborhood_key,
+                end_park_key = source.end_park_key,
+                end_parking_district_key = source.end_parking_district_key,
+                end_pattern_area_key = source.end_pattern_area_key,
+                end_zipcode_key = source.end_zipcode_key
+            from
+                etl.stage_trip_{provider}_{{{{ ts_nodash }}}} as source
+            where
+                source.trip_id = fact.trip.trip_id
             '''
         ))
 
@@ -672,83 +650,86 @@ for provider in providers:
             dag=dag,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
-            INSERT INTO [fact].[trip] (
-                [trip_id],
-                [provider_key],
-                [vehicle_key],
-                [propulsion_type],
-                [start_time],
-                [start_date_key],
-                [start_cell_key],
-                [start_census_block_group_key],
-                [start_city_key],
-                [start_county_key],
-                [start_neighborhood_key],
-                [start_park_key],
-                [start_parking_district_key],
-                [start_pattern_area_key],
-                [start_zipcode_key],
-                [end_time],
-                [end_date_key],
-                [end_cell_key],
-                [end_census_block_group_key],
-                [end_city_key],
-                [end_county_key],
-                [end_neighborhood_key],
-                [end_park_key],
-                [end_parking_district_key],
-                [end_pattern_area_key],
-                [end_zipcode_key],
-                [distance],
-                [duration],
-                [accuracy],
-                [standard_cost],
-                [actual_cost],
-                [parking_verification_url],
-                [first_seen],
-                [last_seen]
+            insert into fact.trip (
+                trip_id,
+                provider_key,
+                vehicle_key,
+                propulsion_type,
+                start_time,
+                start_date_key,
+                start_cell_key,
+                start_census_block_group_key,
+                start_city_key,
+                start_county_key,
+                start_neighborhood_key,
+                start_park_key,
+                start_parking_district_key,
+                start_pattern_area_key,
+                start_zipcode_key,
+                end_time,
+                end_date_key,
+                end_cell_key,
+                end_census_block_group_key,
+                end_city_key,
+                end_county_key,
+                end_neighborhood_key,
+                end_park_key,
+                end_parking_district_key,
+                end_pattern_area_key,
+                end_zipcode_key,
+                distance,
+                duration,
+                accuracy,
+                standard_cost,
+                actual_cost,
+                parking_verification_url,
+                first_seen,
+                last_seen
             )
-            SELECT
-            [trip_id],
-            [provider_key],
-            [vehicle_key],
-            [propulsion_type],
-            [start_time],
-            [start_date_key],
-            [start_cell_key],
-            [start_census_block_group_key],
-            [start_city_key],
-            [start_county_key],
-            [start_neighborhood_key],
-            [start_park_key],
-            [start_parking_district_key],
-            [start_pattern_area_key],
-            [start_zipcode_key],
-            [end_time],
-            [end_date_key],
-            [end_cell_key],
-            [end_census_block_group_key],
-            [end_city_key],
-            [end_county_key],
-            [end_neighborhood_key],
-            [end_park_key],
-            [end_parking_district_key],
-            [end_pattern_area_key],
-            [end_zipcode_key],
-            [distance],
-            [duration],
-            [accuracy],
-            [standard_cost],
-            [actual_cost],
-            [parking_verification_url],
-            [seen],
-            [seen]
-            FROM [etl].[stage_trip] AS source
-            WHERE batch = '{provider}-{{{{ ts_nodash }}}}'
-            AND NOT EXISTS (
-                SELECT 1
-                FROM fact.trip AS target
-                WHERE target.trip_id = source.trip_id
+            select
+                trip_id,
+                provider_key,
+                vehicle_key,
+                propulsion_type,
+                start_time,
+                start_date_key,
+                start_cell_key,
+                start_census_block_group_key,
+                start_city_key,
+                start_county_key,
+                start_neighborhood_key,
+                start_park_key,
+                start_parking_district_key,
+                start_pattern_area_key,
+                start_zipcode_key,
+                end_time,
+                end_date_key,
+                end_cell_key,
+                end_census_block_group_key,
+                end_city_key,
+                end_county_key,
+                end_neighborhood_key,
+                end_park_key,
+                end_parking_district_key,
+                end_pattern_area_key,
+                end_zipcode_key,
+                distance,
+                duration,
+                accuracy,
+                standard_cost,
+                actual_cost,
+                parking_verification_url,
+                seen,
+                seen
+            from
+                etl.stage_trip_{provider}_{{{{ ts_nodash }}}} as source
+            where not exists (
+                select
+                    1
+                from
+                    fact.trip as target
+                where
+                    target.trip_id = source.trip_id
             )
             '''
         ))
@@ -756,10 +737,11 @@ for provider in providers:
     globals()[dag_id] = dag
 
 for i in range(len(providers)):
+    clean_extract_before_tasks[i] >> sql_extract_tasks[i]
     api_extract_tasks[i] >> sql_extract_tasks[i] >> delete_data_lake_extract_tasks[i]
 
     clean_stage_before_tasks[i] >> stage_tasks[i]
-    sql_extract_tasks[i] >> stage_tasks[i] >> clean_extract_tasks[i]
+    sql_extract_tasks[i] >> stage_tasks[i] >> clean_extract_after_tasks[i]
 
     stage_tasks[i] >> warehouse_update_tasks[i] >> clean_stage_after_tasks[i]
     stage_tasks[i] >> warehouse_insert_tasks[i] >> clean_stage_after_tasks[i]

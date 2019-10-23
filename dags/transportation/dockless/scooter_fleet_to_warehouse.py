@@ -15,7 +15,7 @@ from airflow.operators.mobility_plugin import (
 default_args = {
     "owner": "airflow",
     "depends_on_past": True,
-    "start_date":  datetime(2019, 4, 26),
+    "start_date":  datetime(2019, 9, 1),
     "email": ["pbotsqldbas@portlandoregon.gov"],
     "email_on_failure": True,
     "email_on_retry": False,
@@ -57,6 +57,66 @@ clean_stage_task_before = MsSqlOperator(
     """
 )
 
+states_extract_task = MsSqlOperator(
+    task_id="extract_active_states",
+    dag=dag,
+    mssql_conn_id="azure_sql_server_full",
+    sql=f"""
+    create table etl.extract_fleet_state_{{{{ ts_nodash }}}}
+    with
+    (
+        distribution = round_robin,
+        clustered columnstore index
+    )
+    as
+    select
+        provider_key,
+        vehicle_key,
+        start_city_key as city_key,
+        start_pattern_area_key as pattern_area_key,
+        start_state as state,
+        start_time,
+        end_time
+    from
+        fact.state
+    where
+        start_time <= cast('{{{{ execution_date.strftime("%m/%d/%Y %H:%M:%S.%f") }}}}' as datetime2)
+    and coalesce(
+            end_time,
+            cast('12/31/9999 23:59:59.9999' as datetime2)
+        ) >= cast('{{{{ execution_date.subtract(days=2).strftime("%m/%d/%Y %H:%M:%S.%f") }}}}' as datetime2)
+    """)
+
+clean_extract_before_task = MsSqlOperator(
+    task_id=f'clean_extract_table_before',
+    dag=dag,
+    mssql_conn_id='azure_sql_server_full',
+    sql=f'''
+    if exists (
+        select 1
+        from sysobjects
+        where name = 'extract_fleet_state_{{{{ ts_nodash }}}}'
+    )
+    drop table etl.extract_fleet_state_{{{{ ts_nodash }}}}
+    '''
+)
+
+clean_extract_before_task >> states_extract_task
+
+clean_extract_after_task = MsSqlOperator(
+    task_id=f'clean_extract_table_after',
+    dag=dag,
+    mssql_conn_id='azure_sql_server_full',
+    sql=f'''
+    if exists (
+        select 1
+        from sysobjects
+        where name = 'extract_fleet_state_{{{{ ts_nodash }}}}'
+    )
+    drop table etl.extract_fleet_state_{{{{ ts_nodash }}}}
+    '''
+)
+
 fleet_stage_task = MsSqlOperator(
     task_id="stage_fleet_extract",
     dag=dag,
@@ -96,7 +156,7 @@ fleet_stage_task = MsSqlOperator(
             e.time,
             f.city_key,
             f.pattern_area_key,
-            f.start_state,
+            f.state,
             coalesce(f.count, 0) as count,
             seen,
             batch
@@ -104,12 +164,12 @@ fleet_stage_task = MsSqlOperator(
             etl.extract_fleet_count as e
         outer apply (
             select
-                f.start_city_key as city_key,
-                f.start_pattern_area_key as pattern_area_key,
-                f.start_state,
+                f.city_key as city_key,
+                f.pattern_area_key as pattern_area_key,
+                f.state,
                 count(distinct f.vehicle_key) as count
             from
-                fact.state as f
+                etl.extract_fleet_state_{{ ts_nodash }} as f
             where
                 f.provider_key = e.provider_key
                 and f.start_time <= e.time
@@ -118,14 +178,14 @@ fleet_stage_task = MsSqlOperator(
                     cast('12/31/9999 23:59:59.9999' as datetime2)
                 ) >= e.time
             group by
-                f.start_city_key,
-                f.start_pattern_area_key,
-                f.start_state
+                f.city_key,
+                f.pattern_area_key,
+                f.state
         ) as f
         where
             e.batch = '{{ ts_nodash }}'
     ) p pivot (
-        max(count) for start_state IN (
+        max(count) for state IN (
             [available],
             [reserved],
             [unavailable],
@@ -134,6 +194,10 @@ fleet_stage_task = MsSqlOperator(
     ) as pvt
     """
 )
+
+fleet_extract_task >> fleet_stage_task
+
+states_extract_task >> fleet_stage_task >> clean_extract_after_task
 
 clean_stage_task_after = MsSqlOperator(
     task_id="clean_stage_table_after",
@@ -147,7 +211,7 @@ clean_stage_task_after = MsSqlOperator(
     """
 )
 
-fleet_extract_task >> clean_stage_task_before >> fleet_stage_task
+clean_stage_task_before >> fleet_stage_task
 
 fleet_warehouse_update_task = MsSqlOperator(
     task_id="warehouse_update_fleet",
