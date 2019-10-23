@@ -69,10 +69,3 @@ spec:
                       successThreshold: 1
                       failureThreshold: 5
                   resources: {}
-                  volumeMounts:
-                      - mountPath: /usr/local/airflow/logs
-                        name: airflow-logs
-            volumes:
-                - name: airflow-logs
-                  persistentVolumeClaim:
-                      claimName: airflow-logs-pv-claim

@@ -55,10 +55,3 @@ spec:
                                 key: redis-password
                   resources: {}
                   args: ['scheduler']
-                  volumeMounts:
-                      - mountPath: /usr/local/airflow/logs
-                        name: airflow-logs
-            volumes:
-                - name: airflow-logs
-                  persistentVolumeClaim:
-                      claimName: airflow-logs-pv-claim
