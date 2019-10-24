@@ -31,7 +31,7 @@ spec:
             restartPolicy: Always
             containers:
                 - name: airflow-flower
-                  image: pudlmds.azurecr.io/airflow:1.10.5.13
+                  image: pudlmds.azurecr.io/airflow:1.10.5.14
                   imagePullPolicy: Always
                   envFrom:
                       - configMapRef:
