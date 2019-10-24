@@ -22,7 +22,7 @@ from shapely.wkt import loads
 import airflow
 from airflow import DAG
 from airflow.operators.dummy_operator import DummyOperator
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python_operator import BranchPythonOperator
 
 from airflow.hooks.azure_plugin import AzureDataLakeHook
 from airflow.hooks.mobility_plugin import MobilityProviderHook
@@ -67,7 +67,7 @@ def process_trips_to_data_lake(**kwargs):
     if len(trips) <= 0:
         logging.warning(
             f'Received no trips for time period {start_time} to {end_time}')
-        return
+        return f'{kwargs["provider"]}_warehouse_skipped'
 
     trips = trips.rename(index=str, columns={
         'trip_duration': 'duration',
@@ -360,10 +360,13 @@ def process_trips_to_data_lake(**kwargs):
 
     os.remove(kwargs['templates_dict']['trips_local_path'])
 
+    return f'{kwargs["provider"]}_extract_external_trips'
+
 
 providers = ['lime', 'spin', 'bolt', 'shared', 'razor', 'bird']
 
 api_extract_tasks = []
+skip_warehouse_tasks = []
 delete_data_lake_extract_tasks = []
 sql_extract_tasks = []
 stage_tasks = []
@@ -390,11 +393,12 @@ for provider in providers:
     trips_remote_path = f'/transportation/mobility/etl/trip/{provider}-{{{{ ts_nodash }}}}.csv'
 
     api_extract_tasks.append(
-        PythonOperator(
+        BranchPythonOperator(
             task_id=f'{provider}_extract_data_lake',
             provide_context=True,
             python_callable=process_trips_to_data_lake,
             op_kwargs={
+                'provider': provider,
                 'mobility_provider_conn_id': mobility_provider_conn_id,
                 'mobility_provider_token_conn_id': mobility_provider_token_conn_id,
                 'sql_conn_id': 'azure_sql_server_default',
@@ -429,6 +433,13 @@ for provider in providers:
                                     dag=dag,
                                     azure_data_lake_conn_id='azure_data_lake_default',
                                     remote_path=trips_remote_path))
+
+    skip_warehouse_tasks.append(
+        DummyOperator(
+            task_id=f'{provider}_warehouse_skipped',
+            dag=dag,
+        )
+    )
 
     sql_extract_tasks.append(
         MsSqlOperator(
@@ -738,10 +749,12 @@ for provider in providers:
 
 for i in range(len(providers)):
     clean_extract_before_tasks[i] >> sql_extract_tasks[i]
-    api_extract_tasks[i] >> sql_extract_tasks[i] >> delete_data_lake_extract_tasks[i]
+    api_extract_tasks[i] >> [sql_extract_tasks[i],
+                             skip_warehouse_tasks[i]]
 
     clean_stage_before_tasks[i] >> stage_tasks[i]
-    sql_extract_tasks[i] >> stage_tasks[i] >> clean_extract_after_tasks[i]
+    sql_extract_tasks[i] >> [delete_data_lake_extract_tasks[i], stage_tasks[i]]
 
-    stage_tasks[i] >> warehouse_update_tasks[i] >> clean_stage_after_tasks[i]
-    stage_tasks[i] >> warehouse_insert_tasks[i] >> clean_stage_after_tasks[i]
+    stage_tasks[i] >> [warehouse_insert_tasks[i],
+                       warehouse_update_tasks[i]] >> clean_stage_after_tasks[i]
+    stage_tasks[i] >> clean_extract_after_tasks[i]

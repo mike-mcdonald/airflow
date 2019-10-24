@@ -22,7 +22,7 @@ from shapely.wkt import loads
 import airflow
 from airflow import DAG
 from airflow.operators.dummy_operator import DummyOperator
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python_operator import BranchPythonOperator
 
 from airflow.hooks.azure_plugin import AzureDataLakeHook
 from airflow.hooks.mobility_plugin import MobilityProviderHook
@@ -84,7 +84,7 @@ def scooter_events_to_datalake(**kwargs):
     if len(events) <= 0:
         logging.warning(
             f'Received no events for time period {start_time} to {end_time}')
-        return
+        return f'{kwargs["provider"]}_warehouse_skipped'
 
     events = events.rename(index=str, columns={
         'event_type': 'state',
@@ -245,8 +245,11 @@ def scooter_events_to_datalake(**kwargs):
 
     os.remove(kwargs.get('templates_dict').get('events_local_path'))
 
+    return f'{kwargs["provider"]}_extract_events-sql'
+
 
 api_extract_tasks = []
+skip_warehouse_tasks = []
 delete_data_lake_extract_tasks = []
 sql_extract_tasks = []
 provider_sync_tasks = []
@@ -275,12 +278,13 @@ for provider in providers:
     events_remote_path = f'/transportation/mobility/etl/event/{provider}-{{{{ ts_nodash }}}}.csv'
 
     api_extract_tasks.append(
-        PythonOperator(
+        BranchPythonOperator(
             task_id=f'{provider}_extract_data_lake',
             dag=dag,
             provide_context=True,
             python_callable=scooter_events_to_datalake,
             op_kwargs={
+                'provider': provider,
                 'mobility_provider_conn_id': mobility_provider_conn_id,
                 'mobility_provider_token_conn_id': mobility_provider_token_conn_id,
                 'sql_conn_id': 'azure_sql_server_default',
@@ -307,6 +311,13 @@ for provider in providers:
                 'zipcodes_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/zipcodes-{{ ts_nodash }}.csv',
                 'zipcodes_remote_path': '/transportation/mobility/dim/zipcodes.csv',
             }))
+
+    skip_warehouse_tasks.append(
+        DummyOperator(
+            task_id=f'{provider}_warehouse_skipped',
+            dag=dag,
+        )
+    )
 
     delete_data_lake_extract_tasks.append(
         AzureDataLakeRemoveOperator(task_id=f'{provider}_delete_extract',
@@ -604,15 +615,15 @@ for provider in providers:
 
 for i in range(len(providers)):
     clean_extract_before_tasks[i] >> sql_extract_tasks[i]
-    api_extract_tasks[i] >> sql_extract_tasks[i] >> delete_data_lake_extract_tasks[i]
+    api_extract_tasks[i] >> [sql_extract_tasks[i],
+                             skip_warehouse_tasks[i]]
 
-    sql_extract_tasks[i] >> provider_sync_tasks[i]
-    sql_extract_tasks[i] >> vehicle_sync_tasks[i]
+    sql_extract_tasks[i] >> [delete_data_lake_extract_tasks[i],
+                             provider_sync_tasks[i], vehicle_sync_tasks[i]]
 
     clean_stage_before_tasks[i] >> stage_tasks[i]
-    provider_sync_tasks[i] >> stage_tasks[i]
-    vehicle_sync_tasks[i] >> stage_tasks[i]
-    stage_tasks[i] >> clean_extract_after_tasks[i]
+    [vehicle_sync_tasks[i], provider_sync_tasks[i]] >> stage_tasks[i]
 
-    stage_tasks[i] >> event_warehouse_update_tasks[i] >> clean_stage_after_tasks[i]
-    stage_tasks[i] >> event_warehouse_insert_tasks[i] >> clean_stage_after_tasks[i]
+    stage_tasks[i] >> [event_warehouse_insert_tasks[i],
+                       event_warehouse_update_tasks[i]] >> clean_stage_after_tasks[i]
+    stage_tasks[i] >> clean_extract_after_tasks[i]
