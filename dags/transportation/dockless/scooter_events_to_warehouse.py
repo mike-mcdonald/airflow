@@ -252,7 +252,8 @@ sql_extract_tasks = []
 provider_sync_tasks = []
 vehicle_sync_tasks = []
 stage_tasks = []
-clean_extract_table_tasks = []
+clean_extract_before_tasks = []
+clean_extract_after_tasks = []
 clean_stage_before_tasks = []
 clean_stage_after_tasks = []
 event_warehouse_update_tasks = []
@@ -318,36 +319,15 @@ for provider in providers:
         dag=dag,
         mssql_conn_id='azure_sql_server_full',
         sql=f'''
-        insert into
-            etl.extract_event (
-                event_hash,
-                provider_id,
-                provider_name,
-                device_id,
-                vehicle_id,
-                vehicle_type,
-                propulsion_type,
-                date_key,
-                event_time,
-                state,
-                event,
-                event_weight,
-                cell_key,
-                census_block_group_key,
-                city_key,
-                county_key,
-                neighborhood_key,
-                park_key,
-                parking_district_key,
-                pattern_area_key,
-                zipcode_key,
-                battery_pct,
-                associated_trip,
-                seen,
-                batch
-            )
+        create table etl.extract_event_{provider}_{{{{ ts_nodash }}}}
+        with
+        (
+            distribution = round_robin,
+            heap
+        )
+        as
         select
-            event_hash,
+            event_hash as hash,
             provider_id,
             provider_name,
             device_id,
@@ -355,7 +335,7 @@ for provider in providers:
             vehicle_type,
             propulsion_type,
             date_key,
-            event_time,
+            event_time as datetime,
             state,
             event,
             event_weight,
@@ -393,10 +373,8 @@ for provider in providers:
             provider_id,
             provider_name
         from
-            etl.extract_event as e
-        where
-            batch = '{provider}-{{{{ ts_nodash }}}}'
-        and not exists (
+            etl.extract_event_{provider}_{{{{ ts_nodash }}}} as e
+        where not exists (
             select
                 1
             from
@@ -423,10 +401,8 @@ for provider in providers:
             vehicle_id,
             vehicle_type
         from
-            etl.extract_event as e
-        where
-            batch = '{provider}-{{{{ ts_nodash }}}}'
-        and not exists (
+            etl.extract_event_{provider}_{{{{ ts_nodash }}}} as e
+        where not exists (
             select
                 1
             from
@@ -443,39 +419,22 @@ for provider in providers:
         dag=dag,
         mssql_conn_id='azure_sql_server_full',
         sql=f'''
-        insert into
-            etl.stage_event (
-                provider_key,
-                vehicle_key,
-                propulsion_type,
-                hash,
-                date_key,
-                state,
-                event,
-                datetime,
-                cell_key,
-                census_block_group_key,
-                city_key,
-                county_key,
-                neighborhood_key,
-                park_key,
-                parking_district_key,
-                pattern_area_key,
-                zipcode_key,
-                battery_pct,
-                associated_trip,
-                seen,
-                batch
-            )
+        create table etl.stage_event_{provider}_{{{{ ts_nodash }}}}
+        with
+        (
+            distribution = round_robin,
+            heap
+        )
+        as
         select
-            p.[key],
-            v.[key],
+            p.[key] as provider_key,
+            v.[key] as vehicle_key,
             propulsion_type,
-            event_hash,
+            hash,
             date_key,
             state,
             event,
-            event_time,
+            datetime,
             cell_key,
             census_block_group_key,
             city_key,
@@ -490,7 +449,7 @@ for provider in providers:
             seen,
             batch
         from
-            etl.extract_event as e
+            etl.extract_event_{provider}_{{{{ ts_nodash }}}} as e
         left join
             dim.provider as p on p.provider_id = e.provider_id
         left join
@@ -498,21 +457,34 @@ for provider in providers:
                 v.device_id = e.device_id
                 and v.vehicle_id = e.vehicle_id
             )
-        where
-            e.batch = '{provider}-{{{{ ts_nodash }}}}'
             '''
     ))
 
-    clean_extract_table_tasks.append(MsSqlOperator(
-        task_id=f'{provider}_clean_extract_table',
+    clean_extract_before_tasks.append(MsSqlOperator(
+        task_id=f'{provider}_clean_extract_table_before',
         dag=dag,
         mssql_conn_id='azure_sql_server_full',
         sql=f'''
-        delete
-        from
-            etl.extract_event
-        where
-            batch = '{provider}-{{{{ ts_nodash }}}}'
+        if exists (
+            select 1
+            from sysobjects
+            where name = 'extract_event_{provider}_{{{{ ts_nodash }}}}'
+        )
+        drop table etl.extract_event_{provider}_{{{{ ts_nodash }}}}
+        '''
+    ))
+
+    clean_extract_after_tasks.append(MsSqlOperator(
+        task_id=f'{provider}_clean_extract_table_after',
+        dag=dag,
+        mssql_conn_id='azure_sql_server_full',
+        sql=f'''
+        if exists (
+            select 1
+            from sysobjects
+            where name = 'extract_event_{provider}_{{{{ ts_nodash }}}}'
+        )
+        drop table etl.extract_event_{provider}_{{{{ ts_nodash }}}}
         '''
     ))
 
@@ -521,11 +493,12 @@ for provider in providers:
         dag=dag,
         mssql_conn_id='azure_sql_server_full',
         sql=f'''
-        delete
-        from
-            etl.stage_event
-        where
-            batch = '{provider}-{{{{ ts_nodash }}}}'
+        if exists (
+            select 1
+            from sysobjects
+            where name = 'stage_event_{provider}_{{{{ ts_nodash }}}}'
+        )
+        drop table etl.stage_event_{provider}_{{{{ ts_nodash }}}}
         '''
     ))
 
@@ -534,11 +507,7 @@ for provider in providers:
         dag=dag,
         mssql_conn_id='azure_sql_server_full',
         sql=f'''
-        delete
-        from
-            etl.stage_event
-        where
-            batch = '{provider}-{{{{ ts_nodash }}}}'
+        drop table etl.stage_event_{provider}_{{{{ ts_nodash }}}}
         '''
     ))
 
@@ -561,10 +530,9 @@ for provider in providers:
             pattern_area_key = source.pattern_area_key,
             zipcode_key = source.zipcode_key
         from
-            etl.stage_event as source
+            etl.stage_event_{provider}_{{{{ ts_nodash }}}} as source
         where
             source.hash = fact.event.hash
-        and source.batch = '{provider}-{{{{ ts_nodash }}}}'
         '''
     ))
 
@@ -620,10 +588,8 @@ for provider in providers:
             seen,
             seen
         from
-            etl.stage_event as source
-        where
-            batch = '{provider}-{{{{ ts_nodash }}}}'
-        and not exists (
+            etl.stage_event_{provider}_{{{{ ts_nodash }}}} as source
+        where not exists (
             select
                 1
             from
@@ -637,6 +603,7 @@ for provider in providers:
     globals()[dag_id] = dag
 
 for i in range(len(providers)):
+    clean_extract_before_tasks[i] >> sql_extract_tasks[i]
     api_extract_tasks[i] >> sql_extract_tasks[i] >> delete_data_lake_extract_tasks[i]
 
     sql_extract_tasks[i] >> provider_sync_tasks[i]
@@ -645,7 +612,7 @@ for i in range(len(providers)):
     clean_stage_before_tasks[i] >> stage_tasks[i]
     provider_sync_tasks[i] >> stage_tasks[i]
     vehicle_sync_tasks[i] >> stage_tasks[i]
-    sql_extract_tasks[i] >> stage_tasks[i] >> clean_extract_table_tasks[i]
+    stage_tasks[i] >> clean_extract_after_tasks[i]
 
     stage_tasks[i] >> event_warehouse_update_tasks[i] >> clean_stage_after_tasks[i]
     stage_tasks[i] >> event_warehouse_insert_tasks[i] >> clean_stage_after_tasks[i]
