@@ -34,7 +34,7 @@ from airflow.operators.mssql_plugin import MsSqlOperator
 default_args = {
     'owner': 'airflow',
     'depends_on_past': True,
-    'start_date':  datetime(2019, 7, 1),
+    'start_date':  datetime(2019, 4, 26),
     'email': ['pbotsqldbas@portlandoregon.gov'],
     'email_on_failure': True,
     'email_on_retry': False,

@@ -324,7 +324,7 @@ for provider in providers:
         (
             distribution = round_robin,
             heap
-            )
+        )
         as
         select
             event_hash as hash,
