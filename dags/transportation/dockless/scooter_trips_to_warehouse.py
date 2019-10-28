@@ -438,6 +438,7 @@ for provider in providers:
         DummyOperator(
             task_id=f'{provider}_warehouse_skipped',
             dag=dag,
+            depends_on_past=False,
         )
     )
 
