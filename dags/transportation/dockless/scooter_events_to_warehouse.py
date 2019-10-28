@@ -69,7 +69,8 @@ EVENT_WEIGHT = {
 
 def scooter_events_to_datalake(**kwargs):
     end_time = kwargs.get('execution_date')
-    pace = timedelta(hours=48)
+    pace = timedelta(hours=48) if datetime.now(
+    ) < end_time.add(2) else timedelta(hours=2)
     start_time = end_time - pace
 
     # Create the hook
@@ -281,6 +282,7 @@ for provider in providers:
         BranchPythonOperator(
             task_id=f'{provider}_extract_data_lake',
             dag=dag,
+            depends_on_past=False,
             provide_context=True,
             python_callable=scooter_events_to_datalake,
             op_kwargs={
@@ -323,12 +325,14 @@ for provider in providers:
     delete_data_lake_extract_tasks.append(
         AzureDataLakeRemoveOperator(task_id=f'{provider}_delete_extract',
                                     dag=dag,
+                                    depends_on_past=False,
                                     azure_data_lake_conn_id='azure_data_lake_default',
                                     remote_path=events_remote_path))
 
     sql_extract_tasks.append(MsSqlOperator(
         task_id=f'{provider}_extract_events-sql',
         dag=dag,
+        depends_on_past=False,
         mssql_conn_id='azure_sql_server_full',
         sql=f'''
         create table etl.extract_event_{provider}_{{{{ ts_nodash }}}}
@@ -429,6 +433,7 @@ for provider in providers:
     stage_tasks.append(MsSqlOperator(
         task_id=f'{provider}_stage_events',
         dag=dag,
+        depends_on_past=False,
         mssql_conn_id='azure_sql_server_full',
         sql=f'''
         create table etl.stage_event_{provider}_{{{{ ts_nodash }}}}
@@ -475,6 +480,7 @@ for provider in providers:
     clean_extract_before_tasks.append(MsSqlOperator(
         task_id=f'{provider}_clean_extract_table_before',
         dag=dag,
+        depends_on_past=False,
         mssql_conn_id='azure_sql_server_full',
         sql=f'''
         if exists (
@@ -489,6 +495,7 @@ for provider in providers:
     clean_extract_after_tasks.append(MsSqlOperator(
         task_id=f'{provider}_clean_extract_table_after',
         dag=dag,
+        depends_on_past=False,
         mssql_conn_id='azure_sql_server_full',
         sql=f'''
         if exists (
@@ -503,6 +510,7 @@ for provider in providers:
     clean_stage_before_tasks.append(MsSqlOperator(
         task_id=f'{provider}_clean_stage_table_before',
         dag=dag,
+        depends_on_past=False,
         mssql_conn_id='azure_sql_server_full',
         sql=f'''
         if exists (
@@ -517,6 +525,7 @@ for provider in providers:
     clean_stage_after_tasks.append(MsSqlOperator(
         task_id=f'{provider}_clean_stage_table_after',
         dag=dag,
+        depends_on_past=False,
         mssql_conn_id='azure_sql_server_full',
         sql=f'''
         drop table etl.stage_event_{provider}_{{{{ ts_nodash }}}}

@@ -51,7 +51,8 @@ default_args = {
 
 def process_trips_to_data_lake(**kwargs):
     end_time = kwargs['execution_date']
-    pace = timedelta(hours=48)
+    pace = timedelta(hours=48) if datetime.now(
+    ) < end_time.add(2) else timedelta(hours=2)
     start_time = end_time - pace
 
     # Create the hook
@@ -395,6 +396,8 @@ for provider in providers:
     api_extract_tasks.append(
         BranchPythonOperator(
             task_id=f'{provider}_extract_data_lake',
+            dag=dag,
+            depends_on_past=False,
             provide_context=True,
             python_callable=process_trips_to_data_lake,
             op_kwargs={
@@ -425,12 +428,12 @@ for provider in providers:
                 'parks_remote_path': '/transportation/mobility/dim/parks.csv',
                 'zipcodes_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/zipcodes-{{ ts_nodash }}.csv',
                 'zipcodes_remote_path': '/transportation/mobility/dim/zipcodes.csv',
-            },
-            dag=dag))
+            },))
 
     delete_data_lake_extract_tasks.append(
         AzureDataLakeRemoveOperator(task_id=f'{provider}_delete_trip_extract',
                                     dag=dag,
+                                    depends_on_past=False,
                                     azure_data_lake_conn_id='azure_data_lake_default',
                                     remote_path=trips_remote_path))
 
@@ -446,6 +449,7 @@ for provider in providers:
         MsSqlOperator(
             task_id=f'{provider}_extract_external_trips',
             dag=dag,
+            depends_on_past=False,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
             create table
@@ -505,6 +509,7 @@ for provider in providers:
         MsSqlOperator(
             task_id=f'{provider}_clean_extract_table_before',
             dag=dag,
+            depends_on_past=False,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
             if exists (
@@ -520,6 +525,7 @@ for provider in providers:
         MsSqlOperator(
             task_id=f'{provider}_clean_extract_table_after',
             dag=dag,
+            depends_on_past=False,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
             if exists (
@@ -535,6 +541,7 @@ for provider in providers:
         MsSqlOperator(
             task_id=f'{provider}_clean_stage_table_before',
             dag=dag,
+            depends_on_past=False,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
             if exists (
@@ -550,6 +557,7 @@ for provider in providers:
         MsSqlOperator(
             task_id=f'{provider}_clean_stage_table_after',
             dag=dag,
+            depends_on_past=False,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
             if exists (
@@ -565,6 +573,7 @@ for provider in providers:
         MsSqlOperator(
             task_id=f'{provider}_stage_trips',
             dag=dag,
+            depends_on_past=False,
             mssql_conn_id='azure_sql_server_full',
             sql=f'''
             create table etl.stage_trip_{provider}_{{{{ ts_nodash }}}}
