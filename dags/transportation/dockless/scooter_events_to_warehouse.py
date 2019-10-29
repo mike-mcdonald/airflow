@@ -283,6 +283,7 @@ for provider in providers:
             task_id=f'{provider}_extract_data_lake',
             dag=dag,
             depends_on_past=False,
+            pool=f'{provider}_api_pool',
             provide_context=True,
             python_callable=scooter_events_to_datalake,
             op_kwargs={
@@ -334,6 +335,7 @@ for provider in providers:
         dag=dag,
         depends_on_past=False,
         mssql_conn_id='azure_sql_server_full',
+        pool='scooter_azure_sql_server',
         sql=f'''
         create table etl.extract_event_{provider}_{{{{ ts_nodash }}}}
         with
@@ -379,6 +381,7 @@ for provider in providers:
         task_id=f'{provider}_provider_sync',
         mssql_conn_id='azure_sql_server_full',
         dag=dag,
+        pool='scooter_azure_sql_server',
         sql=f'''
         insert into
             dim.provider (
@@ -405,6 +408,7 @@ for provider in providers:
         task_id=f'{provider}_vehicle_sync',
         mssql_conn_id='azure_sql_server_full',
         dag=dag,
+        pool='scooter_azure_sql_server',
         sql=f'''
         insert into
             dim.vehicle (
@@ -435,6 +439,7 @@ for provider in providers:
         dag=dag,
         depends_on_past=False,
         mssql_conn_id='azure_sql_server_full',
+        pool='scooter_azure_sql_server',
         sql=f'''
         create table etl.stage_event_{provider}_{{{{ ts_nodash }}}}
         with
@@ -482,6 +487,7 @@ for provider in providers:
         dag=dag,
         depends_on_past=False,
         mssql_conn_id='azure_sql_server_full',
+        pool='scooter_azure_sql_server',
         sql=f'''
         if exists (
             select 1
@@ -497,6 +503,7 @@ for provider in providers:
         dag=dag,
         depends_on_past=False,
         mssql_conn_id='azure_sql_server_full',
+        pool='scooter_azure_sql_server',
         sql=f'''
         if exists (
             select 1
@@ -512,6 +519,7 @@ for provider in providers:
         dag=dag,
         depends_on_past=False,
         mssql_conn_id='azure_sql_server_full',
+        pool='scooter_azure_sql_server',
         sql=f'''
         if exists (
             select 1
@@ -527,6 +535,7 @@ for provider in providers:
         dag=dag,
         depends_on_past=False,
         mssql_conn_id='azure_sql_server_full',
+        pool='scooter_azure_sql_server',
         sql=f'''
         drop table etl.stage_event_{provider}_{{{{ ts_nodash }}}}
         '''
@@ -536,6 +545,7 @@ for provider in providers:
         task_id=f'{provider}_warehouse_update_event',
         dag=dag,
         mssql_conn_id='azure_sql_server_full',
+        pool='scooter_azure_sql_server',
         sql=f'''
         update
             fact.event
@@ -561,6 +571,7 @@ for provider in providers:
         task_id=f'{provider}_warehouse_insert_event',
         dag=dag,
         mssql_conn_id='azure_sql_server_full',
+        pool='scooter_azure_sql_server',
         sql=f'''
         insert into
             fact.event (
