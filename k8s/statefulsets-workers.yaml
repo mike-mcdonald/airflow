@@ -11,7 +11,7 @@ metadata:
         app: airflow
         component: worker
 spec:
-    serviceName: 'airflow-worker'
+    serviceName: "airflow-worker"
     updateStrategy:
         ## Kill the workers as soon as possible, the scheduler will restart the failed job later
         type: RollingUpdate
@@ -35,10 +35,10 @@ spec:
             containers:
                 - name: airflow-worker
                   imagePullPolicy: Always
-                  image: pudlmds.azurecr.io/airflow:1.10.5.16
+                  image: pudlmds.azurecr.io/airflow:1.10.5.17
                   envFrom:
                       - configMapRef:
-                            name: 'airflow-env'
+                            name: "airflow-env"
                   env:
                       - name: FERNET_KEY
                         valueFrom:
@@ -57,7 +57,7 @@ spec:
                             secretKeyRef:
                                 name: airflow-redis
                                 key: redis-password
-                  args: ['worker']
+                  args: ["worker"]
                   ports:
                       - name: wlog
                         containerPort: 8793

@@ -398,6 +398,7 @@ for provider in providers:
             task_id=f'{provider}_extract_data_lake',
             dag=dag,
             depends_on_past=False,
+            pool=f'{provider}_api_pool',
             provide_context=True,
             python_callable=process_trips_to_data_lake,
             op_kwargs={
@@ -451,6 +452,7 @@ for provider in providers:
             dag=dag,
             depends_on_past=False,
             mssql_conn_id='azure_sql_server_full',
+            pool='scooter_azure_sql_server',
             sql=f'''
             create table
                 etl.extract_trip_{provider}_{{{{ ts_nodash }}}}
@@ -511,6 +513,7 @@ for provider in providers:
             dag=dag,
             depends_on_past=False,
             mssql_conn_id='azure_sql_server_full',
+            pool='scooter_azure_sql_server',
             sql=f'''
             if exists (
                 select 1
@@ -527,6 +530,7 @@ for provider in providers:
             dag=dag,
             depends_on_past=False,
             mssql_conn_id='azure_sql_server_full',
+            pool='scooter_azure_sql_server',
             sql=f'''
             if exists (
                 select 1
@@ -543,6 +547,7 @@ for provider in providers:
             dag=dag,
             depends_on_past=False,
             mssql_conn_id='azure_sql_server_full',
+            pool='scooter_azure_sql_server',
             sql=f'''
             if exists (
                 select 1
@@ -559,6 +564,7 @@ for provider in providers:
             dag=dag,
             depends_on_past=False,
             mssql_conn_id='azure_sql_server_full',
+            pool='scooter_azure_sql_server',
             sql=f'''
             if exists (
                 select 1
@@ -575,6 +581,7 @@ for provider in providers:
             dag=dag,
             depends_on_past=False,
             mssql_conn_id='azure_sql_server_full',
+            pool='scooter_azure_sql_server',
             sql=f'''
             create table etl.stage_trip_{provider}_{{{{ ts_nodash }}}}
             with
@@ -635,6 +642,7 @@ for provider in providers:
             task_id=f'{provider}_warehouse_update_trip',
             dag=dag,
             mssql_conn_id='azure_sql_server_full',
+            pool='scooter_azure_sql_server',
             sql=f'''
             update
                 fact.trip
@@ -670,6 +678,7 @@ for provider in providers:
             task_id=f'{provider}_warehouse_insert_trip',
             dag=dag,
             mssql_conn_id='azure_sql_server_full',
+            pool='scooter_azure_sql_server',
             sql=f'''
             insert into fact.trip (
                 trip_id,

@@ -30,11 +30,11 @@ spec:
             serviceAccountName: airflow
             containers:
                 - name: airflow-scheduler
-                  image: pudlmds.azurecr.io/airflow:1.10.5.16
+                  image: pudlmds.azurecr.io/airflow:1.10.5.17
                   imagePullPolicy: Always
                   envFrom:
                       - configMapRef:
-                            name: 'airflow-env'
+                            name: "airflow-env"
                   env:
                       - name: FERNET_KEY
                         valueFrom:
@@ -54,4 +54,4 @@ spec:
                                 name: airflow-redis
                                 key: redis-password
                   resources: {}
-                  args: ['scheduler']
+                  args: ["scheduler"]
