@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: airflow-pgpool
+    labels:
+        app: airflow
+        component: database-pooler
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: airflow
+            component: database-pooler
+    template:
+        metadata:
+            labels:
+                app: airflow
+                component: database-pooler
+
+        spec:
+            restartPolicy: Always
+            serviceAccountName: airflow
+            containers:
+                - name: postgres
+                  image: bitnami/pgpool:4
+                  imagePullPolicy: IfNotPresent
+                  ports:
+                      - containerPort: 5432
+                  envFrom:
+                      - configMapRef:
+                            name: pgpool-env
+                  env:
+                      - name: PGPOOL_SR_CHECK_PASSWORD
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-pgpool
+                                key: pgpool-sr-password
+                      - name: PGPOOL_POSTGRES_PASSWORD
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-pgpool
+                                key: pgpool-postgres-password
+                      - name: PGPOOL_ADMIN_PASSWORD
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-pgpool
+                                key: pgpool-admin-password

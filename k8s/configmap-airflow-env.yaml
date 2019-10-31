@@ -10,7 +10,7 @@ data:
     ## Force UTC timezone
     TZ: Etc/UTC
     ## Postgres DB configuration
-    POSTGRES_HOST: 'airflow-postgres'
+    POSTGRES_HOST: 'airflow-pgpool'
     POSTGRES_PORT: '5432'
     POSTGRES_DB: 'airflow'
     ## Redis DB configuration

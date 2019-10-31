@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+    name: airflow-pgpool
+    labels:
+        app: airflow
+        component: database
+spec:
+    type: ClusterIP
+    selector:
+        app: airflow
+        component: database
+    ports:
+        - name: pgpool
+          protocol: TCP
+          port: 5432
+          targetPort: 5432

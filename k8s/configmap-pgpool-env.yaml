@@ -1,0 +1,14 @@
+---
+# Source: airflow/templates/configmap-env.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: 'pgpool-env'
+    labels:
+        app: airflow
+data:
+    PGPOOL_BACKEND_NODES: '0:postgres-0:5432,1:postgres-1:5432'
+    PGPOOL_SR_CHECK_USER: 'airflowadmin'
+    PGPOOL_ENABLE_LDAP: 'no'
+    PGPOOL_POSTGRES_USERNAME: 'postgres'
+    PGPOOL_ADMIN_USERNAME: 'admin'
