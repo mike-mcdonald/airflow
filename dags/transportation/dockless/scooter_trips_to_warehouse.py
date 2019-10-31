@@ -70,6 +70,8 @@ def process_trips_to_data_lake(**kwargs):
             f'Received no trips for time period {start_time} to {end_time}')
         return f'{kwargs["provider"]}_warehouse_skipped'
 
+    trips = trips.drop_duplicates(subset=['trip_id'])
+
     trips = trips.rename(index=str, columns={
         'trip_duration': 'duration',
         'trip_distance': 'distance'
@@ -371,10 +373,8 @@ skip_warehouse_tasks = []
 delete_data_lake_extract_tasks = []
 sql_extract_tasks = []
 stage_tasks = []
-clean_extract_before_tasks = []
-clean_extract_after_tasks = []
-clean_stage_before_tasks = []
-clean_stage_after_tasks = []
+clean_extract_tasks = []
+clean_stage_tasks = []
 warehouse_update_tasks = []
 warehouse_insert_tasks = []
 
@@ -398,6 +398,7 @@ for provider in providers:
             task_id=f'{provider}_extract_data_lake',
             dag=dag,
             depends_on_past=False,
+            pool=f'{provider}_api_pool',
             provide_context=True,
             python_callable=process_trips_to_data_lake,
             op_kwargs={
@@ -451,7 +452,15 @@ for provider in providers:
             dag=dag,
             depends_on_past=False,
             mssql_conn_id='azure_sql_server_full',
+            pool='scooter_azure_sql_server',
             sql=f'''
+            if exists (
+                select 1
+                from sysobjects
+                where name = 'extract_trip_{provider}_{{{{ ts_nodash }}}}'
+            )
+            drop table etl.extract_trip_{provider}_{{{{ ts_nodash }}}}
+
             create table
                 etl.extract_trip_{provider}_{{{{ ts_nodash }}}}
             with
@@ -505,12 +514,13 @@ for provider in providers:
             '''
         ))
 
-    clean_extract_before_tasks.append(
+    clean_extract_tasks.append(
         MsSqlOperator(
-            task_id=f'{provider}_clean_extract_table_before',
+            task_id=f'{provider}_clean_extract_table',
             dag=dag,
             depends_on_past=False,
             mssql_conn_id='azure_sql_server_full',
+            pool='scooter_azure_sql_server',
             sql=f'''
             if exists (
                 select 1
@@ -521,44 +531,13 @@ for provider in providers:
             '''
         ))
 
-    clean_extract_after_tasks.append(
+    clean_stage_tasks.append(
         MsSqlOperator(
-            task_id=f'{provider}_clean_extract_table_after',
+            task_id=f'{provider}_clean_stage_table',
             dag=dag,
             depends_on_past=False,
             mssql_conn_id='azure_sql_server_full',
-            sql=f'''
-            if exists (
-                select 1
-                from sysobjects
-                where name = 'extract_trip_{provider}_{{{{ ts_nodash }}}}'
-            )
-            drop table etl.extract_trip_{provider}_{{{{ ts_nodash }}}}
-            '''
-        ))
-
-    clean_stage_before_tasks.append(
-        MsSqlOperator(
-            task_id=f'{provider}_clean_stage_table_before',
-            dag=dag,
-            depends_on_past=False,
-            mssql_conn_id='azure_sql_server_full',
-            sql=f'''
-            if exists (
-                select 1
-                from sysobjects
-                where name = 'stage_trip_{provider}_{{{{ ts_nodash }}}}'
-            )
-            drop table etl.stage_trip_{provider}_{{{{ ts_nodash }}}}
-            '''
-        ))
-
-    clean_stage_after_tasks.append(
-        MsSqlOperator(
-            task_id=f'{provider}_clean_stage_table_after',
-            dag=dag,
-            depends_on_past=False,
-            mssql_conn_id='azure_sql_server_full',
+            pool='scooter_azure_sql_server',
             sql=f'''
             if exists (
                 select 1
@@ -575,7 +554,15 @@ for provider in providers:
             dag=dag,
             depends_on_past=False,
             mssql_conn_id='azure_sql_server_full',
+            pool='scooter_azure_sql_server',
             sql=f'''
+            if exists (
+                select 1
+                from sysobjects
+                where name = 'stage_trip_{provider}_{{{{ ts_nodash }}}}'
+            )
+            drop table etl.stage_trip_{provider}_{{{{ ts_nodash }}}}
+
             create table etl.stage_trip_{provider}_{{{{ ts_nodash }}}}
             with
             (
@@ -635,6 +622,7 @@ for provider in providers:
             task_id=f'{provider}_warehouse_update_trip',
             dag=dag,
             mssql_conn_id='azure_sql_server_full',
+            pool='scooter_azure_sql_server',
             sql=f'''
             update
                 fact.trip
@@ -670,6 +658,7 @@ for provider in providers:
             task_id=f'{provider}_warehouse_insert_trip',
             dag=dag,
             mssql_conn_id='azure_sql_server_full',
+            pool='scooter_azure_sql_server',
             sql=f'''
             insert into fact.trip (
                 trip_id,
@@ -758,13 +747,11 @@ for provider in providers:
     globals()[dag_id] = dag
 
 for i in range(len(providers)):
-    clean_extract_before_tasks[i] >> sql_extract_tasks[i]
     api_extract_tasks[i] >> [sql_extract_tasks[i],
                              skip_warehouse_tasks[i]]
 
-    clean_stage_before_tasks[i] >> stage_tasks[i]
     sql_extract_tasks[i] >> [delete_data_lake_extract_tasks[i], stage_tasks[i]]
 
+    stage_tasks[i] >> clean_extract_tasks[i]
     stage_tasks[i] >> [warehouse_insert_tasks[i],
-                       warehouse_update_tasks[i]] >> clean_stage_after_tasks[i]
-    stage_tasks[i] >> clean_extract_after_tasks[i]
+                       warehouse_update_tasks[i]] >> clean_stage_tasks[i]
