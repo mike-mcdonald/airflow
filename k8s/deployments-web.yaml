@@ -29,7 +29,7 @@ spec:
             restartPolicy: Always
             containers:
                 - name: airflow-web
-                  image: pudlmds.azurecr.io/airflow:1.10.5.17
+                  image: pudlmds.azurecr.io/airflow:1.10.5.18
                   imagePullPolicy: Always
                   ports:
                       - name: web
@@ -37,7 +37,7 @@ spec:
                         protocol: TCP
                   envFrom:
                       - configMapRef:
-                            name: "airflow-env"
+                            name: 'airflow-env'
                   env:
                       - name: FERNET_KEY
                         valueFrom:
@@ -57,10 +57,10 @@ spec:
                                 name: airflow-redis
                                 key: redis-password
                   resources: {}
-                  args: ["webserver"]
+                  args: ['webserver']
                   livenessProbe:
                       httpGet:
-                          path: "/health"
+                          path: '/health'
                           port: web
                       ## Keep 6 minutes the delay to allow clean wait of postgres and redis containers
                       initialDelaySeconds: 360

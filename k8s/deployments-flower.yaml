@@ -31,11 +31,11 @@ spec:
             restartPolicy: Always
             containers:
                 - name: airflow-flower
-                  image: pudlmds.azurecr.io/airflow:1.10.5.17
+                  image: pudlmds.azurecr.io/airflow:1.10.5.18
                   imagePullPolicy: Always
                   envFrom:
                       - configMapRef:
-                            name: "airflow-env"
+                            name: 'airflow-env'
                   env:
                       - name: FERNET_KEY
                         valueFrom:
@@ -58,10 +58,10 @@ spec:
                       - name: flower
                         containerPort: 5555
                         protocol: TCP
-                  args: ["flower"]
+                  args: ['flower']
                   livenessProbe:
                       httpGet:
-                          path: "//"
+                          path: '//'
                           port: flower
                       initialDelaySeconds: 60
                       periodSeconds: 60
