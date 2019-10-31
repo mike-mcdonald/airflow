@@ -70,7 +70,7 @@ EVENT_WEIGHT = {
 def scooter_events_to_datalake(**kwargs):
     end_time = kwargs.get('execution_date')
     pace = timedelta(hours=48) if datetime.now(
-    ) < end_time.add(2) else timedelta(hours=2)
+    ) < end_time.add(hours=48) else timedelta(hours=2)
     start_time = end_time - pace
 
     # Create the hook
