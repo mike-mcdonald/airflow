@@ -4,16 +4,38 @@ services:
         image: 'redis:5.0.5'
         # command: redis-server --requirepass redispass
 
-    postgres:
-        image: postgres:9.6
-        environment:
-            - POSTGRES_USER=airflow
-            - POSTGRES_PASSWORD=airflow
-            - POSTGRES_DB=airflow
-            - PGDATA=/var/lib/postgresql/data/pgdata
+    pg-0:
+        image: bitnami/postgresql-repmgr:10
+        restart: always
+        ports:
+            - 5432
         volumes:
-            - pgdata:/var/lib/postgresql/data/pgdata
-            - ./artifacts:/docker-entrypoint-initdb.d
+            - pg_0_data:/bitnami/postgresql
+        environment:
+            - POSTGRESQL_POSTGRES_PASSWORD=adminpassword
+            - POSTGRESQL_USERNAME=airflow
+            - POSTGRESQL_PASSWORD=airflow
+            - POSTGRESQL_DATABASE=airflow
+            - REPMGR_PASSWORD=repmgrpassword
+            - REPMGR_PRIMARY_HOST=pg-0
+            - REPMGR_PARTNER_NODES=pg-0
+            - REPMGR_NODE_NAME=pg-0
+            - REPMGR_NODE_NETWORK_NAME=pg-0
+    postgres:
+        image: bitnami/pgpool:4
+        ports:
+            - 5432:5432
+        volumes:
+            - ./pgpool/conf:/opt/bitnami/pgpool/conf
+        environment:
+            - PGPOOL_BACKEND_NODES=0:pg-0:5432
+            - PGPOOL_SR_CHECK_USER=airflow
+            - PGPOOL_SR_CHECK_PASSWORD=airflow
+            - PGPOOL_ENABLE_LDAP=no
+            - PGPOOL_POSTGRES_USERNAME=postgres
+            - PGPOOL_POSTGRES_PASSWORD=adminpassword
+            - PGPOOL_ADMIN_USERNAME=admin
+            - PGPOOL_ADMIN_PASSWORD=adminpassword
 
     webserver:
         image: pbotapps.azurecr.io/airflow
@@ -43,7 +65,6 @@ services:
             interval: 30s
             timeout: 30s
             retries: 3
-
     scheduler:
         image: pbotapps.azurecr.io/airflow
         restart: always
@@ -63,7 +84,6 @@ services:
             # - POSTGRES_DB=airflow
             # - REDIS_PASSWORD=redispass
         command: scheduler
-
     worker:
         image: pbotapps.azurecr.io/airflow
         restart: always
@@ -82,7 +102,6 @@ services:
             # - POSTGRES_DB=airflow
             # - REDIS_PASSWORD=redispass
         command: worker
-
     flower:
         image: pbotapps.azurecr.io/airflow
         restart: always
@@ -102,9 +121,9 @@ services:
             # - POSTGRES_DB=airflow
             # - REDIS_PASSWORD=redispass
         command: flower
-
     sharedstreets:
         image: pbotapps.azurecr.io/sharedstreets-api
         restart: always
 volumes:
-    pgdata:
+    pg_0_data:
+        driver: local
