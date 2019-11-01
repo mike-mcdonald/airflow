@@ -49,7 +49,7 @@ states_extract_task = MsSqlOperator(
     task_id='extract_active_states',
     dag=dag,
     mssql_conn_id='azure_sql_server_full',
-    sql=f'''
+    sql='''
     if exists (
         select 1
         from sysobjects
@@ -57,7 +57,7 @@ states_extract_task = MsSqlOperator(
     )
     drop table etl.extract_fleet_state_{{ ts_nodash }}
 
-    create table etl.extract_fleet_state_{{{{ ts_nodash }}}}
+    create table etl.extract_fleet_state_{{ ts_nodash }}
     with
     (
         distribution = round_robin,
@@ -75,28 +75,13 @@ states_extract_task = MsSqlOperator(
     from
         fact.state
     where
-        start_time <= cast('{{{{ execution_date.in_timezone('America/Los_Angeles').strftime('%m/%d/%Y %H:%M:%S.%f') }}}}' as datetime2)
+        start_time <= cast('{{ execution_date.in_timezone('America/Los_Angeles').strftime('%m/%d/%Y %H:%M:%S.%f') }}' as datetime2)
     and coalesce(
             end_time,
             cast('12/31/9999 23:59:59.9999' as datetime2)
-        ) >= cast('{{{{ execution_date.in_timezone('America/Los_Angeles').subtract(days=2).strftime('%m/%d/%Y %H:%M:%S.%f') }}}}' as datetime2)
+        ) >= cast('{{ execution_date.in_timezone('America/Los_Angeles').subtract(days=2).strftime('%m/%d/%Y %H:%M:%S.%f') }}' as datetime2)
     ''')
 
-clean_extract_before_task = MsSqlOperator(
-    task_id=f'clean_extract_table_before',
-    dag=dag,
-    mssql_conn_id='azure_sql_server_full',
-    sql='''
-    if exists (
-        select 1
-        from sysobjects
-        where name = 'extract_fleet_state_{{ ts_nodash }}'
-    )
-    drop table etl.extract_fleet_state_{{ ts_nodash }}
-    '''
-)
-
-clean_extract_before_task >> states_extract_task
 
 clean_extract_after_task = MsSqlOperator(
     task_id=f'clean_extract_table_after',
@@ -117,6 +102,13 @@ fleet_stage_task = MsSqlOperator(
     dag=dag,
     mssql_conn_id='azure_sql_server_full',
     sql='''
+    if exists (
+        select 1
+        from sysobjects
+        where name = 'stage_fleet_{{ ts_nodash }}'
+    )
+    drop table etl.stage_fleet_{{ ts_nodash }}
+
     create table etl.stage_fleet_{{ ts_nodash }}
     with (
         distribution = round_robin,
@@ -186,8 +178,8 @@ fleet_extract_task >> fleet_stage_task
 
 states_extract_task >> fleet_stage_task >> clean_extract_after_task
 
-clean_stage_task_before = MsSqlOperator(
-    task_id='clean_stage_table_before',
+clean_stage_task_after = MsSqlOperator(
+    task_id='clean_stage_table_after',
     dag=dag,
     mssql_conn_id='azure_sql_server_full',
     sql='''
@@ -200,16 +192,6 @@ clean_stage_task_before = MsSqlOperator(
     '''
 )
 
-clean_stage_task_after = MsSqlOperator(
-    task_id='clean_stage_table_after',
-    dag=dag,
-    mssql_conn_id='azure_sql_server_full',
-    sql='''
-    drop table etl.stage_fleet_{{ ts_nodash }}
-    '''
-)
-
-clean_stage_task_before >> fleet_stage_task
 
 fleet_warehouse_update_task = MsSqlOperator(
     task_id='warehouse_update_fleet',
