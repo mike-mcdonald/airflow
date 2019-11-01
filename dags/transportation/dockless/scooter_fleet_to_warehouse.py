@@ -1,6 +1,6 @@
-"""
+'''
 DAG for ETL Processing of Dockless Mobility Provider Data
-"""
+'''
 from datetime import datetime, timedelta
 
 import airflow
@@ -13,43 +13,50 @@ from airflow.operators.mobility_plugin import (
 )
 
 default_args = {
-    "owner": "airflow",
-    "depends_on_past": True,
-    "start_date":  datetime(2019, 4, 26),
-    "email": ["pbotsqldbas@portlandoregon.gov"],
-    "email_on_failure": True,
-    "email_on_retry": False,
-    "retries": 9,
-    "retry_delay": timedelta(minutes=2),
-    "concurrency": 1,
-    "max_active_runs": 1,
-    # "queue": "bash_queue",
-    # "pool": "backfill",
-    # "priority_weight": 10,
-    # "end_date": datetime(2016, 1, 1),
+    'owner': 'airflow',
+    'depends_on_past': True,
+    'start_date':  datetime(2019, 4, 26),
+    'email': ['pbotsqldbas@portlandoregon.gov'],
+    'email_on_failure': True,
+    'email_on_retry': False,
+    'retries': 9,
+    'retry_delay': timedelta(minutes=2),
+    'concurrency': 1,
+    'max_active_runs': 1,
+    # 'queue': 'bash_queue',
+    # 'pool': 'backfill',
+    # 'priority_weight': 10,
+    # 'end_date': datetime(2016, 1, 1),
 }
 
 dag = DAG(
-    dag_id="scooter_fleet_to_warehouse",
+    dag_id='scooter_fleet_to_warehouse',
     default_args=default_args,
     catchup=True,
-    schedule_interval="@daily"
+    schedule_interval='@daily'
 )
 
 fleet_extract_task = MobilityFleetToSqlExtractOperator(
-    task_id="build_fleet_extract",
+    task_id='build_fleet_extract',
     dag=dag,
-    sql_conn_id="azure_sql_server_default",
-    data_lake_conn_id="azure_data_lake_default",
-    fleet_local_path="/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/{{ ts_nodash }}.csv",
-    fleet_remote_path="/transportation/mobility/etl/fleet_count/{{ ts_nodash }}.csv"
+    sql_conn_id='azure_sql_server_default',
+    data_lake_conn_id='azure_data_lake_default',
+    fleet_local_path='/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/{{ ts_nodash }}.csv',
+    fleet_remote_path='/transportation/mobility/etl/fleet_count/{{ ts_nodash }}.csv'
 )
 
 states_extract_task = MsSqlOperator(
-    task_id="extract_active_states",
+    task_id='extract_active_states',
     dag=dag,
-    mssql_conn_id="azure_sql_server_full",
-    sql=f"""
+    mssql_conn_id='azure_sql_server_full',
+    sql=f'''
+    if exists (
+        select 1
+        from sysobjects
+        where name = 'extract_fleet_state_{{ ts_nodash }}'
+    )
+    drop table etl.extract_fleet_state_{{ ts_nodash }}
+
     create table etl.extract_fleet_state_{{{{ ts_nodash }}}}
     with
     (
@@ -68,12 +75,12 @@ states_extract_task = MsSqlOperator(
     from
         fact.state
     where
-        start_time <= cast('{{{{ execution_date.in_timezone('America/Los_Angeles').strftime("%m/%d/%Y %H:%M:%S.%f") }}}}' as datetime2)
+        start_time <= cast('{{{{ execution_date.in_timezone('America/Los_Angeles').strftime('%m/%d/%Y %H:%M:%S.%f') }}}}' as datetime2)
     and coalesce(
             end_time,
             cast('12/31/9999 23:59:59.9999' as datetime2)
-        ) >= cast('{{{{ execution_date.in_timezone('America/Los_Angeles').subtract(days=2).strftime("%m/%d/%Y %H:%M:%S.%f") }}}}' as datetime2)
-    """)
+        ) >= cast('{{{{ execution_date.in_timezone('America/Los_Angeles').subtract(days=2).strftime('%m/%d/%Y %H:%M:%S.%f') }}}}' as datetime2)
+    ''')
 
 clean_extract_before_task = MsSqlOperator(
     task_id=f'clean_extract_table_before',
@@ -106,9 +113,9 @@ clean_extract_after_task = MsSqlOperator(
 )
 
 fleet_stage_task = MsSqlOperator(
-    task_id="stage_fleet_extract",
+    task_id='stage_fleet_extract',
     dag=dag,
-    mssql_conn_id="azure_sql_server_full",
+    mssql_conn_id='azure_sql_server_full',
     sql='''
     create table etl.stage_fleet_{{ ts_nodash }}
     with (
@@ -180,9 +187,9 @@ fleet_extract_task >> fleet_stage_task
 states_extract_task >> fleet_stage_task >> clean_extract_after_task
 
 clean_stage_task_before = MsSqlOperator(
-    task_id="clean_stage_table_before",
+    task_id='clean_stage_table_before',
     dag=dag,
-    mssql_conn_id="azure_sql_server_full",
+    mssql_conn_id='azure_sql_server_full',
     sql='''
     if exists (
         select 1
@@ -194,9 +201,9 @@ clean_stage_task_before = MsSqlOperator(
 )
 
 clean_stage_task_after = MsSqlOperator(
-    task_id="clean_stage_table_after",
+    task_id='clean_stage_table_after',
     dag=dag,
-    mssql_conn_id="azure_sql_server_full",
+    mssql_conn_id='azure_sql_server_full',
     sql='''
     drop table etl.stage_fleet_{{ ts_nodash }}
     '''
@@ -205,10 +212,10 @@ clean_stage_task_after = MsSqlOperator(
 clean_stage_task_before >> fleet_stage_task
 
 fleet_warehouse_update_task = MsSqlOperator(
-    task_id="warehouse_update_fleet",
+    task_id='warehouse_update_fleet',
     dag=dag,
-    mssql_conn_id="azure_sql_server_full",
-    sql="""
+    mssql_conn_id='azure_sql_server_full',
+    sql='''
     update
         fact.fleet_count
     set
@@ -224,13 +231,13 @@ fleet_warehouse_update_task = MsSqlOperator(
         and coalesce(source.city_key, -1) = coalesce(fact.fleet_count.city_key, -1)
         and coalesce(source.pattern_area_key, -1) = coalesce(fact.fleet_count.pattern_area_key, -1)
         and source.time = fact.fleet_count.time
-    """
+    '''
 )
 fleet_warehouse_insert_task = MsSqlOperator(
-    task_id="warehouse_insert_fleet",
+    task_id='warehouse_insert_fleet',
     dag=dag,
-    mssql_conn_id="azure_sql_server_full",
-    sql="""
+    mssql_conn_id='azure_sql_server_full',
+    sql='''
     insert
         fact.fleet_count (
             date_key,
@@ -271,7 +278,7 @@ fleet_warehouse_insert_task = MsSqlOperator(
             and coalesce(source.pattern_area_key, -1) = coalesce(target.pattern_area_key, -1)
             and source.time = target.time
     )
-    """
+    '''
 )
 
 fleet_stage_task >> fleet_warehouse_insert_task >> clean_stage_task_after

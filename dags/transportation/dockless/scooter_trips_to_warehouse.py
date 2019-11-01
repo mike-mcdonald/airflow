@@ -52,7 +52,7 @@ default_args = {
 def process_trips_to_data_lake(**kwargs):
     end_time = kwargs['execution_date']
     pace = timedelta(hours=48) if datetime.now(
-    ) < end_time.add(2) else timedelta(hours=2)
+    ) < end_time.add(hours=48) else timedelta(hours=2)
     start_time = end_time - pace
 
     # Create the hook
