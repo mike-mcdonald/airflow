@@ -86,9 +86,10 @@ def process_trips_to_data_lake(**kwargs):
         lambda x: ','.join(sorted(x)))
     trips['start_time'] = trips.start_time.map(
         lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
-    trips['start_time'] = trips.start_time.dt.round('L')
     trips['start_time'] = trips.start_time.map(
         lambda x: datetime.replace(x, tzinfo=None))  # Remove timezone info after shifting
+    trips['start_time'] = trips.start_time.dt.round('L')
+
     trips['start_date_key'] = trips.start_time.map(
         lambda x: int(x.strftime('%Y%m%d')))
     trips['start_time'] = trips.start_time.map(
