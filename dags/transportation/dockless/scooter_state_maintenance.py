@@ -28,7 +28,7 @@ default_args = {
 dag = DAG(
     dag_id="scooter_state_maintenance",
     default_args=default_args,
-    catchup=True,
+    catchup=False,
     schedule_interval="@daily"
 )
 
@@ -146,21 +146,21 @@ stage_states_task = MsSqlOperator(
         s1.[start_pattern_area_key],
         s1.[start_zipcode_key],
         s1.[start_battery_pct],
-        [next_state].[start_hash],
-        [next_state].[start_date_key],
-        [next_state].[start_time],
-        [next_state].[start_state],
-        [next_state].[start_event],
-        [next_state].[start_cell_key],
-        [next_state].[start_census_block_group_key],
-        [next_state].[start_city_key],
-        [next_state].[start_county_key],
-        [next_state].[start_neighborhood_key],
-        [next_state].[start_park_key],
-        [next_state].[start_parking_district_key],
-        [next_state].[start_pattern_area_key],
-        [next_state].[start_zipcode_key],
-        [next_state].[start_battery_pct],
+        [next_state].[hash],
+        [next_state].[date_key],
+        [next_state].[datetime],
+        [next_state].[state],
+        [next_state].[event],
+        [next_state].[cell_key],
+        [next_state].[census_block_group_key],
+        [next_state].[city_key],
+        [next_state].[county_key],
+        [next_state].[neighborhood_key],
+        [next_state].[park_key],
+        [next_state].[parking_district_key],
+        [next_state].[pattern_area_key],
+        [next_state].[zipcode_key],
+        [next_state].[battery_pct],
         coalesce(
             s1.[associated_trip],
             [next_state].[associated_trip]
@@ -168,38 +168,38 @@ stage_states_task = MsSqlOperator(
         datediff(
             second,
             s1.[start_time],
-            [next_state].[start_time]
+            [next_state].[datetime]
         ),
         s1.[seen],
         s1.[batch]
     from
         etl.extract_maintenance_states as s1
-        outer apply (
-            select top 1
-                start_hash,
-                start_date_key,
-                start_state,
-                start_event,
-                start_time,
-                start_cell_key,
-                start_census_block_group_key,
-                start_city_key,
-                start_county_key,
-                start_neighborhood_key,
-                start_park_key,
-                start_parking_district_key,
-                start_pattern_area_key,
-                start_zipcode_key,
-                start_battery_pct,
-                associated_trip
-            from
-                fact.state as s2
-            where
-                s2.vehicle_key = s1.vehicle_key
-                and s2.start_time > s1.start_time
-            order by
-                s2.start_time
-        ) as next_state
+    outer apply (
+        select top 1
+            hash,
+            date_key,
+            state,
+            event,
+            datetime,
+            cell_key,
+            census_block_group_key,
+            city_key,
+            county_key,
+            neighborhood_key,
+            park_key,
+            parking_district_key,
+            pattern_area_key,
+            zipcode_key,
+            battery_pct,
+            associated_trip
+        from
+            fact.event as s2
+        where
+            s2.vehicle_key = s1.vehicle_key
+            and s2.datetime > s1.start_time
+        order by
+            s2.datetime
+    ) as next_state
     where
         batch = '{{ ts_nodash }}'
     """
