@@ -96,9 +96,9 @@ def process_trips_to_data_lake(**kwargs):
         lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
     trips['end_time'] = trips.end_time.map(
         lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
-    trips['end_time'] = trips.end_time.dt.round('L')
     trips['end_time'] = trips.end_time.map(
         lambda x: datetime.replace(x, tzinfo=None))
+    trips['end_time'] = trips.end_time.dt.round('L')
     trips['end_date_key'] = trips.end_time.map(
         lambda x: int(x.strftime('%Y%m%d')))
     trips['end_time'] = trips.end_time.map(
@@ -133,28 +133,6 @@ def process_trips_to_data_lake(**kwargs):
     # Pull out the origin and destination
     trips['origin'] = trips.route.map(get_origin)
     trips['destination'] = trips.route.map(get_destination)
-
-    logging.debug('Extracting route dataframe...')
-
-    route_df = gpd.GeoDataFrame(
-        pd.concat(trips.route.values, sort=False).sort_values(
-            by=['trip_id', 'timestamp'], ascending=True
-        )
-    ).reset_index(drop=True)
-    route_df.crs = {'init': 'epsg:4326'}
-    route_df['datetime'] = route_df.timestamp.map(
-        lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
-    route_df['datetime'] = route_df.datetime.dt.round('L')
-    route_df['datetime'] = route_df.datetime.map(
-        lambda x: datetime.replace(x, tzinfo=None))
-    route_df['date_key'] = route_df.datetime.map(
-        lambda x: int(x.strftime('%Y%m%d')))
-    # Generate a hash to aid in merge operations
-    route_df['hash'] = route_df.apply(lambda x: hashlib.md5((
-        x.trip_id + x.provider_id + x.datetime.strftime('%d%m%Y%H%M%S%f')
-    ).encode('utf-8')).hexdigest(), axis=1)
-    route_df['datetime'] = route_df.datetime.map(
-        lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
 
     # delete before passing to dataframe write, segmentation fault otherwise
     del trips['route']
@@ -364,7 +342,7 @@ def process_trips_to_data_lake(**kwargs):
 
     os.remove(kwargs['templates_dict']['trips_local_path'])
 
-    return f'{kwargs["provider"]}_extract_external_trips'
+    return f'{kwargs['provider']}_extract_external_trips'
 
 
 providers = ['lime', 'spin', 'bolt', 'shared', 'razor', 'bird']
