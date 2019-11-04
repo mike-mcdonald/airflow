@@ -342,7 +342,7 @@ def process_trips_to_data_lake(**kwargs):
 
     os.remove(kwargs['templates_dict']['trips_local_path'])
 
-    return f'{kwargs['provider']}_extract_external_trips'
+    return f'{kwargs["provider"]}_extract_external_trips'
 
 
 providers = ['lime', 'spin', 'bolt', 'shared', 'razor', 'bird']
