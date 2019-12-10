@@ -40,11 +40,10 @@ dag = DAG(
 )
 
 
-def add_default_columns(context, dataframe, hash_columns):
+def add_default_columns(context, dataframe, time_columns, hash_columns):
     def hash(jam):
-        cols = [col for col in jam if col in hash_columns]
         s = ''
-        for col in cols:
+        for col in hash_columns:
             s = s + str(jam.get(col))
 
         return hashlib.md5(s.encode('utf-8')).hexdigest()
@@ -59,6 +58,14 @@ def add_default_columns(context, dataframe, hash_columns):
         lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f'))
     dataframe['seen'] = dataframe.seen.map(lambda x: x[:-3])
 
+    for time_col in time_columns:
+        dataframe[time_col] = dataframe[time_col]map(
+            lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
+        dataframe[time_col] = dataframe[time_col]dt.round('L')
+        dataframe[time_col] = dataframe[time_col]map(
+            lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f'))
+        dataframe[time_col] = dataframe[time_col]map(lambda x: x[:-3])
+
     return dataframe
 
 
@@ -68,14 +75,7 @@ def alerts_to_data_lake(**kwargs):
     alerts = hook.get_alerts()
 
     alerts = add_default_columns(
-        kwargs, alerts, ['uuid', 'pubMillis'])
-
-    alerts['pubMillis'] = alerts.pubMillis.map(
-        lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
-    alerts['pubMillis'] = alerts.pubMillis.dt.round('L')
-    alerts['pubMillis'] = alerts.pubMillis.map(
-        lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f'))
-    alerts['pubMillis'] = alerts.pubMillis.map(lambda x: x[:-3])
+        kwargs, alerts, ['pubMillis'], ['uuid', 'pubMillis'])
 
     alerts['location'] = alerts.location.map(lambda x: [x['x'], x['y']])
     alerts['location'] = alerts.location.apply(Point)
@@ -101,14 +101,7 @@ def jams_to_data_lake(**kwargs):
     jams = hook.get_trafficjams()
 
     jams = add_default_columns(
-        kwargs, jams, ['uuid', 'pubMillis'])
-
-    jams['pubMillis'] = jams.pubMillis.map(
-        lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
-    jams['pubMillis'] = jams.pubMillis.dt.round('L')
-    jams['pubMillis'] = jams.pubMillis.map(
-        lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f'))
-    jams['pubMillis'] = jams.pubMillis.map(lambda x: x[:-3])
+        kwargs, jams, ['pubMillis'], ['uuid', 'pubMillis'])
 
     jams['line'] = jams.line.map(lambda l: [[x['x'], x['y']] for x in l])
     jams['line'] = jams.line.apply(LineString)
@@ -134,28 +127,10 @@ def irregularities_to_data_lake(**kwargs):
     irregularities = hook.get_irregularities()
 
     irregularities = add_default_columns(
-        kwargs, irregularities, ['id', 'detectionDateMillis'])
+        kwargs, irregularities, ['detectionDateMillis', 'updateDateMillis'], ['id', 'detectionDateMillis'])
 
     del irregularities['detectionDate']
     del irregularities['updateDate']
-
-    irregularities['detectionDateMillis'] = irregularities.detectionDateMillis.map(
-        lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
-    irregularities['detectionDateMillis'] = irregularities.detectionDateMillis.dt.round(
-        'L')
-    irregularities['detectionDateMillis'] = irregularities.detectionDateMillis.map(
-        lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f'))
-    irregularities['detectionDateMillis'] = irregularities.detectionDateMillis.map(
-        lambda x: x[:-3])
-
-    irregularities['updateDateMillis'] = irregularities.updateDateMillis.map(
-        lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
-    irregularities['updateDateMillis'] = irregularities.updateDateMillis.dt.round(
-        'L')
-    irregularities['updateDateMillis'] = irregularities.updateDateMillis.map(
-        lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f'))
-    irregularities['updateDateMillis'] = irregularities.updateDateMillis.map(
-        lambda x: x[:-3])
 
     irregularities['line'] = irregularities.line.map(
         lambda l: [[x['x'], x['y']] for x in l])
