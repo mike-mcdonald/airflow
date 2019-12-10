@@ -10,7 +10,6 @@ import pytz
 import airflow
 from airflow import DAG
 
-from airflow.operators.mssql_operator import MsSqlOperator
 from airflow.operators.python_operator import PythonOperator
 
 from airflow.hooks.azure_plugin import AzureDataLakeHook
@@ -30,7 +29,7 @@ default_args = {
 }
 
 dag = DAG(
-    dag_id='waze_trafficjams_to_warehouse',
+    dag_id='waze_jams_to_warehouse',
     catchup=False,
     default_args=default_args,
     schedule_interval='@daily'
@@ -222,28 +221,4 @@ parse_datalake_files_task = PythonOperator(
     provide_context=True,
     python_callable=process_datalake_files,
     op_kwargs={'azure_datalake_conn_id': 'azure_datalake_default'}
-)
-
-
-event_external_stage_task = MsSqlOperator(
-    task_id='extract_external_batch',
-    dag=dag,
-    mssql_conn_id='azure_sql_server_full',
-    sql='''
-    insert into
-        etl.extract_trafficjam (
-            [hash],
-            [uuid],
-            [pubMillis],
-
-        )
-    select
-        [hash],
-        [uuid],
-        [start_time]
-    from
-        etl.external_jams
-    where
-        batch = '{{ ts_nodash }}'
-    '''
 )
