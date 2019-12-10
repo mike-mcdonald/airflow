@@ -59,12 +59,12 @@ def add_default_columns(context, dataframe, time_columns, hash_columns):
     dataframe['seen'] = dataframe.seen.map(lambda x: x[:-3])
 
     for time_col in time_columns:
-        dataframe[time_col] = dataframe[time_col]map(
+        dataframe[time_col] = dataframe[time_col].map(
             lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
-        dataframe[time_col] = dataframe[time_col]dt.round('L')
-        dataframe[time_col] = dataframe[time_col]map(
+        dataframe[time_col] = dataframe[time_col].dt.round('L')
+        dataframe[time_col] = dataframe[time_col].map(
             lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f'))
-        dataframe[time_col] = dataframe[time_col]map(lambda x: x[:-3])
+        dataframe[time_col] = dataframe[time_col].map(lambda x: x[:-3])
 
     return dataframe
 
