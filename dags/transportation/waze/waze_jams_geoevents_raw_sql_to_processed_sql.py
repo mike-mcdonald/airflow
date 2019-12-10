@@ -18,7 +18,7 @@ from airflow.operators.python_operator import PythonOperator
 
 from airflow.hooks.azure_plugin import AzureDataLakeHook
 from airflow.hooks.dataframe_plugin import MsSqlDataFrameHook
-from airflow.hooks.waze_plugin import WazeHook
+from airflow.operators.mssql_plugin import MsSqlOperator
 
 default_args = {
     'owner': 'airflow',
@@ -87,18 +87,18 @@ def extract_jams(**kwargs):
 
     df['batch'] = kwargs.get('ts_nodash')
 
-    # process dataframe
+    # process dataframe groups
     grouped = df.groupby(by='hash')
 
     df[['start_time', 'min_level', 'min_speed', 'min_delay',
-        'min_length']] = grouped.min()[['pubMillis', 'level', 'speed', 'delay',
-                                        'length']]
+        'min_length']] = grouped[['pubMillis', 'level', 'speed', 'delay',
+                                  'length']].transform('min')
     df[['end_time', 'max_level', 'max_speed', 'max_delay',
-        'max_length']] = grouped.max()[['seen', 'level', 'speed', 'delay',
-                                        'length']]
+        'max_length']] = grouped[['seen', 'level', 'speed', 'delay',
+                                  'length']].transform('max')
     df[['avg_level', 'avg_speed', 'avg_delay',
-        'avg_length']] = grouped.mean()[['level', 'speed', 'delay',
-                                         'length']]
+        'avg_length']] = grouped[['level', 'speed', 'delay',
+                                  'length']].transform('mean')
     df['times_seen'] = grouped.count()['uuid']
 
     hook.write_dataframe(df[['hash', 'start_time', 'end_time', 'min_level', 'min_speed', 'min_delay',
@@ -121,7 +121,7 @@ jams_extract_task = PythonOperator(
     python_callable=extract_jams,
     provide_context=True,
     op_kwargs={
-        'sql_server_conn_id': 'local_sql_waze'
+        'sql_server_conn_id': 'local_sql_waze',
         'azure_data_lake_conn_id': 'azure_data_lake_default',
     },
     templates_dict={
@@ -130,10 +130,10 @@ jams_extract_task = PythonOperator(
     }
 )
 
-clean_extract_task = MsSqlOperator()
+# clean_extract_task = MsSqlOperator()
 
-clean_stage_before_task = MsSqlOperator()
+# clean_stage_before_task = MsSqlOperator()
 
-clean_stage_after_task = MsSqlOperator()
+# clean_stage_after_task = MsSqlOperator()
 
-jams_stage_task = MsSqlOperator()
+# jams_stage_task = MsSqlOperator()
