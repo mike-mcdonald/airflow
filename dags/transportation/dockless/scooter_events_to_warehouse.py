@@ -22,7 +22,7 @@ from shapely.wkt import loads
 import airflow
 from airflow import DAG
 from airflow.operators.dummy_operator import DummyOperator
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python_operator import BranchPythonOperator
 
 from airflow.hooks.azure_plugin import AzureDataLakeHook
 from airflow.hooks.mobility_plugin import MobilityProviderHook
@@ -38,38 +38,20 @@ from airflow.operators.mobility_plugin import (
 default_args = {
     'owner': 'airflow',
     'depends_on_past': True,
-    'start_date':  datetime(2019, 4, 26),
+    'start_date':  datetime(2019, 4, 27),
     'email': ['pbotsqldbas@portlandoregon.gov'],
     'email_on_failure': True,
     'email_on_retry': False,
     'retries': 9,
-    'retry_delay': timedelta(minutes=1),
-    'concurrency': 1,
-    'max_active_runs': 1
+    'retry_delay': timedelta(seconds=10),
     # 'queue': 'bash_queue',
     # 'pool': 'backfill',
     # 'priority_weight': 10,
     # 'end_date': datetime(2016, 1, 1),
 }
 
-dag = DAG(
-    dag_id='scooter_events_to_warehouse',
-    default_args=default_args,
-    catchup=True,
-    schedule_interval='@hourly',
-)
 
 providers = ['lime', 'spin', 'bolt', 'shared', 'razor', 'bird']
-
-task1 = DummyOperator(
-    task_id='provider_extract_start',
-    dag=dag
-)
-
-task2 = DummyOperator(
-    task_id='provider_extract_complete',
-    dag=dag
-)
 
 EVENT_WEIGHT = {
     'service_start': 1,
@@ -87,7 +69,8 @@ EVENT_WEIGHT = {
 
 def scooter_events_to_datalake(**kwargs):
     end_time = kwargs.get('execution_date')
-    pace = timedelta(hours=48)
+    pace = timedelta(hours=48) if datetime.now(
+    ) < end_time.add(hours=48) else timedelta(hours=2)
     start_time = end_time - pace
 
     # Create the hook
@@ -102,7 +85,7 @@ def scooter_events_to_datalake(**kwargs):
     if len(events) <= 0:
         logging.warning(
             f'Received no events for time period {start_time} to {end_time}')
-        return
+        return f'{kwargs["provider"]}_warehouse_skipped'
 
     events = events.rename(index=str, columns={
         'event_type': 'state',
@@ -135,7 +118,7 @@ def scooter_events_to_datalake(**kwargs):
 
     events = events.drop_duplicates(subset='event_hash')
 
-    events['batch'] = kwargs.get('ts_nodash')
+    events['batch'] = kwargs['templates_dict']['batch']
     events['seen'] = datetime.now()
     events['seen'] = events.seen.dt.round('L')
     events['seen'] = events.seen.map(
@@ -263,65 +246,111 @@ def scooter_events_to_datalake(**kwargs):
 
     os.remove(kwargs.get('templates_dict').get('events_local_path'))
 
+    return f'{kwargs["provider"]}_extract_events-sql'
 
-remote_paths_delete_tasks = []
+
+api_extract_tasks = []
+skip_warehouse_tasks = []
+delete_data_lake_extract_tasks = []
+sql_extract_tasks = []
+provider_sync_tasks = []
+vehicle_sync_tasks = []
+stage_tasks = []
+clean_extract_tasks = []
+clean_stage_tasks = []
+event_warehouse_update_tasks = []
+event_warehouse_insert_tasks = []
+
 
 # Extract data from providers and stage in tables
 for provider in providers:
+    dag_id = f'{provider}_events_to_warehouse'
+    dag = DAG(
+        dag_id=dag_id,
+        default_args=default_args,
+        catchup=True,
+        schedule_interval='@hourly',
+    )
     mobility_provider_conn_id = f'mobility_provider_{provider}'
     mobility_provider_token_conn_id = f'mobility_provider_{provider}_token'
 
     events_remote_path = f'/transportation/mobility/etl/event/{provider}-{{{{ ts_nodash }}}}.csv'
 
-    event_extract_task = PythonOperator(
-        task_id=f'loading_{provider}_events',
-        dag=dag,
-        provide_context=True,
-        python_callable=scooter_events_to_datalake,
-        op_kwargs={
-            'mobility_provider_conn_id': mobility_provider_conn_id,
-            'mobility_provider_token_conn_id': mobility_provider_token_conn_id,
-            'sql_conn_id': 'azure_sql_server_default',
-            'data_lake_conn_id': 'azure_data_lake_default',
-        },
-        templates_dict={
-            'events_local_path': f'/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/{provider}-{{{{ ts_nodash }}}}.csv',
-            'events_remote_path': f'/transportation/mobility/etl/event/{provider}-{{{{ ts_nodash }}}}.csv',
-            'cities_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/cities-{{ ts_nodash }}.csv',
-            'cities_remote_path': '/transportation/mobility/dim/cities.csv',
-            'parking_districts_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/parking_districts-{{ ts_nodash }}.csv',
-            'parking_districts_remote_path': '/transportation/mobility/dim/parking_districts.csv',
-            'pattern_areas_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/pattern_areas-{{ ts_nodash }}.csv',
-            'pattern_areas_remote_path': '/transportation/mobility/dim/pattern_areas.csv',
-            'census_blocks_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/census_block_groups-{{ ts_nodash }}.csv',
-            'census_blocks_remote_path': '/transportation/mobility/dim/census_block_groups.csv',
-            'counties_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/counties-{{ ts_nodash }}.csv',
-            'counties_remote_path': '/transportation/mobility/dim/counties.csv',
-            'neighborhoods_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/neighborhoods-{{ ts_nodash }}.csv',
-            'neighborhoods_remote_path': '/transportation/mobility/dim/neighborhoods.csv',
-            'parks_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/parks-{{ ts_nodash }}.csv',
-            'parks_remote_path': '/transportation/mobility/dim/parks.csv',
-            'zipcodes_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/zipcodes-{{ ts_nodash }}.csv',
-            'zipcodes_remote_path': '/transportation/mobility/dim/zipcodes.csv',
-        })
+    api_extract_tasks.append(
+        BranchPythonOperator(
+            task_id=f'{provider}_extract_data_lake',
+            dag=dag,
+            depends_on_past=False,
+            pool=f'{provider}_api_pool',
+            provide_context=True,
+            python_callable=scooter_events_to_datalake,
+            op_kwargs={
+                'provider': provider,
+                'mobility_provider_conn_id': mobility_provider_conn_id,
+                'mobility_provider_token_conn_id': mobility_provider_token_conn_id,
+                'sql_conn_id': 'azure_sql_server_default',
+                'data_lake_conn_id': 'azure_data_lake_default',
+            },
+            templates_dict={
+                'batch': f'{provider}-{{{{ ts_nodash }}}}',
+                'events_local_path': f'/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/{provider}-{{{{ ts_nodash }}}}.csv',
+                'events_remote_path': events_remote_path,
+                'cities_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/cities-{{ ts_nodash }}.csv',
+                'cities_remote_path': '/transportation/mobility/dim/cities.csv',
+                'parking_districts_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/parking_districts-{{ ts_nodash }}.csv',
+                'parking_districts_remote_path': '/transportation/mobility/dim/parking_districts.csv',
+                'pattern_areas_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/pattern_areas-{{ ts_nodash }}.csv',
+                'pattern_areas_remote_path': '/transportation/mobility/dim/pattern_areas.csv',
+                'census_blocks_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/census_block_groups-{{ ts_nodash }}.csv',
+                'census_blocks_remote_path': '/transportation/mobility/dim/census_block_groups.csv',
+                'counties_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/counties-{{ ts_nodash }}.csv',
+                'counties_remote_path': '/transportation/mobility/dim/counties.csv',
+                'neighborhoods_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/neighborhoods-{{ ts_nodash }}.csv',
+                'neighborhoods_remote_path': '/transportation/mobility/dim/neighborhoods.csv',
+                'parks_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/parks-{{ ts_nodash }}.csv',
+                'parks_remote_path': '/transportation/mobility/dim/parks.csv',
+                'zipcodes_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/zipcodes-{{ ts_nodash }}.csv',
+                'zipcodes_remote_path': '/transportation/mobility/dim/zipcodes.csv',
+            }))
 
-    remote_paths_delete_tasks.append(
-        AzureDataLakeRemoveOperator(task_id=f'delete_{provider}_extract',
+    skip_warehouse_tasks.append(
+        DummyOperator(
+            task_id=f'{provider}_warehouse_skipped',
+            dag=dag,
+            depends_on_past=False,
+        )
+    )
+
+    delete_data_lake_extract_tasks.append(
+        AzureDataLakeRemoveOperator(task_id=f'{provider}_delete_extract',
                                     dag=dag,
+                                    depends_on_past=False,
                                     azure_data_lake_conn_id='azure_data_lake_default',
                                     remote_path=events_remote_path))
 
-    event_extract_task.set_upstream(task1)
-    event_extract_task.set_downstream(task2)
+    sql_extract_tasks.append(MsSqlOperator(
+        task_id=f'{provider}_extract_events-sql',
+        dag=dag,
+        depends_on_past=False,
+        mssql_conn_id='azure_sql_server_full',
+        pool='scooter_azure_sql_server',
+        sql=f'''
+        if exists (
+            select 1
+            from sysobjects
+            where name = 'extract_event_{provider}_{{{{ ts_nodash }}}}'
+        )
+        drop table etl.extract_event_{provider}_{{{{ ts_nodash }}}}
 
-event_extract_task = MsSqlOperator(
-    task_id='extract_external_batch',
-    dag=dag,
-    mssql_conn_id='azure_sql_server_full',
-    sql='''
-    insert into
-        etl.extract_event (
-            event_hash,
+        create table etl.extract_event_{provider}_{{{{ ts_nodash }}}}
+        with
+        (
+            distribution = round_robin,
+            heap
+        )
+        as
+        select
+            event_hash as hash,
             provider_id,
             provider_name,
             device_id,
@@ -329,7 +358,7 @@ event_extract_task = MsSqlOperator(
             vehicle_type,
             propulsion_type,
             date_key,
-            event_time,
+            event_time as datetime,
             state,
             event,
             event_weight,
@@ -346,68 +375,94 @@ event_extract_task = MsSqlOperator(
             associated_trip,
             seen,
             batch
+        from
+            etl.external_event
+        where
+            batch = '{provider}-{{{{ ts_nodash }}}}'
+        '''
+    ))
+
+    provider_sync_tasks.append(MsSqlOperator(
+        task_id=f'{provider}_provider_sync',
+        mssql_conn_id='azure_sql_server_full',
+        dag=dag,
+        pool='scooter_azure_sql_server',
+        sql=f'''
+        insert into
+            dim.provider (
+                provider_id,
+                provider_name
+            )
+        select distinct
+            provider_id,
+            provider_name
+        from
+            etl.extract_event_{provider}_{{{{ ts_nodash }}}} as e
+        where not exists (
+            select
+                1
+            from
+                dim.provider as p
+            where
+                p.provider_id = e.provider_id
         )
-    select
-        event_hash,
-        provider_id,
-        provider_name,
-        device_id,
-        vehicle_id,
-        vehicle_type,
-        propulsion_type,
-        date_key,
-        event_time,
-        state,
-        event,
-        event_weight,
-        cell_key,
-        census_block_group_key,
-        city_key,
-        county_key,
-        neighborhood_key,
-        park_key,
-        parking_district_key,
-        pattern_area_key,
-        zipcode_key,
-        battery_pct,
-        associated_trip,
-        seen,
-        batch
-    from
-        etl.external_event
-    where
-        batch = '{{ ts_nodash }}'
-    '''
-)
+        '''
+    ))
 
-task2 >> event_extract_task
+    vehicle_sync_tasks.append(MsSqlOperator(
+        task_id=f'{provider}_vehicle_sync',
+        mssql_conn_id='azure_sql_server_full',
+        dag=dag,
+        pool='scooter_azure_sql_server',
+        sql=f'''
+        insert into
+            dim.vehicle (
+                device_id,
+                vehicle_id,
+                vehicle_type
+            )
+        select distinct
+            device_id,
+            vehicle_id,
+            vehicle_type
+        from
+            etl.extract_event_{provider}_{{{{ ts_nodash }}}} as e
+        where not exists (
+            select
+                1
+            from
+                dim.vehicle as v
+            where
+                v.device_id = e.device_id
+            and v.vehicle_id = e.vehicle_id
+        )
+        '''
+    ))
 
+    stage_tasks.append(MsSqlOperator(
+        task_id=f'{provider}_stage_events',
+        dag=dag,
+        depends_on_past=False,
+        mssql_conn_id='azure_sql_server_full',
+        pool='scooter_azure_sql_server',
+        sql=f'''
+        if exists (
+            select 1
+            from sysobjects
+            where name = 'stage_event_{provider}_{{{{ ts_nodash }}}}'
+        )
+        drop table etl.stage_event_{provider}_{{{{ ts_nodash }}}}
 
-provider_sync_task = MobilityProviderSyncOperator(
-    task_id='provider_sync',
-    source_table='etl.extract_event',
-    mssql_conn_id='azure_sql_server_full',
-    dag=dag
-)
-
-vehicle_sync_task = MobilityVehicleSyncOperator(
-    task_id='vehicle_sync',
-    source_table='etl.extract_event',
-    mssql_conn_id='azure_sql_server_full',
-    dag=dag
-)
-
-provider_sync_task << event_extract_task >> vehicle_sync_task
-
-stage_event_task = MsSqlOperator(
-    task_id=f'stage_events',
-    dag=dag,
-    mssql_conn_id='azure_sql_server_full',
-    sql='''
-    insert into
-        etl.stage_event (
-            provider_key,
-            vehicle_key,
+        create table etl.stage_event_{provider}_{{{{ ts_nodash }}}}
+        with
+        (
+            distribution = round_robin,
+            heap
+        )
+        as
+        select
+            p.[key] as provider_key,
+            v.[key] as vehicle_key,
             propulsion_type,
             hash,
             date_key,
@@ -427,122 +482,107 @@ stage_event_task = MsSqlOperator(
             associated_trip,
             seen,
             batch
+        from
+            etl.extract_event_{provider}_{{{{ ts_nodash }}}} as e
+        left join
+            dim.provider as p on p.provider_id = e.provider_id
+        left join
+            dim.vehicle as v on (
+                v.device_id = e.device_id
+                and v.vehicle_id = e.vehicle_id
+            )
+            '''
+    ))
+
+    clean_extract_tasks.append(MsSqlOperator(
+        task_id=f'{provider}_clean_extract_table',
+        dag=dag,
+        depends_on_past=False,
+        mssql_conn_id='azure_sql_server_full',
+        pool='scooter_azure_sql_server',
+        sql=f'''
+        if exists (
+            select 1
+            from sysobjects
+            where name = 'extract_event_{provider}_{{{{ ts_nodash }}}}'
         )
-    select
-        p.[key],
-        v.[key],
-        propulsion_type,
-        event_hash,
-        date_key,
-        state,
-        event,
-        event_time,
-        cell_key,
-        census_block_group_key,
-        city_key,
-        county_key,
-        neighborhood_key,
-        park_key,
-        parking_district_key,
-        pattern_area_key,
-        zipcode_key,
-        battery_pct,
-        associated_trip,
-        seen,
-        batch
-    from
-        etl.extract_event as e
-    left join
-        dim.provider as p on p.provider_id = e.provider_id
-    left join
-        dim.vehicle as v on (
-            v.device_id = e.device_id
-            and v.vehicle_id = e.vehicle_id
-        )
-    where
-        e.batch = '{{ ts_nodash }}'
+        drop table etl.extract_event_{provider}_{{{{ ts_nodash }}}}
         '''
-)
+    ))
 
-provider_sync_task >> stage_event_task << vehicle_sync_task
+    clean_stage_tasks.append(MsSqlOperator(
+        task_id=f'{provider}_clean_stage_table',
+        dag=dag,
+        depends_on_past=False,
+        mssql_conn_id='azure_sql_server_full',
+        pool='scooter_azure_sql_server',
+        sql=f'''
+        if exists (
+            select 1
+            from sysobjects
+            where name = 'stage_event_{provider}_{{{{ ts_nodash }}}}'
+        )
+        drop table etl.stage_event_{provider}_{{{{ ts_nodash }}}}
+        '''
+    ))
 
-clean_extract_table_task = MsSqlOperator(
-    task_id='clean_extract_table',
-    dag=dag,
-    mssql_conn_id='azure_sql_server_full',
-    sql='''
-    delete
-    from
-        etl.extract_event
-    where
-        batch = '{{ ts_nodash }}'
-    '''
-)
+    event_warehouse_update_tasks.append(MsSqlOperator(
+        task_id=f'{provider}_warehouse_update_event',
+        dag=dag,
+        mssql_conn_id='azure_sql_server_full',
+        pool='scooter_azure_sql_server',
+        sql=f'''
+        update
+            fact.event
+        set
+            last_seen = source.seen,
+            cell_key = source.cell_key,
+            census_block_group_key = source.census_block_group_key,
+            city_key = source.city_key,
+            county_key = source.county_key,
+            neighborhood_key = source.neighborhood_key,
+            park_key = source.park_key,
+            parking_district_key = source.parking_district_key,
+            pattern_area_key = source.pattern_area_key,
+            zipcode_key = source.zipcode_key
+        from
+            etl.stage_event_{provider}_{{{{ ts_nodash }}}} as source
+        where
+            source.hash = fact.event.hash
+        '''
+    ))
 
-clean_extract_table_task << stage_event_task
-
-
-clean_stage_before_task = MsSqlOperator(
-    task_id='clean_stage_table_before',
-    dag=dag,
-    mssql_conn_id='azure_sql_server_full',
-    sql='''
-    delete
-    from
-        etl.stage_event
-    where
-        batch = '{{ ts_nodash }}'
-    '''
-)
-
-clean_stage_before_task >> stage_event_task
-
-clean_stage_task_after = MsSqlOperator(
-    task_id='clean_stage_table_after',
-    dag=dag,
-    mssql_conn_id='azure_sql_server_full',
-    sql='''
-    delete
-    from
-        etl.stage_event
-    where
-        batch = '{{ ts_nodash }}'
-    '''
-)
-
-event_warehouse_update_task = MsSqlOperator(
-    task_id='warehouse_update_event',
-    dag=dag,
-    mssql_conn_id='azure_sql_server_full',
-    sql='''
-    update
-        fact.event
-    set
-        last_seen = source.seen,
-        cell_key = source.cell_key,
-        census_block_group_key = source.census_block_group_key,
-        city_key = source.city_key,
-        county_key = source.county_key,
-        neighborhood_key = source.neighborhood_key,
-        park_key = source.park_key,
-        parking_district_key = source.parking_district_key,
-        pattern_area_key = source.pattern_area_key,
-        zipcode_key = source.zipcode_key
-    from
-        etl.stage_event as source
-    where
-        source.hash = fact.event.hash
-    and source.batch = '{{ ts_nodash }}'
-    '''
-)
-
-event_warehouse_insert_task = MsSqlOperator(
-    task_id='warehouse_insert_event',
-    dag=dag,
-    mssql_conn_id='azure_sql_server_full',
-    sql='''
-    insert into
-        fact.event (
+    event_warehouse_insert_tasks.append(MsSqlOperator(
+        task_id=f'{provider}_warehouse_insert_event',
+        dag=dag,
+        mssql_conn_id='azure_sql_server_full',
+        pool='scooter_azure_sql_server',
+        sql=f'''
+        insert into
+            fact.event (
+                provider_key,
+                vehicle_key,
+                propulsion_type,
+                hash,
+                date_key,
+                datetime,
+                state,
+                event,
+                cell_key,
+                census_block_group_key,
+                city_key,
+                county_key,
+                neighborhood_key,
+                park_key,
+                parking_district_key,
+                pattern_area_key,
+                zipcode_key,
+                battery_pct,
+                associated_trip,
+                first_seen,
+                last_seen
+            )
+        select
             provider_key,
             vehicle_key,
             propulsion_type,
@@ -562,50 +602,32 @@ event_warehouse_insert_task = MsSqlOperator(
             zipcode_key,
             battery_pct,
             associated_trip,
-            first_seen,
-            last_seen
-        )
-    select
-        provider_key,
-        vehicle_key,
-        propulsion_type,
-        hash,
-        date_key,
-        datetime,
-        state,
-        event,
-        cell_key,
-        census_block_group_key,
-        city_key,
-        county_key,
-        neighborhood_key,
-        park_key,
-        parking_district_key,
-        pattern_area_key,
-        zipcode_key,
-        battery_pct,
-        associated_trip,
-        seen,
-        seen
-    from
-        etl.stage_event as source
-    where
-        batch = '{{ ts_nodash }}'
-    and not exists (
-        select
-            1
+            seen,
+            seen
         from
-            fact.event as target
-        where
-            target.hash = source.hash
-    )
-    '''
-)
+            etl.stage_event_{provider}_{{{{ ts_nodash }}}} as source
+        where not exists (
+            select
+                1
+            from
+                fact.event as target
+            where
+                target.hash = source.hash
+        )
+        '''
+    ))
 
-event_warehouse_insert_task << stage_event_task >> event_warehouse_update_task
+    globals()[dag_id] = dag
 
-event_warehouse_insert_task >> clean_stage_task_after << event_warehouse_update_task
+for i in range(len(providers)):
+    api_extract_tasks[i] >> [sql_extract_tasks[i],
+                             skip_warehouse_tasks[i]]
 
+    sql_extract_tasks[i] >> [delete_data_lake_extract_tasks[i],
+                             provider_sync_tasks[i], vehicle_sync_tasks[i]]
 
-for task in remote_paths_delete_tasks:
-    event_extract_task >> task
+    [vehicle_sync_tasks[i], provider_sync_tasks[i]] >> stage_tasks[i]
+
+    stage_tasks[i] >> clean_extract_tasks[i]
+    stage_tasks[i] >> [event_warehouse_insert_tasks[i],
+                       event_warehouse_update_tasks[i]] >> clean_stage_tasks[i]

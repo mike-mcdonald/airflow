@@ -82,10 +82,9 @@ class MobilityProviderHook(BaseHook):
                 res = self.session.get(url, params=params)
                 res.raise_for_status()
             except Exception as err:
-                if res.status_code == 403:
-                    # Bird passes forbidden if you are out of bounds for their feed
-                    # adapt for that to not return an exception
-                    # TODO: understand when another company might pass 403 instead of 401, which is a credentials error
+                if res.status_code == 404:
+                    # This is supposed to mean there are no objects for the requested time period
+                    # TODO: Hides an actual change of address for the API or other more serious issues
                     return results
 
                 retries = retries + 1
@@ -94,9 +93,9 @@ class MobilityProviderHook(BaseHook):
                         f"Unable to retrieve response from {url} after {self.max_retries}.  Aborting...")
 
                 self.log.warning(
-                    f"Error while retrieving {url}: {err}.  Retrying in 10 seconds... (retry {retries}/{self.max_retries})")
+                    f"Error while retrieving {url}: {err}.  Retrying in {10 * retries} seconds... (retry {retries}/{self.max_retries})")
                 res = None
-                time.sleep(10)
+                time.sleep(10 * retries)
 
         self.log.debug(f"Received response from {url}")
 
@@ -122,6 +121,8 @@ class MobilityProviderHook(BaseHook):
 
         if "links" in page:
             next_page = page["links"].get("next")
+            if "rate_limit" in self.connection.extra_dejson:
+                time.sleep(int(self.connection.extra_dejson["rate_limit"]))
             if next_page is not None:
                 results = self._request(url=next_page, payload_key=payload_key,
                                         results=results)
