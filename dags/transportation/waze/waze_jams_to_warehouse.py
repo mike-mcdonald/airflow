@@ -1,11 +1,20 @@
 '''
 DAG for ETL Processing of Waze alerts
 '''
+import json
+import logging
 import os
+import pathlib
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+from multiprocessing import cpu_count, Pool
 
+import numpy as np
 import pandas as pd
 import pytz
+from requests import Session
+from shapely.wkt import loads
 
 import airflow
 from airflow import DAG
@@ -37,23 +46,26 @@ dag = DAG(
 
 
 def process_datalake_files(**kwargs):
-    remote_path = '/transportation/waze/etl/traffic_jam/raw/'
+    remote_path = '/transportation/waze/etl/jam/raw'
 
     hook = AzureDataLakeHook(
-        azure_datalake_conn_id=kwargs['azure_datalake_conn_id'])
+        azure_data_lake_conn_id=kwargs['azure_data_lake_conn_id'])
 
     files = hook.ls(remote_path)
 
     df = []
 
+    logging.debug(f'files:{files}')
+
     for file in files:
         # create local_path
-        local_path = f'/usr/local/airflow/tmp/waze/traffic_jam/raw/{file}'
-        pathlib.Path(os.path.dirname(kwargs['templates_dict']['local_path'])
+        head, tail = os.path.split(file)
+        local_path = f'/usr/local/airflow/tmp/waze/jam/{tail}'
+        pathlib.Path(os.path.dirname(local_path)
                      ).mkdir(parents=True, exist_ok=True)
         # download file
-        hook.download_file(local_path, f'{remote_path}/{file}')
-        df = df.append(pd.read_csv(local_path))
+        hook.download_file(local_path, file)
+        df.append(pd.read_csv(local_path))
         os.remove(local_path)
 
     df = pd.concat(df, sort=False).sort_values(by=['hash'])
@@ -90,11 +102,11 @@ def process_datalake_files(**kwargs):
                 res = None
                 retries = retries + 1
                 if retries > 3:
-                    print(
+                    logging.warning(
                         f'Unable to retrieve response from {url} after 3 tries.  Aborting...')
                     return res
 
-                print(
+                logging.warning(
                     f'Error while retrieving: {err}. Retrying in 10 seconds... (retry {retries}/3)')
                 time.sleep(10)
 
@@ -120,9 +132,11 @@ def process_datalake_files(**kwargs):
         'feature': np.concatenate(shst.map(safe_result).map(lambda x: x.get('features')).values)
     })
 
+    logging.debug('Retrieved features from sharedstreets...')
+
     shst_df['hash'] = shst_df.feature.map(lambda x: x['properties']['hash'])
     shst_df['batch'] = shst_df.feature.map(lambda x: x['properties']['batch'])
-    shst_df['segments'] = shst_df.candidate.map(
+    shst_df['segments'] = shst_df.feature.map(
         lambda x: x['properties']['shstCandidate']['segments'])
 
     # Pivot on segments
@@ -139,6 +153,10 @@ def process_datalake_files(**kwargs):
     df = df.merge(shst_df, on=['hash', 'batch'],
                   how='left').sort_values(by='hash')
 
+    del df['line']
+
+    logging.debug('Merged sharedstreets information...')
+
     grouped = df.groupby(['hash', 'geometryId', 'referenceId'])
 
     df[[
@@ -153,7 +171,7 @@ def process_datalake_files(**kwargs):
         how='left',
         suffixes=('_orig', '_min')
     )[[
-      'seen_min'
+      'pubMillis_min',
       'level_min',
       'speed_min',
       'delay_min',
@@ -172,7 +190,7 @@ def process_datalake_files(**kwargs):
         how='left',
         suffixes=('_orig', '_max')
     )[[
-      'seen_max'
+      'seen_max',
       'level_max',
       'speed_max',
       'delay_max',
@@ -203,16 +221,45 @@ def process_datalake_files(**kwargs):
         suffixes=('_orig', '_count')
     )[['uuid_count']]
 
-    # write processed output
-    local_path = f'/usr/local/airflow/tmp/waze/traffic_jam/{kwargs["execution_date"]}.csv'
-    df.to_csv(local_path)
-    remote_path = f'/transportation/waze/etl/traffic_jam/processed/{kwargs["execution_date"]}.csv'
-    hook.upload_file(local_path, remote_path)
-    os.remove(local_path)
+    df = df.drop_duplicates(subset=['hash', 'geometryId', 'referenceId']).rename(index=str, columns={
+        'geometryId': 'shst_geometry_id',
+        'referenceId': 'shst_reference_id'
+    })
 
-    for file in files:
-            # delete file
-        hook.rm(f'{remote_path}/{file}')
+    logging.debug('Writing grouped output to data lake...')
+
+    # write processed output
+    local_path = f'/usr/local/airflow/tmp/waze/jam/{kwargs["ts_nodash"]}.csv'
+    df[[
+        'shst_geometry_id',
+        'shst_reference_id',
+        'hash',
+        'uuid',
+        'start_time',
+        'min_level',
+        'min_speed',
+        'min_delay',
+        'min_length',
+        'end_time',
+        'max_level',
+        'max_speed',
+        'max_delay',
+        'max_length',
+        'avg_level',
+        'avg_speed',
+        'avg_delay',
+        'avg_length',
+        'times_seen',
+        'batch',
+        'seen'
+    ]].to_csv(local_path, index=False)
+    remote_path = f'/transportation/waze/etl/jam/processed/{kwargs["ts_nodash"]}.csv'
+    hook.upload_file(local_path, remote_path)
+    # os.remove(local_path)
+
+    # for file in files:
+    # delete file
+    # hook.rm(file)
 
 
 parse_datalake_files_task = PythonOperator(
@@ -220,5 +267,5 @@ parse_datalake_files_task = PythonOperator(
     dag=dag,
     provide_context=True,
     python_callable=process_datalake_files,
-    op_kwargs={'azure_datalake_conn_id': 'azure_datalake_default'}
+    op_kwargs={'azure_data_lake_conn_id': 'azure_data_lake_default'}
 )
