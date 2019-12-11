@@ -55,12 +55,10 @@ def process_datalake_files(**kwargs):
 
     df = []
 
-    logging.debug(f'files:{files}')
-
     for file in files:
         # create local_path
         head, tail = os.path.split(file)
-        local_path = f'/usr/local/airflow/tmp/waze/jam/{tail}'
+        local_path = f'/usr/local/airflow/tmp/waze/jam/raw-{tail}'
         pathlib.Path(os.path.dirname(local_path)
                      ).mkdir(parents=True, exist_ok=True)
         # download file
@@ -146,18 +144,22 @@ def process_datalake_files(**kwargs):
         "batch": np.repeat(shst_df['batch'].values, lens),
         "segment": np.concatenate(shst_df['segments'].values),
     })
-    shst_df['geometryId'] = shst_df.segment.map(lambda x: x.get('geometryId'))
-    shst_df['referenceId'] = shst_df.segment.map(
+    shst_df['shst_geometry_id'] = shst_df.segment.map(
+        lambda x: x.get('geometryId'))
+    shst_df['shst_reference_id'] = shst_df.segment.map(
         lambda x: x.get('referenceId'))
 
     df = df.merge(shst_df, on=['hash', 'batch'],
                   how='left').sort_values(by='hash')
 
+    df['hash'] = df.apply(
+        lambda x: hashlib.md5(f'{x.uuid}{x.pubMillis}{x.shst_geometry_id}{x.shst_reference_id}'.encode('utf-8')).hexdigest())
+
     del df['line']
 
     logging.debug('Merged sharedstreets information...')
 
-    grouped = df.groupby(['hash', 'geometryId', 'referenceId'])
+    grouped = df.groupby(['hash'])
 
     df[[
         'start_time',
@@ -221,15 +223,12 @@ def process_datalake_files(**kwargs):
         suffixes=('_orig', '_count')
     )[['uuid_count']]
 
-    df = df.drop_duplicates(subset=['hash', 'geometryId', 'referenceId']).rename(index=str, columns={
-        'geometryId': 'shst_geometry_id',
-        'referenceId': 'shst_reference_id'
-    })
+    df = df.drop_duplicates(subset=['hash'])
 
     logging.debug('Writing grouped output to data lake...')
 
     # write processed output
-    local_path = f'/usr/local/airflow/tmp/waze/jam/{kwargs["ts_nodash"]}.csv'
+    local_path = f'/usr/local/airflow/tmp/waze/jam/processed-{kwargs["ts_nodash"]}.csv'
     df[[
         'shst_geometry_id',
         'shst_reference_id',
@@ -253,13 +252,13 @@ def process_datalake_files(**kwargs):
         'batch',
         'seen'
     ]].to_csv(local_path, index=False)
+
     remote_path = f'/transportation/waze/etl/jam/processed/{kwargs["ts_nodash"]}.csv'
     hook.upload_file(local_path, remote_path)
-    # os.remove(local_path)
+    os.remove(local_path)
 
-    # for file in files:
-    # delete file
-    # hook.rm(file)
+    for file in files:
+        hook.rm(file)
 
 
 parse_datalake_files_task = PythonOperator(
