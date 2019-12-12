@@ -1,6 +1,7 @@
 '''
 DAG for ETL Processing of Waze alerts
 '''
+import hashlib
 import json
 import logging
 import os
@@ -51,12 +52,15 @@ def process_datalake_files(**kwargs):
     hook = AzureDataLakeHook(
         azure_data_lake_conn_id=kwargs['azure_data_lake_conn_id'])
 
+    cores = cpu_count()
+    executor = ThreadPoolExecutor(max_workers=cores*4)
+
     files = hook.ls(remote_path)
 
     df = []
+    threads = []
 
-    for file in files:
-        # create local_path
+    def append_data_lake_file(file):
         head, tail = os.path.split(file)
         local_path = f'/usr/local/airflow/tmp/waze/jam/raw-{tail}'
         pathlib.Path(os.path.dirname(local_path)
@@ -65,6 +69,12 @@ def process_datalake_files(**kwargs):
         hook.download_file(local_path, file)
         df.append(pd.read_csv(local_path))
         os.remove(local_path)
+
+    for file in files:
+        threads.append(executor.submit(append_data_lake_file, file))
+
+    for thread in threads:
+        thread.result()
 
     df = pd.concat(df, sort=False).sort_values(by=['hash'])
 
@@ -115,8 +125,6 @@ def process_datalake_files(**kwargs):
     session.headers.update({'Content-Type': 'application/json'})
     session.headers.update({'Accept': 'application/json'})
 
-    cores = cpu_count()  # Number of CPU cores on your system
-    executor = ThreadPoolExecutor(max_workers=cores*4)
     shst = shst_df.map(lambda x: executor.submit(
         _request, session, SHAREDSTREETS_API_URL, data=json.dumps(x)))
 
@@ -153,7 +161,9 @@ def process_datalake_files(**kwargs):
                   how='left').sort_values(by='hash')
 
     df['hash'] = df.apply(
-        lambda x: hashlib.md5(f'{x.uuid}{x.pubMillis}{x.shst_geometry_id}{x.shst_reference_id}'.encode('utf-8')).hexdigest())
+        lambda x: hashlib.md5(
+            f'{x.uuid}{x.pubMillis}{x.shst_geometry_id}{x.shst_reference_id}'.encode('utf-8')).hexdigest(),
+        axis=1)
 
     del df['line']
 
@@ -257,8 +267,8 @@ def process_datalake_files(**kwargs):
     hook.upload_file(local_path, remote_path)
     os.remove(local_path)
 
-    for file in files:
-        hook.rm(file)
+    # for file in files:
+    # hook.rm(file)
 
 
 parse_datalake_files_task = PythonOperator(
