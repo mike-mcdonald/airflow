@@ -47,7 +47,7 @@ providers = ['lime', 'spin', 'bolt', 'shared', 'razor', 'bird']
 
 
 def update_kmeans_object(**kwargs):
-    hook = MsSqlDataFrameHook()
+    hook = MsSqlDataFrameHook(mssql_conn_id=kwargs['sql_server_conn_id'])
 
     trip_counts = hook.read_sql_dataframe(sql='''
     select
@@ -55,12 +55,17 @@ def update_kmeans_object(**kwargs):
         count(trip_id) as trips
     from
         fact.trip
+    group by
+        start_date_key
+    order by
+        trips desc
     ''')
 
     trip_counts = trip_counts.sort_values(by=['trips'])
     max_date_key = trip_counts.loc[0].start_date_key
 
-    start_time = datetime.strptime(max_date_key, '%y%m%d')
+    start_time = datetime.strptime(str(max_date_key), '%Y%m%d').replace(
+        tzinfo=timezone('US/Pacific')).astimezone(timezone('UTC'))
     end_time = start_time + timedelta(hours=24)
 
     trips = []
@@ -99,7 +104,6 @@ def update_kmeans_object(**kwargs):
     route_df['coordinates'] = route_df.feature.map(
         lambda x: x['geometry']['coordinates']
     )
-    route_df['geometry'] = route_df.coordinates.apply(Point)
 
     # convert coordinates into a multi-dimensional array for kmeans
     coord_array = []
@@ -121,7 +125,7 @@ parse_datalake_files_task = PythonOperator(
     provide_context=True,
     python_callable=update_kmeans_object,
     templates_dict={
-        'remote_path': '/transportation/mobility/etl/learning/kmeans.pkl',
+        'remote_path': '/transportation/mobility/learning/kmeans.pkl',
         'local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/kmeans-{{ ts_nodash }}.pkl',
     },
     op_kwargs={
