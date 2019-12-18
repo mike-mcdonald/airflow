@@ -1,27 +1,18 @@
 '''
 DAG for ETL Processing of PDX GIS Open Data Counties, from Metro
 '''
-import hashlib
-import json
 import logging
 import pathlib
 import os
 import pickle
-import time
 
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from math import atan2, fabs, pi, pow, sqrt
-from multiprocessing import cpu_count, Pool
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 
 from pytz import timezone
-from requests import Session
-from shapely.geometry import Point
-from shapely.wkt import dumps
 from sklearn.cluster import KMeans
 
 import airflow
