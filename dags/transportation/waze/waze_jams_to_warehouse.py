@@ -61,8 +61,8 @@ def process_datalake_files(**kwargs):
     threads = []
 
     def append_data_lake_file(file):
-        head, tail = os.path.split(file)
-        local_path = f'/usr/local/airflow/tmp/waze/jam/raw-{tail}'
+        dirname, filename = os.path.split(file)
+        local_path = f'/usr/local/airflow/tmp/waze/jam/raw-{filename}'
         pathlib.Path(os.path.dirname(local_path)
                      ).mkdir(parents=True, exist_ok=True)
         # download file
