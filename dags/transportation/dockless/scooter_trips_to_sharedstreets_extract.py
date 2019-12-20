@@ -6,6 +6,7 @@ import json
 import logging
 import pathlib
 import os
+import pickle
 import time
 
 from concurrent.futures import ThreadPoolExecutor
@@ -75,6 +76,77 @@ def extract_shst_hits_datalake(**kwargs):
             f'Received no trips for time period {start_time} to {end_time}')
         return
 
+    # Convert the route to a DataFrame now to make mapping easier
+    trips['route'] = trips.apply(
+        lambda x: x.route['features'] if x.shst is not None else x.route['features'], axis=1)
+
+    lens = [len(item) for item in trips['route']]
+
+    route_df = pd.DataFrame({
+        "trip_id": np.repeat(trips['trip_id'].values, lens),
+        "provider_id": np.repeat(trips['provider_id'].values, lens),
+        "device_id": np.repeat(trips['device_id'].values, lens),
+        "vehicle_type": np.repeat(trips['vehicle_type'].values, lens),
+        "propulsion_type": np.repeat(trips['propulsion_type'].values, lens),
+        "feature": np.concatenate(trips['route'].values)
+    })
+
+    del trips
+
+    route_df['timestamp'] = route_df.feature.map(
+        lambda x: x['properties']['timestamp'])
+    route_df['coordinates'] = route_df.feature.map(
+        lambda x: x['geometry']['coordinates']
+    )
+    route_df['geometry'] = route_df.coordinates.apply(Point)
+
+    route_df = gpd.GeoDataFrame(route_df.sort_values(
+        by=['trip_id', 'timestamp'], ascending=True
+    ).reset_index(drop=True).copy())
+    route_df.crs = {'init': 'epsg:4326'}
+    route_df['datetime'] = route_df.timestamp.map(
+        lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
+    route_df['datetime'] = route_df.datetime.dt.round('L')
+    route_df['datetime'] = route_df.datetime.map(
+        lambda x: datetime.replace(x, tzinfo=None))
+    route_df['date_key'] = route_df.datetime.map(
+        lambda x: int(x.strftime('%Y%m%d')))
+    # Generate a hash to aid in merge operations
+    route_df['hash'] = route_df.apply(lambda x: hashlib.md5((
+        f'{x.trip_id}{x.device_id}{x.provider_id}{x.timestamp}{os.environ['HASH_SALT']}'
+    ).encode('utf-8')).hexdigest(), axis=1)
+    route_df['datetime'] = route_df.datetime.map(
+        lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
+
+    hook = AzureDataLakeHook(
+        azure_data_lake_conn_id=kwargs.get('azure_datalake_conn_id'))
+
+    hook.download_file('/transportation/mobility/learning/kmeans.pkl',
+                       kwargs['templates_dict']['kmeans_local_path'])
+
+    kmeans = pickle.load(kwargs['templates_dict']['kmeans_local_path'])
+
+    # convert coordinates into a multi-dimensional array for kmeans
+    coord_array = []
+    route_df.coordinates.map(lambda x: coord_array.append([x[0], x[1]]))
+    coord_array = np.array(coord_array)
+
+    route_df['cluster'] = kmeans.predict(coord_array)
+
+    shst_df = route_df.groupby('cluster').apply(lambda x: {
+        'type': 'FeatureCollection',
+        'features': x.apply(lambda x: {
+            'type': 'Feature',
+            'properties': {
+                'hash': x.hash
+            },
+            'geometry': {
+                'type': 'Point',
+                'coordinates': [x.coordinates[0], x.coordinates[1]]
+            }
+        }, axis=1).values.tolist()
+    })
+
     def _request(session, url, data=None):
         '''
         Internal helper for sending requests.
@@ -109,7 +181,7 @@ def extract_shst_hits_datalake(**kwargs):
 
     cores = cpu_count()  # Number of CPU cores on your system
     executor = ThreadPoolExecutor(max_workers=cores*4)
-    shst = trips.route.map(lambda x: executor.submit(
+    shst = shst_df.map(lambda x: executor.submit(
         _request, session, SHAREDSTREETS_API_URL, data=json.dumps(x)))
 
     def safe_result(x):
@@ -122,44 +194,6 @@ def extract_shst_hits_datalake(**kwargs):
         lambda x: ','.join(sorted(x)))
 
     trips['shst'] = shst.map(safe_result)
-
-    # Convert the route to a DataFrame now to make mapping easier
-    trips['route'] = trips.apply(
-        lambda x: x.shst['features'] if x.shst is not None else x.route['features'], axis=1)
-
-    lens = [len(item) for item in trips['route']]
-
-    route_df = pd.DataFrame({
-        "trip_id": np.repeat(trips['trip_id'].values, lens),
-        "provider_id": np.repeat(trips['provider_id'].values, lens),
-        "device_id": np.repeat(trips['device_id'].values, lens),
-        "vehicle_type": np.repeat(trips['vehicle_type'].values, lens),
-        "propulsion_type": np.repeat(trips['propulsion_type'].values, lens),
-        "feature": np.concatenate(trips['route'].values)
-    })
-
-    route_df['timestamp'] = route_df.feature.map(
-        lambda x: x['properties']['timestamp'])
-    route_df['geometry'] = route_df.feature.map(
-        lambda x: Point(x['geometry']['coordinates']))
-
-    route_df = gpd.GeoDataFrame(route_df.sort_values(
-        by=['trip_id', 'timestamp'], ascending=True
-    ).reset_index(drop=True).copy())
-    route_df.crs = {'init': 'epsg:4326'}
-    route_df['datetime'] = route_df.timestamp.map(
-        lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
-    route_df['datetime'] = route_df.datetime.dt.round('L')
-    route_df['datetime'] = route_df.datetime.map(
-        lambda x: datetime.replace(x, tzinfo=None))
-    route_df['date_key'] = route_df.datetime.map(
-        lambda x: int(x.strftime('%Y%m%d')))
-    # Generate a hash to aid in merge operations
-    route_df['hash'] = route_df.apply(lambda x: hashlib.md5((
-        x.trip_id + x.device_id + x.provider_id + str(x.timestamp)
-    ).encode('utf-8')).hexdigest(), axis=1)
-    route_df['datetime'] = route_df.datetime.map(
-        lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
 
     route_df = route_df.to_crs(epsg=3857)
 
@@ -199,8 +233,14 @@ def extract_shst_hits_datalake(**kwargs):
     route_df['bearing'] = route_df.apply(find_bearing, axis=1)
     route_df['speed'] = route_df.apply(find_speed, axis=1)
 
-    route_df['candidates'] = route_df.feature.map(
+    shst_df = pd.DataFrame({
+        'feature': np.concatenate(shst.map(safe_result).map(lambda x: x['features']).values)
+    })
+    shst_df['hash'] = shst_df.feature.map(lambda x: x['properties']['hash'])
+    shst_df['candidates'] = shst_df.feature.map(
         lambda x: x['properties']['shstCandidates'])
+
+    route_df = route_df.merge(shst_df, on='hash')
 
     lens = [len(item) for item in route_df['candidates']]
     shst_df = pd.DataFrame({
@@ -215,6 +255,8 @@ def extract_shst_hits_datalake(**kwargs):
         "speed": np.repeat(route_df['speed'].values, lens),
         "candidate": np.concatenate(route_df['candidates'].values),
     })
+
+    del route_df
 
     shst_df['shstBearing'] = shst_df.candidate.map(lambda x: x['bearing'])
     shst_df['shst_geometry_id'] = shst_df.candidate.map(
@@ -264,9 +306,6 @@ def extract_shst_hits_datalake(**kwargs):
         'batch'
     ]].to_csv(kwargs.get('templates_dict').get('local_path'), index=False)
 
-    hook = AzureDataLakeHook(
-        azure_data_lake_conn_id=kwargs.get('azure_datalake_conn_id'))
-
     hook.upload_file(kwargs.get('templates_dict').get(
         'local_path'), kwargs.get('templates_dict').get('remote_path'))
 
@@ -278,7 +317,8 @@ parse_datalake_files_task = PythonOperator(
     python_callable=extract_shst_hits_datalake,
     templates_dict={
         'local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/{{ ts_nodash }}.csv',
-        'remote_path': '/transportation/mobility/etl/shst_hits/{{ ts_nodash }}.csv'
+        'remote_path': '/transportation/mobility/etl/shst_hits/{{ ts_nodash }}.csv',
+        'kmeans_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/kmeans-{{ ts_nodash }}.pkl',
     },
     op_kwargs={
         'azure_datalake_conn_id': 'azure_data_lake_default'
