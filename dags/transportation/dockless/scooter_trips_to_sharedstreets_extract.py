@@ -1,3 +1,22 @@
+from airflow.hooks.mobility_plugin import MobilityProviderHook
+from airflow.hooks.azure_plugin import AzureDataLakeHook
+from airflow.operators.python_operator import PythonOperator
+from airflow import DAG
+import airflow
+from shapely.wkt import dumps
+from shapely.geometry import Point
+from requests import Session
+from pytz import timezone
+import pandas as pd
+import numpy as np
+import geopandas as gpd
+from multiprocessing import cpu_count, Pool
+from math import atan2, fabs, pi, pow, sqrt
+from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
+import time
+import pickle
+import pathlib
 '''
 DAG for ETL Processing of PDX GIS Open Data Counties, from Metro
 '''
@@ -5,29 +24,10 @@ import hashlib
 import json
 import logging
 import os
-import pathlib
-import pickle
-import time
+<< << << < HEAD
+== == == =
+>>>>>> > develop
 
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
-from math import atan2, fabs, pi, pow, sqrt
-from multiprocessing import cpu_count, Pool
-
-import geopandas as gpd
-import numpy as np
-import pandas as pd
-
-from pytz import timezone
-from requests import Session
-from shapely.geometry import Point
-from shapely.wkt import dumps
-
-import airflow
-from airflow import DAG
-from airflow.operators.python_operator import PythonOperator
-from airflow.hooks.azure_plugin import AzureDataLakeHook
-from airflow.hooks.mobility_plugin import MobilityProviderHook
 
 SHAREDSTREETS_API_URL = 'http://sharedstreets:3000/api/v1/match/point/bike'
 
@@ -308,7 +308,8 @@ parse_datalake_files_task = PythonOperator(
     templates_dict={
         'kmeans_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/kmeans-{{ ts_nodash }}.pkl'
         'local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/{{ ts_nodash }}.csv',
-        'remote_path': '/transportation/mobility/etl/shst_hits/{{ ts_nodash }}.csv'
+        'remote_path': '/transportation/mobility/etl/shst_hits/{{ ts_nodash }}.csv',
+        'kmeans_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/kmeans-{{ ts_nodash }}.pkl',
     },
     op_kwargs={
         'azure_datalake_conn_id': 'azure_data_lake_default'
