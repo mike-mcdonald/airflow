@@ -4,8 +4,9 @@ DAG for ETL Processing of PDX GIS Open Data Counties, from Metro
 import hashlib
 import json
 import logging
-import pathlib
 import os
+import pathlib
+import pickle
 import time
 
 from concurrent.futures import ThreadPoolExecutor
@@ -53,7 +54,7 @@ providers = ['lime', 'spin', 'bolt', 'shared', 'razor', 'bird']
 
 
 def extract_shst_hits_datalake(**kwargs):
-    end_time = kwargs.get('execution_date') - timedelta(hours=24)
+    end_time = kwargs.get('execution_date') - timedelta(days=7)
     start_time = end_time - timedelta(hours=1)
 
     trips = []
@@ -71,61 +72,19 @@ def extract_shst_hits_datalake(**kwargs):
     trips.crs = {'init': 'epsg:4326'}
 
     if len(trips) <= 0:
-        print(
+        logging.warning(
             f'Received no trips for time period {start_time} to {end_time}')
         return
 
-    def _request(session, url, data=None):
-        '''
-        Internal helper for sending requests.
+    hook = AzureDataLakeHook(
+        azure_data_lake_conn_id=kwargs.get('azure_datalake_conn_id'))
 
-        Returns payload(s).
-        '''
-        retries = 0
-        res = None
-
-        while res is None:
-            try:
-                res = session.post(url, data=data)
-                res.raise_for_status()
-            except Exception as err:
-                res = None
-                retries = retries + 1
-                if retries > 3:
-                    print(
-                        f'Unable to retrieve response from {url} after 3 tries.  Aborting...')
-                    return res
-
-                print(
-                    f'Error while retrieving: {err}. Retrying in 10 seconds... (retry {retries}/3)')
-                time.sleep(10)
-
-        return res
-
-    session = Session()
-
-    session.headers.update({'Content-Type': 'application/json'})
-    session.headers.update({'Accept': 'application/json'})
-
-    cores = cpu_count()  # Number of CPU cores on your system
-    executor = ThreadPoolExecutor(max_workers=cores*4)
-    shst = trips.route.map(lambda x: executor.submit(
-        _request, session, SHAREDSTREETS_API_URL, data=json.dumps(x)))
-
-    def safe_result(x):
-        try:
-            return x.result().json()
-        except:
-            return None
-
-    trips['propulsion_type'] = trips.propulsion_type.map(
-        lambda x: ','.join(sorted(x)))
-
-    trips['shst'] = shst.map(safe_result)
+    hook.download_file('/transportation/mobility/learning/kmeans.pkl',
+                       kwargs['templates_dict']['kmeans_local_path'])
+    kmeans = pickle.load(kwargs['templates_dict']['kmeans_local_path'])
 
     # Convert the route to a DataFrame now to make mapping easier
-    trips['route'] = trips.apply(
-        lambda x: x.shst['features'] if x.shst is not None else x.route['features'], axis=1)
+    trips['route'] = trips.route.map(lambda x: x['features'])
 
     lens = [len(item) for item in trips['route']]
 
@@ -140,6 +99,8 @@ def extract_shst_hits_datalake(**kwargs):
 
     route_df['timestamp'] = route_df.feature.map(
         lambda x: x['properties']['timestamp'])
+    route_df['coordinates'] = route_df.feature.map(
+        lambda x: x['geometry']['coordinates'])
     route_df['geometry'] = route_df.feature.map(
         lambda x: Point(x['geometry']['coordinates']))
 
@@ -160,6 +121,60 @@ def extract_shst_hits_datalake(**kwargs):
     ).encode('utf-8')).hexdigest(), axis=1)
     route_df['datetime'] = route_df.datetime.map(
         lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
+
+    coord_array = []
+    route_df.coordinates.map(lambda x: coord_array.append([x[0], x[1]]))
+    coord_array = np.array(coord_array)
+    route_df['cluster'] = kmeans.predict(coord_array)
+
+    shst_df = route_df[['hash', 'geometry', 'cluster']].groupby('cluster').apply(
+        lambda x: {
+            'type': 'FeatureCollection',
+            'features': x.apply(lambda x: {
+                'type': 'Feature',
+                'properties': {
+                    'hash': x.hash
+                },
+                'geometry': {
+                    'type': x.geometry.geom_type,
+                    'coordinates': np.array(x.geometry)
+                }
+            }, axis=1).values.tolist()
+        })
+
+    def _request(session, url, data=None):
+        """
+        Internal helper for sending requests.
+
+        Returns payload(s).
+        """
+        retries = 0
+        res = None
+
+        while res is None:
+            try:
+                res = session.post(url, data=data)
+                res.raise_for_status()
+            except Exception as err:
+                res = None
+                retries = retries + 1
+                if retries > 3:
+                    print(
+                        f"Unable to retrieve response from {url} after 3 tries.  Aborting...")
+
+                print(
+                    f"Error while retrieving: {err}. Retrying in {retries * 10} seconds... (retry {retries}/3)")
+                time.sleep(retries * 10)
+
+        return res
+
+    session.headers.update({"Content-Type": "application/json"})
+    session.headers.update({"Accept": "application/json"})
+
+    cores = cpu_count()  # Number of CPU cores on your system
+    executor = ThreadPoolExecutor(max_workers=cores*4)
+    shst = shst_df.map(lambda x: executor.submit(
+        _request, session, SHAREDSTREETS_API_URL, data=json.dumps(x)))
 
     route_df = route_df.to_crs(epsg=3857)
 
@@ -199,8 +214,23 @@ def extract_shst_hits_datalake(**kwargs):
     route_df['bearing'] = route_df.apply(find_bearing, axis=1)
     route_df['speed'] = route_df.apply(find_speed, axis=1)
 
-    route_df['candidates'] = route_df.feature.map(
+    def safe_result(x):
+        try:
+            return x.result().json()
+        except:
+            return None
+
+    shst_df = shst.map(safe_result)
+
+    shst_df = pd.DataFrame({
+        'feature': np.concatenate(shst_df.map(lambda x: x['features']).values)
+    })
+
+    shst_df['hash'] = shst_df.feature.map(lambda x: x['properties']['hash'])
+    shst_df['candidates'] = shst_df.feature.map(
         lambda x: x['properties']['shstCandidates'])
+
+    route_df = route_df.merge(shst_df, on='hash')
 
     lens = [len(item) for item in route_df['candidates']]
     shst_df = pd.DataFrame({
@@ -215,6 +245,8 @@ def extract_shst_hits_datalake(**kwargs):
         "speed": np.repeat(route_df['speed'].values, lens),
         "candidate": np.concatenate(route_df['candidates'].values),
     })
+
+    del route_df
 
     shst_df['shstBearing'] = shst_df.candidate.map(lambda x: x['bearing'])
     shst_df['shst_geometry_id'] = shst_df.candidate.map(
@@ -264,9 +296,6 @@ def extract_shst_hits_datalake(**kwargs):
         'batch'
     ]].to_csv(kwargs.get('templates_dict').get('local_path'), index=False)
 
-    hook = AzureDataLakeHook(
-        azure_data_lake_conn_id=kwargs.get('azure_datalake_conn_id'))
-
     hook.upload_file(kwargs.get('templates_dict').get(
         'local_path'), kwargs.get('templates_dict').get('remote_path'))
 
@@ -277,6 +306,7 @@ parse_datalake_files_task = PythonOperator(
     provide_context=True,
     python_callable=extract_shst_hits_datalake,
     templates_dict={
+        'kmeans_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/kmeans-{{ ts_nodash }}.pkl'
         'local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/{{ ts_nodash }}.csv',
         'remote_path': '/transportation/mobility/etl/shst_hits/{{ ts_nodash }}.csv'
     },
