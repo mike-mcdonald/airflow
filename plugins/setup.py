@@ -11,7 +11,8 @@ setup(
             'mobility_plugin = transportation_plugins.mobility_plugin:MobilityPlugin',
             'dataframe_plugin = common_plugins.dataframe_plugin:DataFramePlugin',
             'mssql_plugin = common_plugins.mssql_plugin:MsSqlPlugin',
-            'azure_plugin = common_plugins.azure_plugin:AzurePlugin'
+            'azure_plugin = common_plugins.azure_plugin:AzurePlugin',
+            'waze_plugin = transportation_plugins.waze_plugin:WazePlugin'
         ]
     }
 )
