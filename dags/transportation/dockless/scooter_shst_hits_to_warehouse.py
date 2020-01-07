@@ -44,7 +44,7 @@ default_args = {
 }
 
 dag = DAG(
-    dag_id='scooter_shst_hits_to_data_lake',
+    dag_id='scooter_shst_hits_to_warehouse',
     default_args=default_args,
     catchup=True,
     schedule_interval='@hourly',
@@ -104,6 +104,8 @@ def extract_shst_hits_datalake(**kwargs):
         lambda x: x['geometry']['coordinates'])
     route_df['geometry'] = route_df.feature.map(
         lambda x: Point(x['geometry']['coordinates']))
+
+    route_df.drop_duplicates(subset=['trip_id', 'timestamp'])
 
     route_df = gpd.GeoDataFrame(route_df.sort_values(
         by=['trip_id', 'timestamp'], ascending=True
@@ -302,7 +304,7 @@ def extract_shst_hits_datalake(**kwargs):
 
 
 parse_datalake_files_task = PythonOperator(
-    task_id='process_segments_to_csv_files',
+    task_id='extract_routes_to_data_lake',
     dag=dag,
     provide_context=True,
     python_callable=extract_shst_hits_datalake,
