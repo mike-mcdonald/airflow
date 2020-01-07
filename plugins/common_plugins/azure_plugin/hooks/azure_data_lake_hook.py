@@ -17,3 +17,9 @@ class AzureDataLakeHook(ContribHook):
             self.connection.rm(path, recursive)
         except FileNotFoundError as err:
             self.log.debug(f"{path} not found.")
+
+    def ls(self, path, detail=False):
+        try:
+            return self.connection.ls(path, detail)
+        except:
+            self.log.error(f'Failed to list files at {path}...')

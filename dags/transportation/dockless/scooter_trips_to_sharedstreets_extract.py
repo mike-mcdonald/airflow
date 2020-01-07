@@ -118,7 +118,7 @@ def extract_shst_hits_datalake(**kwargs):
         lambda x: int(x.strftime('%Y%m%d')))
     # Generate a hash to aid in merge operations
     route_df['hash'] = route_df.apply(lambda x: hashlib.md5((
-        x.trip_id + x.device_id + x.provider_id + str(x.timestamp)
+        f'{x.trip_id}{x.device_id}{x.provider_id}{x.timestamp}{os.environ["HASH_SALT"]}'
     ).encode('utf-8')).hexdigest(), axis=1)
     route_df['datetime'] = route_df.datetime.map(
         lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
