@@ -29,6 +29,7 @@ from airflow import DAG
 from airflow.hooks.azure_plugin import AzureDataLakeHook
 from airflow.hooks.mobility_plugin import MobilityProviderHook
 from airflow.operators.python_operator import PythonOperator
+from airflow.operators.mssql_plugin import MsSqlOperator
 
 SHAREDSTREETS_API_URL = 'http://sharedstreets:3000/api/v1/match/point/bike'
 
@@ -105,7 +106,8 @@ def extract_shst_hits_datalake(**kwargs):
     route_df['geometry'] = route_df.feature.map(
         lambda x: Point(x['geometry']['coordinates']))
 
-    route_df.drop_duplicates(subset=['trip_id', 'timestamp'])
+    route_df.drop_duplicates(
+        subset=['trip_id', 'device_id', 'provider_id', 'timestamp'])
 
     route_df = gpd.GeoDataFrame(route_df.sort_values(
         by=['trip_id', 'timestamp'], ascending=True
@@ -302,6 +304,8 @@ def extract_shst_hits_datalake(**kwargs):
     hook.upload_file(kwargs.get('templates_dict').get(
         'local_path'), kwargs.get('templates_dict').get('remote_path'))
 
+    os.remove(kwargs.get('templates_dict').get('local_path'))
+
 
 parse_datalake_files_task = PythonOperator(
     task_id='extract_routes_to_data_lake',
@@ -309,7 +313,7 @@ parse_datalake_files_task = PythonOperator(
     provide_context=True,
     python_callable=extract_shst_hits_datalake,
     templates_dict={
-        'kmeans_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/kmeans-{{ ts_nodash }}.pkl'
+        'kmeans_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/kmeans-{{ ts_nodash }}.pkl',
         'local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/{{ ts_nodash }}.csv',
         'remote_path': '/transportation/mobility/etl/shst_hits/{{ ts_nodash }}.csv',
         'kmeans_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/kmeans-{{ ts_nodash }}.pkl',
@@ -318,3 +322,115 @@ parse_datalake_files_task = PythonOperator(
         'azure_datalake_conn_id': 'azure_data_lake_default'
     },
 )
+
+# Run SQL scripts to transform extract data into staged facts
+stage_shst_segment_hit_task = MsSqlOperator(
+    task_id=f'stage_shst_segment_hits',
+    dag=dag,
+    mssql_conn_id='azure_sql_server_full',
+    pool='scooter_azure_sql_server',
+    sql='''
+    if exists (
+        select 1
+        from sysobjects
+        where name = 'stage_shst_segment_hit_{{ ts_nodash }}'
+    )
+    drop table etl.stage_shst_segment_hit_{{ ts_nodash }}
+
+    create table etl.stage_shst_segment_hit_{{ ts_nodash }}
+    with
+    (
+        distribution = round_robin,
+        heap
+    )
+    as
+    select
+        provider_key,
+        date_key,
+        shst_geometry_id,
+        shst_reference_id,
+        hash,
+        datetime,
+        vehicle_type,
+        propulsion_type,
+        bearing,
+        speed,
+        seen,
+        batch
+    from
+        etl.external_shst_segment_hit as e
+    inner join
+        dim.provider as p on p.provider_id = e.provider_id
+    where
+        e.batch = '{{ ts_nodash }}'
+    '''
+)
+
+parse_datalake_files_task >> stage_shst_segment_hit_task
+
+warehouse_insert_task = MsSqlOperator(
+    task_id='warehouse_insert_shst_segment_hits',
+    dag=dag,
+    mssql_conn_id='azure_sql_server_full',
+    pool='scooter_azure_sql_server',
+    sql='''
+    insert into
+        fact.shst_segment_hit (
+            provider_key,
+            date_key,
+            shst_geometry_id,
+            shst_reference_id,
+            hash,
+            datetime,
+            vehicle_type,
+            propulsion_type,
+            bearing,
+            speed,
+            first_seen,
+            last_seen
+        )
+    select
+        provider_key,
+        date_key,
+        shst_geometry_id,
+        shst_reference_id,
+        hash,
+        datetime,
+        vehicle_type,
+        propulsion_type,
+        bearing,
+        speed,
+        seen,
+        seen
+    from
+        etl.etl.stage_shst_segment_hit_{{ ts_nodash }} as source
+    and not exists (
+        select
+            1
+        from
+            fact.shst_segment_hit as target
+        where
+         target.hash = source.hash
+    )
+    '''
+)
+
+stage_shst_segment_hit_task >> warehouse_insert_task
+
+clean_stage_task = MsSqlOperator(
+    task_id='clean_stage_table',
+    dag=dag,
+    depends_on_past=False,
+    mssql_conn_id='azure_sql_server_full',
+    pool='scooter_azure_sql_server',
+    sql='''
+    if exists (
+        select 1
+        from sysobjects
+        where name = 'stage_shst_segment_hit_{{ ts_nodash }}'
+    )
+    drop table etl.stage_shst_segment_hit_{{ ts_nodash }}
+    '''
+)
+
+warehouse_insert_task >> clean_stage_task
