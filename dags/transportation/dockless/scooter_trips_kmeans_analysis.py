@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from pytz import timezone
+from shapely.geometry import box, Point
 from sklearn.cluster import KMeans
 
 import airflow
@@ -36,10 +37,10 @@ default_args = {
 }
 
 dag = DAG(
-    dag_id='scooter_shst_hits_to_data_lake',
+    dag_id='scooter_kmeans_update',
     default_args=default_args,
-    catchup=True,
-    schedule_interval='@hourly',
+    catchup=False,
+    schedule_interval=None,
     max_active_runs=3,
 )
 
@@ -49,12 +50,14 @@ providers = ['lime', 'spin', 'bolt', 'shared', 'razor', 'bird']
 def update_kmeans_object(**kwargs):
     hook = MsSqlDataFrameHook(mssql_conn_id=kwargs['sql_server_conn_id'])
 
-    trip_counts = hook.read_sql_dataframe(sql='''
+    trip_counts = hook.read_sql_dataframe(sql=f'''
     select
         start_date_key,
         count(trip_id) as trips
     from
         fact.trip
+    where
+        start_time between '{kwargs['execution_date'].in_timezone('America/Los_Angeles').subtract(months=6).strftime('%m/%d/%Y') }' and '{kwargs['execution_date'].in_timezone('America/Los_Angeles').strftime('%m/%d/%Y')}'
     group by
         start_date_key
     order by
@@ -88,7 +91,7 @@ def update_kmeans_object(**kwargs):
         raise Error
 
     trips['route'] = trips.route.apply(
-        lambda x: x['features'], axis=1)
+        lambda x: x['features'])
 
     lens = [len(item) for item in trips['route']]
 
@@ -104,16 +107,41 @@ def update_kmeans_object(**kwargs):
     route_df['coordinates'] = route_df.feature.map(
         lambda x: x['geometry']['coordinates']
     )
+    route_df['geometry'] = route_df.feature.map(
+        lambda x: Point(x['geometry']['coordinates'])
+    )
+
+    route_df = gpd.GeoDataFrame(route_df)
+
+    # Eliminate points that are outside the bounds of the metro area cities
+    hook = AzureDataLakeHook(
+        azure_data_lake_conn_id=kwargs.get('azure_data_lake_conn_id'))
+    pathlib.Path(os.path.dirname(kwargs.get('templates_dict').get('cities_local_path'))
+                 ).mkdir(parents=True, exist_ok=True)
+
+    cities = hook.download_file(
+        kwargs.get('templates_dict').get('cities_local_path'),
+        kwargs.get('templates_dict').get('cities_remote_path'))
+    cities = gpd.read_file(kwargs.get(
+        'templates_dict').get('cities_local_path'))
+    hull = cities.geometry.map(lambda x: box(
+        x.bounds[0], x.bounds[1], x.bounds[2], x.bounds[3])).unary_union.convex_hull
+    route_df = route_df[route_df.geometry.within(hull)]
+
+    del cities
+    del hull
 
     # convert coordinates into a multi-dimensional array for kmeans
     coord_array = []
     route_df.coordinates.map(lambda x: coord_array.append([x[0], x[1]]))
     coord_array = np.array(coord_array)
 
+    # Update kmeans object
     kmeans = KMeans(n_clusters=50)
     kmeans.fit(coord_array)
 
-    pickle.dump(kmeans, kwargs.get('templates_dict').get('local_path'))
+    with open(kwargs.get('templates_dict').get('local_path')) as f:
+        pickle.dump(kmeans, f)
 
     hook.upload_file(kwargs.get('templates_dict').get(
         'local_path'), kwargs.get('templates_dict').get('remote_path'))
@@ -125,10 +153,13 @@ parse_datalake_files_task = PythonOperator(
     provide_context=True,
     python_callable=update_kmeans_object,
     templates_dict={
+        'cities_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/cities-{{ ts_nodash }}.csv',
+        'cities_remote_path': '/transportation/mobility/dim/cities.csv',
         'remote_path': '/transportation/mobility/learning/kmeans.pkl',
         'local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/kmeans-{{ ts_nodash }}.pkl',
     },
     op_kwargs={
-        'sql_server_conn_id': 'sql_server_default'
+        'sql_server_conn_id': 'azure_sql_server_full',
+        'azure_data_lake_conn_id': 'azure_data_lake_default'
     },
 )
