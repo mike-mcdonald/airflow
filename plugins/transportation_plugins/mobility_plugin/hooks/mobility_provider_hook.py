@@ -24,6 +24,7 @@ class MobilityProviderHook(BaseHook):
         except AirflowException as err:
             self.log.error(
                 f"Failed to find connection for mobility provider: {mobility_provider_conn_id}. Error: {err}")
+            raise
 
         self.session = requests.Session()
 
