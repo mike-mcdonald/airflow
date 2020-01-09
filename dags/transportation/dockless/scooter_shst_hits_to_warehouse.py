@@ -28,10 +28,9 @@ import airflow
 from airflow import DAG
 from airflow.hooks.azure_plugin import AzureDataLakeHook
 from airflow.hooks.mobility_plugin import MobilityProviderHook
+from airflow.hooks.mobility_plugin import SharedStreetsAPIHook
 from airflow.operators.python_operator import PythonOperator
 from airflow.operators.mssql_plugin import MsSqlOperator
-
-SHAREDSTREETS_API_URL = 'http://sharedstreets:3000/api/v1/match/point/bike'
 
 default_args = {
     'owner': 'airflow',
@@ -56,6 +55,7 @@ providers = ['lime', 'spin', 'bolt', 'shared', 'razor', 'bird']
 
 
 def extract_shst_hits_datalake(**kwargs):
+    # lookback a week and get the last hour
     end_time = kwargs.get('execution_date') - timedelta(days=7)
     start_time = end_time - timedelta(hours=1)
 
@@ -78,10 +78,10 @@ def extract_shst_hits_datalake(**kwargs):
             f'Received no trips for time period {start_time} to {end_time}')
         return
 
-    hook = AzureDataLakeHook(
+    hook_datalake = AzureDataLakeHook(
         azure_data_lake_conn_id=kwargs.get('azure_datalake_conn_id'))
 
-    hook.download_file('/transportation/mobility/learning/kmeans.pkl',
+    hook_datalake.download_file('/transportation/mobility/learning/kmeans.pkl',
                        kwargs['templates_dict']['kmeans_local_path'])
     kmeans = pickle.load(kwargs['templates_dict']['kmeans_local_path'])
 
@@ -115,7 +115,7 @@ def extract_shst_hits_datalake(**kwargs):
     route_df.crs = {'init': 'epsg:4326'}
     route_df['datetime'] = route_df.timestamp.map(
         lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
-    route_df['datetime'] = route_df.datetime.dt.round('L')
+    route_df['datetime'] = route_df.datetime.dt.round('H')
     route_df['datetime'] = route_df.datetime.map(
         lambda x: datetime.replace(x, tzinfo=None))
     route_df['date_key'] = route_df.datetime.map(
@@ -126,6 +126,8 @@ def extract_shst_hits_datalake(**kwargs):
     ).encode('utf-8')).hexdigest(), axis=1)
     route_df['datetime'] = route_df.datetime.map(
         lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
+
+    route_df = route_df.drop_duplicates(subset=['hash'])
 
     coord_array = []
     route_df.coordinates.map(lambda x: coord_array.append([x[0], x[1]]))
@@ -146,40 +148,11 @@ def extract_shst_hits_datalake(**kwargs):
                 }
             }, axis=1).values.tolist()
         })
-
-    def _request(session, url, data=None):
-        """
-        Internal helper for sending requests.
-
-        Returns payload(s).
-        """
-        retries = 0
-        res = None
-
-        while res is None:
-            try:
-                res = session.post(url, data=data)
-                res.raise_for_status()
-            except Exception as err:
-                res = None
-                retries = retries + 1
-                if retries > 3:
-                    print(
-                        f"Unable to retrieve response from {url} after 3 tries.  Aborting...")
-
-                print(
-                    f"Error while retrieving: {err}. Retrying in {retries * 10} seconds... (retry {retries}/3)")
-                time.sleep(retries * 10)
-
-        return res
-
-    session.headers.update({"Content-Type": "application/json"})
-    session.headers.update({"Accept": "application/json"})
-
+    hook_shst = SharedStreetsAPIHook(shst_api_conn_id='shst_api_default')
     cores = cpu_count()  # Number of CPU cores on your system
     executor = ThreadPoolExecutor(max_workers=cores*4)
     shst = shst_df.map(lambda x: executor.submit(
-        _request, session, SHAREDSTREETS_API_URL, data=json.dumps(x)))
+        hook_shst.match, 'point', 'bike', x))
 
     route_df = route_df.to_crs(epsg=3857)
 
@@ -301,7 +274,7 @@ def extract_shst_hits_datalake(**kwargs):
         'batch'
     ]].to_csv(kwargs.get('templates_dict').get('local_path'), index=False)
 
-    hook.upload_file(kwargs.get('templates_dict').get(
+    hook_datalake.upload_file(kwargs.get('templates_dict').get(
         'local_path'), kwargs.get('templates_dict').get('remote_path'))
 
     os.remove(kwargs.get('templates_dict').get('local_path'))
