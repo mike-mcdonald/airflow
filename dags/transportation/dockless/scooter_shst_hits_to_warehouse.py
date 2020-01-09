@@ -175,6 +175,10 @@ def extract_shst_hits_datalake(**kwargs):
     route_df['dt'] = route_df.apply(
         lambda x: (x.nt - x.timestamp) / 1000, axis=1)
 
+    is_stopped = (route_df['dx'] == 0) & (route_df['dy'] == 0)
+
+    route_df = route_df[~is_stopped]
+
     def find_bearing(hit):
         deg = atan2(hit.dx, hit.dy) / pi * 180
         if deg < 0:
