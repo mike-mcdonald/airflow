@@ -2,6 +2,7 @@
 DAG for ETL Processing of PDX GIS Open Data Counties, from Metro
 '''
 import hashlib
+import joblib
 import json
 import logging
 import os
@@ -26,12 +27,15 @@ from shapely.wkt import dumps
 import airflow
 
 from airflow import DAG
+
 from airflow.hooks.azure_plugin import AzureDataLakeHook
 from airflow.hooks.mobility_plugin import MobilityProviderHook
-from airflow.operators.python_operator import PythonOperator
-from airflow.operators.mssql_plugin import MsSqlOperator
+from airflow.hooks.mobility_plugin import SharedStreetsAPIHook
 
-SHAREDSTREETS_API_URL = 'http://sharedstreets:3000/api/v1/match/point/bike'
+from airflow.operators.dummy_operator import DummyOperator
+from airflow.operators.python_operator import BranchPythonOperator
+from airflow.operators.azure_plugin import AzureDataLakeRemoveOperator
+from airflow.operators.mssql_plugin import MsSqlOperator
 
 default_args = {
     'owner': 'airflow',
@@ -56,6 +60,7 @@ providers = ['lime', 'spin', 'bolt', 'shared', 'razor', 'bird']
 
 
 def extract_shst_hits_datalake(**kwargs):
+    # lookback a week and get the last hour
     end_time = kwargs.get('execution_date') - timedelta(days=7)
     start_time = end_time - timedelta(hours=1)
 
@@ -76,17 +81,20 @@ def extract_shst_hits_datalake(**kwargs):
     if len(trips) <= 0:
         logging.warning(
             f'Received no trips for time period {start_time} to {end_time}')
-        return
+        return 'warehouse_skipped'
 
-    hook = AzureDataLakeHook(
+    hook_datalake = AzureDataLakeHook(
         azure_data_lake_conn_id=kwargs.get('azure_datalake_conn_id'))
 
-    hook.download_file('/transportation/mobility/learning/kmeans.pkl',
-                       kwargs['templates_dict']['kmeans_local_path'])
-    kmeans = pickle.load(kwargs['templates_dict']['kmeans_local_path'])
+    hook_datalake.download_file(
+        kwargs['templates_dict']['kmeans_local_path'], '/transportation/mobility/learning/kmeans.pkl',)
+
+    kmeans = joblib.load(kwargs['templates_dict']['kmeans_local_path'])
 
     # Convert the route to a DataFrame now to make mapping easier
     trips['route'] = trips.route.map(lambda x: x['features'])
+    trips['propulsion_type'] = trips.propulsion_type.map(
+        lambda x: ','.join(sorted(x)))
 
     lens = [len(item) for item in trips['route']]
 
@@ -115,7 +123,7 @@ def extract_shst_hits_datalake(**kwargs):
     route_df.crs = {'init': 'epsg:4326'}
     route_df['datetime'] = route_df.timestamp.map(
         lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
-    route_df['datetime'] = route_df.datetime.dt.round('L')
+    route_df['datetime'] = route_df.datetime.dt.round('H')
     route_df['datetime'] = route_df.datetime.map(
         lambda x: datetime.replace(x, tzinfo=None))
     route_df['date_key'] = route_df.datetime.map(
@@ -126,6 +134,8 @@ def extract_shst_hits_datalake(**kwargs):
     ).encode('utf-8')).hexdigest(), axis=1)
     route_df['datetime'] = route_df.datetime.map(
         lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
+
+    route_df = route_df.drop_duplicates(subset=['hash'])
 
     coord_array = []
     route_df.coordinates.map(lambda x: coord_array.append([x[0], x[1]]))
@@ -142,44 +152,15 @@ def extract_shst_hits_datalake(**kwargs):
                 },
                 'geometry': {
                     'type': x.geometry.geom_type,
-                    'coordinates': np.array(x.geometry)
+                    'coordinates': np.array(x.geometry).tolist()
                 }
             }, axis=1).values.tolist()
         })
-
-    def _request(session, url, data=None):
-        """
-        Internal helper for sending requests.
-
-        Returns payload(s).
-        """
-        retries = 0
-        res = None
-
-        while res is None:
-            try:
-                res = session.post(url, data=data)
-                res.raise_for_status()
-            except Exception as err:
-                res = None
-                retries = retries + 1
-                if retries > 3:
-                    print(
-                        f"Unable to retrieve response from {url} after 3 tries.  Aborting...")
-
-                print(
-                    f"Error while retrieving: {err}. Retrying in {retries * 10} seconds... (retry {retries}/3)")
-                time.sleep(retries * 10)
-
-        return res
-
-    session.headers.update({"Content-Type": "application/json"})
-    session.headers.update({"Accept": "application/json"})
-
+    hook_shst = SharedStreetsAPIHook(shst_api_conn_id='shst_api_default')
     cores = cpu_count()  # Number of CPU cores on your system
     executor = ThreadPoolExecutor(max_workers=cores*4)
     shst = shst_df.map(lambda x: executor.submit(
-        _request, session, SHAREDSTREETS_API_URL, data=json.dumps(x)))
+        hook_shst.match, 'point', 'bike', x))
 
     route_df = route_df.to_crs(epsg=3857)
 
@@ -202,6 +183,10 @@ def extract_shst_hits_datalake(**kwargs):
     route_df['dt'] = route_df.apply(
         lambda x: (x.nt - x.timestamp) / 1000, axis=1)
 
+    is_stopped = (route_df['dx'] == 0) & (route_df['dy'] == 0)
+
+    route_df = route_df[~is_stopped]
+
     def find_bearing(hit):
         deg = atan2(hit.dx, hit.dy) / pi * 180
         if deg < 0:
@@ -221,7 +206,7 @@ def extract_shst_hits_datalake(**kwargs):
 
     def safe_result(x):
         try:
-            return x.result().json()
+            return x.result()
         except:
             return None
 
@@ -301,13 +286,15 @@ def extract_shst_hits_datalake(**kwargs):
         'batch'
     ]].to_csv(kwargs.get('templates_dict').get('local_path'), index=False)
 
-    hook.upload_file(kwargs.get('templates_dict').get(
+    hook_datalake.upload_file(kwargs.get('templates_dict').get(
         'local_path'), kwargs.get('templates_dict').get('remote_path'))
 
     os.remove(kwargs.get('templates_dict').get('local_path'))
 
+    return 'stage_shst_segment_hits'
 
-parse_datalake_files_task = PythonOperator(
+
+parse_datalake_files_task = BranchPythonOperator(
     task_id='extract_routes_to_data_lake',
     dag=dag,
     provide_context=True,
@@ -321,6 +308,12 @@ parse_datalake_files_task = PythonOperator(
     op_kwargs={
         'azure_datalake_conn_id': 'azure_data_lake_default'
     },
+)
+
+skip_warehouse_task = DummyOperator(
+    task_id=f'warehouse_skipped',
+    dag=dag,
+    depends_on_past=False,
 )
 
 # Run SQL scripts to transform extract data into staged facts
@@ -345,7 +338,7 @@ stage_shst_segment_hit_task = MsSqlOperator(
     )
     as
     select
-        provider_key,
+        p.[key] as provider_key,
         date_key,
         shst_geometry_id,
         shst_reference_id,
@@ -366,7 +359,17 @@ stage_shst_segment_hit_task = MsSqlOperator(
     '''
 )
 
-parse_datalake_files_task >> stage_shst_segment_hit_task
+parse_datalake_files_task >> [stage_shst_segment_hit_task, skip_warehouse_task]
+
+
+delete_data_lake_extract_task = AzureDataLakeRemoveOperator(task_id=f'delete_extract',
+                                                            dag=dag,
+                                                            depends_on_past=False,
+                                                            azure_data_lake_conn_id='azure_data_lake_default',
+                                                            remote_path='/transportation/mobility/etl/shst_hits/{{ ts_nodash }}.csv')
+
+stage_shst_segment_hit_task >> delete_data_lake_extract_task
+
 
 warehouse_insert_task = MsSqlOperator(
     task_id='warehouse_insert_shst_segment_hits',
@@ -403,8 +406,8 @@ warehouse_insert_task = MsSqlOperator(
         seen,
         seen
     from
-        etl.etl.stage_shst_segment_hit_{{ ts_nodash }} as source
-    and not exists (
+        etl.stage_shst_segment_hit_{{ ts_nodash }} as source
+    where not exists (
         select
             1
         from
@@ -415,7 +418,29 @@ warehouse_insert_task = MsSqlOperator(
     '''
 )
 
-stage_shst_segment_hit_task >> warehouse_insert_task
+warehouse_update_task = MsSqlOperator(
+    task_id=f'warehouse_update_event',
+    dag=dag,
+    mssql_conn_id='azure_sql_server_full',
+    pool='scooter_azure_sql_server',
+    sql='''
+    update
+        fact.shst_segment_hit
+    set
+        last_seen = source.seen,
+        datetime = source.datetime,
+        vehicle_type = source.vehicle_type,
+        propulsion_type = source.propulsion_type,
+        bearing = source.bearing,
+        speed = source.speed
+    from
+        etl.stage_shst_segment_hit_{{ ts_nodash }} as source
+    where
+        source.hash = fact.shst_segment_hit.hash
+    '''
+)
+
+stage_shst_segment_hit_task >> [warehouse_insert_task, warehouse_update_task]
 
 clean_stage_task = MsSqlOperator(
     task_id='clean_stage_table',
