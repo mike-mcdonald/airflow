@@ -2,6 +2,7 @@
 DAG for ETL Processing of PDX GIS Open Data Counties, from Metro
 '''
 import hashlib
+import joblib
 import json
 import logging
 import os
@@ -26,10 +27,14 @@ from shapely.wkt import dumps
 import airflow
 
 from airflow import DAG
+
 from airflow.hooks.azure_plugin import AzureDataLakeHook
 from airflow.hooks.mobility_plugin import MobilityProviderHook
 from airflow.hooks.mobility_plugin import SharedStreetsAPIHook
-from airflow.operators.python_operator import PythonOperator
+
+from airflow.operators.dummy_operator import DummyOperator
+from airflow.operators.python_operator import BranchPythonOperator
+from airflow.operators.azure_plugin import AzureDataLakeRemoveOperator
 from airflow.operators.mssql_plugin import MsSqlOperator
 
 default_args = {
@@ -76,17 +81,20 @@ def extract_shst_hits_datalake(**kwargs):
     if len(trips) <= 0:
         logging.warning(
             f'Received no trips for time period {start_time} to {end_time}')
-        return
+        return 'warehouse_skipped'
 
     hook_datalake = AzureDataLakeHook(
         azure_data_lake_conn_id=kwargs.get('azure_datalake_conn_id'))
 
-    hook_datalake.download_file('/transportation/mobility/learning/kmeans.pkl',
-                       kwargs['templates_dict']['kmeans_local_path'])
-    kmeans = pickle.load(kwargs['templates_dict']['kmeans_local_path'])
+    hook_datalake.download_file(
+        kwargs['templates_dict']['kmeans_local_path'], '/transportation/mobility/learning/kmeans.pkl',)
+
+    kmeans = joblib.load(kwargs['templates_dict']['kmeans_local_path'])
 
     # Convert the route to a DataFrame now to make mapping easier
     trips['route'] = trips.route.map(lambda x: x['features'])
+    trips['propulsion_type'] = trips.propulsion_type.map(
+        lambda x: ','.join(sorted(x)))
 
     lens = [len(item) for item in trips['route']]
 
@@ -144,7 +152,7 @@ def extract_shst_hits_datalake(**kwargs):
                 },
                 'geometry': {
                     'type': x.geometry.geom_type,
-                    'coordinates': np.array(x.geometry)
+                    'coordinates': np.array(x.geometry).tolist()
                 }
             }, axis=1).values.tolist()
         })
@@ -198,7 +206,7 @@ def extract_shst_hits_datalake(**kwargs):
 
     def safe_result(x):
         try:
-            return x.result().json()
+            return x.result()
         except:
             return None
 
@@ -283,8 +291,10 @@ def extract_shst_hits_datalake(**kwargs):
 
     os.remove(kwargs.get('templates_dict').get('local_path'))
 
+    return 'stage_shst_segment_hits'
 
-parse_datalake_files_task = PythonOperator(
+
+parse_datalake_files_task = BranchPythonOperator(
     task_id='extract_routes_to_data_lake',
     dag=dag,
     provide_context=True,
@@ -298,6 +308,12 @@ parse_datalake_files_task = PythonOperator(
     op_kwargs={
         'azure_datalake_conn_id': 'azure_data_lake_default'
     },
+)
+
+skip_warehouse_task = DummyOperator(
+    task_id=f'warehouse_skipped',
+    dag=dag,
+    depends_on_past=False,
 )
 
 # Run SQL scripts to transform extract data into staged facts
@@ -322,7 +338,7 @@ stage_shst_segment_hit_task = MsSqlOperator(
     )
     as
     select
-        provider_key,
+        p.[key] as provider_key,
         date_key,
         shst_geometry_id,
         shst_reference_id,
@@ -343,7 +359,17 @@ stage_shst_segment_hit_task = MsSqlOperator(
     '''
 )
 
-parse_datalake_files_task >> stage_shst_segment_hit_task
+parse_datalake_files_task >> [stage_shst_segment_hit_task, skip_warehouse_task]
+
+
+delete_data_lake_extract_task = AzureDataLakeRemoveOperator(task_id=f'delete_extract',
+                                                            dag=dag,
+                                                            depends_on_past=False,
+                                                            azure_data_lake_conn_id='azure_data_lake_default',
+                                                            remote_path='/transportation/mobility/etl/shst_hits/{{ ts_nodash }}.csv')
+
+stage_shst_segment_hit_task >> delete_data_lake_extract_task
+
 
 warehouse_insert_task = MsSqlOperator(
     task_id='warehouse_insert_shst_segment_hits',
@@ -380,8 +406,8 @@ warehouse_insert_task = MsSqlOperator(
         seen,
         seen
     from
-        etl.etl.stage_shst_segment_hit_{{ ts_nodash }} as source
-    and not exists (
+        etl.stage_shst_segment_hit_{{ ts_nodash }} as source
+    where not exists (
         select
             1
         from
@@ -392,7 +418,29 @@ warehouse_insert_task = MsSqlOperator(
     '''
 )
 
-stage_shst_segment_hit_task >> warehouse_insert_task
+warehouse_update_task = MsSqlOperator(
+    task_id=f'warehouse_update_event',
+    dag=dag,
+    mssql_conn_id='azure_sql_server_full',
+    pool='scooter_azure_sql_server',
+    sql='''
+    update
+        fact.shst_segment_hit
+    set
+        last_seen = source.seen,
+        datetime = source.datetime,
+        vehicle_type = source.vehicle_type,
+        propulsion_type = source.propulsion_type,
+        bearing = source.bearing,
+        speed = source.speed
+    from
+        etl.stage_shst_segment_hit_{{ ts_nodash }} as source
+    where
+        source.hash = fact.shst_segment_hit.hash
+    '''
+)
+
+stage_shst_segment_hit_task >> [warehouse_insert_task, warehouse_update_task]
 
 clean_stage_task = MsSqlOperator(
     task_id='clean_stage_table',
