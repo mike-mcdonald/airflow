@@ -91,6 +91,8 @@ def extract_shst_hits_datalake(**kwargs):
 
     kmeans = joblib.load(kwargs['templates_dict']['kmeans_local_path'])
 
+    os.remove(kwargs['templates_dict']['kmeans_local_path'])
+
     # Convert the route to a DataFrame now to make mapping easier
     trips['route'] = trips.route.map(lambda x: x['features'])
     trips['propulsion_type'] = trips.propulsion_type.map(
@@ -176,16 +178,10 @@ def extract_shst_hits_datalake(**kwargs):
     # drop destination
     route_df = route_df.dropna().copy()
 
-    route_df['dx'] = route_df.apply(
-        lambda x: x.nx - x.x, axis=1)
-    route_df['dy'] = route_df.apply(
-        lambda x: x.ny - x.y, axis=1)
-    route_df['dt'] = route_df.apply(
-        lambda x: (x.nt - x.timestamp) / 1000, axis=1)
+    route_df['dx'] = route_df.nx - route_df.x
+    route_df['dy'] = route_df.ny - route_df.y
+    route_df['dt'] = (route_df.nt - route_df.timestamp) / 1000
 
-    is_stopped = (route_df['dx'] == 0) & (route_df['dy'] == 0)
-
-    route_df = route_df[~is_stopped]
 
     def find_bearing(hit):
         deg = atan2(hit.dx, hit.dy) / pi * 180
