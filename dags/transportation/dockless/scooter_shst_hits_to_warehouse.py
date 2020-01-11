@@ -116,9 +116,6 @@ def extract_shst_hits_datalake(**kwargs):
     route_df['geometry'] = route_df.feature.map(
         lambda x: Point(x['geometry']['coordinates']))
 
-    route_df.drop_duplicates(
-        subset=['trip_id', 'device_id', 'provider_id', 'timestamp'])
-
     route_df = gpd.GeoDataFrame(route_df.sort_values(
         by=['trip_id', 'timestamp'], ascending=True
     ).reset_index(drop=True).copy())
@@ -136,8 +133,6 @@ def extract_shst_hits_datalake(**kwargs):
     ).encode('utf-8')).hexdigest(), axis=1)
     route_df['datetime'] = route_df.datetime.map(
         lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
-
-    route_df = route_df.drop_duplicates(subset=['hash'])
 
     coord_array = []
     route_df.coordinates.map(lambda x: coord_array.append([x[0], x[1]]))
@@ -218,6 +213,11 @@ def extract_shst_hits_datalake(**kwargs):
 
     route_df = route_df.merge(shst_df, on='hash')
 
+    if len(route_df['candidates'].values) == 0:
+        logging.warning(
+            f'Received no candidates for time period {start_time} to {end_time}')
+        return 'warehouse_skipped'
+
     lens = [len(item) for item in route_df['candidates']]
     shst_df = pd.DataFrame({
         "date_key": np.repeat(route_df['date_key'].values, lens),
@@ -259,7 +259,9 @@ def extract_shst_hits_datalake(**kwargs):
     pathlib.Path(os.path.dirname(kwargs.get('templates_dict').get('local_path'))
                  ).mkdir(parents=True, exist_ok=True)
 
-    shst_df.sort_values(
+    is_stopped = shst_df['speed'] == 0
+
+    shst_df[~is_stopped].sort_values(
         by=['hash', 'bearing_diff', 'score']
     ).drop_duplicates(
         subset=['hash'],
