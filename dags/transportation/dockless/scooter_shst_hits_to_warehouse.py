@@ -177,12 +177,8 @@ def extract_shst_hits_datalake(**kwargs):
     route_df['dy'] = route_df.ny - route_df.y
     route_df['dt'] = (route_df.nt - route_df.timestamp) / 1000
 
-
     def find_bearing(hit):
-        deg = atan2(hit.dx, hit.dy) / pi * 180
-        if deg < 0:
-            deg = deg + 360
-        return deg
+        return atan2(hit.dx, hit.dy) / pi * 180
 
     def find_speed(hit):
         if hit['dt'] <= 0:
@@ -247,8 +243,10 @@ def extract_shst_hits_datalake(**kwargs):
             angle = angle + 360
         return angle
 
-    shst_df['bearing_diff'] = shst_df.apply(lambda x: fabs(
-        normalizeAngle(x.bearing) - normalizeAngle(x.shstBearing)), axis=1)
+    shst_df['bearing'] = shst_df.bearing.apply(normalizeAngle)
+    shst_df['shstBearing'] = shst_df.shstBearing.apply(normalizeAngle)
+    shst_df['bearing_diff'] = shst_df.bearing - shst_df.shstBearing
+    shst_df['bearing_diff'] = shst_df.bearing_diff.apply(fabs)
 
     shst_df['batch'] = kwargs.get('ts_nodash')
     shst_df['seen'] = datetime.now()
