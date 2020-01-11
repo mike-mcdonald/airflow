@@ -195,7 +195,7 @@ def extract_shst_hits_datalake(**kwargs):
         try:
             return x.result()
         except:
-            logging.warning('Error retrieving sharedstreets references, returning empty results...')
+            logging.error('Error retrieving sharedstreets references, returning empty results...')
             return { 'features': [] }
 
     shst_df = shst.map(safe_result)
