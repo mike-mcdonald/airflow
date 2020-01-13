@@ -56,6 +56,11 @@ spec:
                             secretKeyRef:
                                 name: airflow-redis
                                 key: redis-password
+                      - name: HASH_SALT
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-hash
+                                key: salt
                   resources: {}
                   args: ['webserver']
                   livenessProbe:

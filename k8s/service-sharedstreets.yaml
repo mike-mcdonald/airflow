@@ -1,0 +1,20 @@
+---
+# Source: airflow/templates/service-worker.yaml
+# Headless service for stable DNS entries of StatefulSet members.
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-sharedstreets
+  labels:
+    app: airflow
+    component: sharedstreets
+spec:
+  type: ClusterIP
+  selector:
+    app: airflow
+    component: sharedstreets
+  ports:
+    - name: sharedstreets
+      protocol: TCP
+      port: 3000
+      targetPort: 3000
