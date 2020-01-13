@@ -7,7 +7,6 @@ metadata:
   labels:
     app: airflow
     component: web
-  annotations:
 spec:
   type: ClusterIP
   selector:

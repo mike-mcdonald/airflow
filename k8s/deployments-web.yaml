@@ -29,7 +29,7 @@ spec:
             restartPolicy: Always
             containers:
                 - name: airflow-web
-                  image: pudlmds.azurecr.io/airflow:1.10.5.24
+                  image: pudlmds.azurecr.io/airflow:1.10.6.1
                   imagePullPolicy: Always
                   ports:
                       - name: web
@@ -56,6 +56,11 @@ spec:
                             secretKeyRef:
                                 name: airflow-redis
                                 key: redis-password
+                      - name: HASH_SALT
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-hash
+                                key: salt
                   resources: {}
                   args: ['webserver']
                   livenessProbe:

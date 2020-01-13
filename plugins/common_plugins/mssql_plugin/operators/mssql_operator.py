@@ -4,6 +4,7 @@ from airflow.utils.decorators import apply_defaults
 
 from common_plugins.mssql_plugin.hooks.mssql_hook import MsSqlHook
 
+
 class MsSqlOperator(BaseOperator):
     """
     Executes sql code in a specific Microsoft SQL database
@@ -42,7 +43,6 @@ class MsSqlOperator(BaseOperator):
         self.log.info('Executing: %s', self.sql)
         hook = MsSqlHook(mssql_conn_id=self.mssql_conn_id,
                          schema=self.database)
-        hook.run(
-            self.sql,
-            autocommit=self.autocommit,
-            parameters=self.parameters)
+        hook.run(self.sql,
+                 autocommit=self.autocommit,
+                 parameters=self.parameters)

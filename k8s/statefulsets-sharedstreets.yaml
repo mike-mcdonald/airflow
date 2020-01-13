@@ -1,0 +1,39 @@
+---
+# Source: airflow/templates/statefulsets-workers.yaml
+## Workers are not in deployment, but in StatefulSet, to allow each worker expose a mini-server
+## that only serve logs, that will be used by the web server.
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+    name: airflow-sharedstreets
+    labels:
+        app: airflow
+        component: sharedstreets
+spec:
+    serviceName: 'airflow-sharedstreets'
+    updateStrategy:
+        ## Kill the workers as soon as possible, the scheduler will restart the failed job later
+        type: RollingUpdate
+    ## Use experimental burst mode for faster StatefulSet scaling
+    ##   https://github.com/kubernetes/kubernetes/commit/c2c5051adf096ffd48bf1dcf5b11cb47e464ecdd
+    podManagementPolicy: Parallel
+    replicas: 5
+    selector:
+        matchLabels:
+            app: airflow
+            component: sharedstreets
+    template:
+        metadata:
+            labels:
+                app: airflow
+                component: sharedstreets
+        spec:
+            restartPolicy: Always
+            terminationGracePeriodSeconds: 30
+            serviceAccountName: airflow
+            containers:
+                - name: airflow-sharedstreets
+                  imagePullPolicy: Always
+                  image: pudlmds.azurecr.io/sharedstreets-api:1.0.0
+

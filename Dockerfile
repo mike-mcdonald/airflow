@@ -5,10 +5,8 @@ ENV DEBIAN_FRONTEND noninteractive
 ENV TERM linux
 
 # Airflow
-ARG AIRFLOW_VERSION=1.10.5
+ARG AIRFLOW_VERSION=1.10.6
 ARG AIRFLOW_USER_HOME=/usr/local/airflow
-ARG AIRFLOW_DEPS=""
-ARG PYTHON_DEPS=""
 ENV AIRFLOW_HOME=${AIRFLOW_USER_HOME}
 
 # Define en_US.
@@ -81,7 +79,7 @@ RUN set -ex \
     && pip install pyOpenSSL \
     && pip install ndg-httpsclient \
     && pip install pyasn1 \
-    && pip install apache-airflow[all]==${AIRFLOW_VERSION} \
+    && pip install apache-airflow[crypto,azure_data_lake,celery,devel_azure,postgres,redis,webhdfs]==${AIRFLOW_VERSION} \
     && apt-get purge --auto-remove -yqq $buildDeps \
     && apt-get autoremove -yqq --purge \
     && apt-get clean \
