@@ -455,4 +455,4 @@ clean_stage_task = MsSqlOperator(
     '''
 )
 
-warehouse_insert_task >> clean_stage_task
+[warehouse_insert_task, warehouse_update_task] >> clean_stage_task
