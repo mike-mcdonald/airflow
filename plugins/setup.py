@@ -13,6 +13,7 @@ setup(
             'mssql_plugin = common_plugins.mssql_plugin:MsSqlPlugin',
             'azure_plugin = common_plugins.azure_plugin:AzurePlugin',
             'waze_plugin = transportation_plugins.waze_plugin:WazePlugin'
+            'zendesk_plugin = parking_plugins.zendesk_plugin:ZendeskPlugin'
         ]
     }
 )
