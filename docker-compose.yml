@@ -30,6 +30,7 @@ services:
             # - POSTGRES_PASSWORD=airflow
             # - POSTGRES_DB=airflow
             # - REDIS_PASSWORD=redispass
+        env_file: .env
         volumes:
             - ./.output:/usr/local/airflow/tmp
             - ./config/airflow.cfg:/usr/local/airflow/airflow.cfg
