@@ -1,5 +1,6 @@
 import base64
 import time
+import logging
 
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
@@ -23,16 +24,16 @@ class ZendeskHook(BaseHook):
                 f"Failed to find connection for Zendesk, Error: {err}")
             raise
         
-        AuthInfo = base64.b64encode(f"{self.connection.login}/token:{self.connection.password}")
+        AuthInfoStr = f"{str(self.connection.login)}/token:{str(self.connection.password)}"
+        AuthInfoB = base64.b64encode(AuthInfoStr.encode("utf-8"))
+        AuthInfoStr = str(AuthInfoB, "utf-8")
 
         self.session = requests.Session()
         self.session.headers.update({
             "Accept": f"application/json",
-            "Authorization": f"Basic {AuthInfo}"
+            "Authorization": f"Basic {AuthInfoStr}"
         })
 
-    def _date_format(self, dt):
-        return int(dt.timestamp()) * 1000
 
     def _request(self, url, payload_key, params=None, results=[]):
         """
@@ -44,7 +45,8 @@ class ZendeskHook(BaseHook):
         res = None
 
         self.log.debug(f"Making request to: {url}")
-
+        logging.info(f"---------------------------Making request to: {url}")
+        logging.info(f"---------------------------payload key: {payload_key} params {params}  session {self.session.headers}")
         while res is None:
             try:
                 res = self.session.get(url, params=params)
@@ -66,11 +68,13 @@ class ZendeskHook(BaseHook):
                 time.sleep(10 * retries)
 
         self.log.debug(f"Received response from {url}")
+        logging.info(f"-----------------Received response from {url} and {params}")
 
         page = res.json()
-
-        if page["tickets"] is not None:
-            results.extend(page["tickets"][payload_key])
+       
+        
+        if page[payload_key] is not None:
+            results.extend(page[payload_key])
 
         if page["end_of_stream"] == False:
             next_page = page["next_page"]
@@ -78,7 +82,7 @@ class ZendeskHook(BaseHook):
                 time.sleep(int(self.connection.extra_dejson["rate_limit"])) 
             results = self._request(url=next_page, payload_key=payload_key,
                                         results=results)
-
+        logging.info(f"-----------------length of tickets returned: {len(results)}")
         return results
 
 
@@ -96,19 +100,15 @@ class ZendeskHook(BaseHook):
 
         """
 
-        self.log.debug(
-            f"Retrieving events for period {start_time} to now")
-
-        # convert datetimes to querystring friendly format
-        if start_time is not None:
-            start_time = self._date_format(start_time)
+        self.log.info(f"Retrieving tickets for period {start_time} to {datetime.now()}")
+        logging.info(f"Retrieving tickets for period {start_time} to {datetime.now()}")
         
 
         # gather all the params together
         params = dict(start_time=start_time)
 
+
         # make the request(s)
-        tickets = self._request(
-            self.connection.host.replace(":endpoint", "incremental/tickets.json"), "incremental/tickets.json", params)
+        tickets = self._request(self.connection.host.replace(":endpoint", "incremental/tickets.json"), "tickets",params)
 
         return pd.DataFrame.from_records(tickets)

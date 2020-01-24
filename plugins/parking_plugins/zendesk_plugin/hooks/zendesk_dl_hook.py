@@ -7,7 +7,7 @@ class ZendeskAzureDLHook(ContribHook):
     """
 
     def __init__(self, zendesk_datalake_conn_id='azure_data_lake_zendesk'):
-        super().__init__(zendesk_datalake_conn_id=zendesk_datalake_conn_id)
+        super().__init__(azure_data_lake_conn_id=zendesk_datalake_conn_id)
 
     def set_expiry(self, path, expiry_option, expire_time=None):
         self.connection.set_expiry(path, expiry_option, expire_time)

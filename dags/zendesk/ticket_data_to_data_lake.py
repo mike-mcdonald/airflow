@@ -29,7 +29,7 @@ from airflow.hooks.zendesk_plugin import ZendeskAzureDLHook , ZendeskHook
 default_args = {
     'owner': 'airflow',
     'depends_on_past': True,
-    'start_date':  datetime(2001, 1, 1),
+    'start_date':  datetime(2019, 12, 12),
     'email': ['pbotsqldbas@portlandoregon.gov'],
     'email_on_failure': True,
     'email_on_retry': False,
@@ -46,23 +46,25 @@ def zendesk_tickets_to_datalake(**kwargs):
 
     # set initial start time if it is the first time
     # otherwise get the end time of last request and pass it as a start time for this request.
-    start_time = datetime.now()
+    start_time = datetime(2020, 1, 22).timestamp()
 
     # Create the hook
     hook = ZendeskHook(
         zendesk_conn_id=kwargs.get('zendesk_api_conn_id'))
     
+    
+    logging.info(f'-------------------date time passed to url:{start_time}')
     # Get tickets as data frams
     tickets = gpd.GeoDataFrame(hook.get_tickets(start_time=start_time))
-    
     if len(tickets) <= 0:
         logging.warning(
             f'Received no tickets for time period {start_time} to {datetime.now()}')
         return f'warehouse_skipped'
     
+    
     # do data transformation on tickets as needed here.
     hook = ZendeskAzureDLHook(
-        azure_data_lake_conn_id=kwargs.get('zendesk_datalake_conn_id') # maybe different in my case
+        zendesk_datalake_conn_id=kwargs.get('zendesk_datalake_conn_id') # maybe different in my case
     )
 
     #revise.
@@ -92,10 +94,8 @@ def zendesk_tickets_to_datalake(**kwargs):
 
     hook.upload_file(kwargs.get('templates_dict').get(
         'tickets_local_path'), kwargs.get('templates_dict').get('tickets_remote_path'))
-
     os.remove(kwargs.get('templates_dict').get('tickets_local_path'))
 
-    return f'{kwargs["provider"]}_extract_events-sql'
 
 
 dag_id = "ticket_data_to_data_lake"
@@ -103,7 +103,7 @@ dag = DAG(
     dag_id=dag_id,
     default_args=default_args,
     catchup=True,
-    schedule_interval='@weekly'
+    schedule_interval='@monthly'
 )
 zendesk_conn_id = "Zendesk_API"
 
@@ -129,11 +129,11 @@ retrieve_zendesk_data_task = BranchPythonOperator(
 )
 
 
-warehouse_skipped = DummyOperator(
+'''warehouse_skipped = DummyOperator(
     task_id=f'warehouse_skipped',
     dag=dag,
     depends_on_past=False,
-)
+)'''
 
 start = DummyOperator(
     task_id=f'start',
