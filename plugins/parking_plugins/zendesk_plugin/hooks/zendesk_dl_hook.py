@@ -23,3 +23,4 @@ class ZendeskAzureDLHook(ContribHook):
             return self.connection.ls(path, detail)
         except:
             self.log.error(f'Failed to list files at {path}...')
+    

@@ -45,8 +45,8 @@ class ZendeskHook(BaseHook):
         res = None
 
         self.log.debug(f"Making request to: {url}")
-        logging.info(f"---------------------------Making request to: {url}")
-        logging.info(f"---------------------------payload key: {payload_key} params {params}  session {self.session.headers}")
+        logging.info(f"---------------------------payload key: {payload_key} params {params} url {url}  session {self.session.headers}")
+
         while res is None:
             try:
                 res = self.session.get(url, params=params)
@@ -71,44 +71,40 @@ class ZendeskHook(BaseHook):
         logging.info(f"-----------------Received response from {url} and {params}")
 
         page = res.json()
+
+        next_start_time = 'null'
        
         
         if page[payload_key] is not None:
             results.extend(page[payload_key])
 
-        if page["end_of_stream"] == False:
+        end_of_stream = page["end_of_stream"]
+
+        if end_of_stream == False:
             next_page = page["next_page"]
+
             if "rate_limit" in self.connection.extra_dejson:
-                time.sleep(int(self.connection.extra_dejson["rate_limit"])) 
-            results = self._request(url=next_page, payload_key=payload_key,
-                                        results=results)
-        logging.info(f"-----------------length of tickets returned: {len(results)}")
-        return results
+                time.sleep(int(self.connection.extra_dejson["rate_limit"]))
+            
+            if len(results) < 20000:
+                results, next_start_time = self._request(url=next_page, payload_key=payload_key, results=results)
+            else:
+                next_start_time = page["end_time"]
+        else:
+            next_start_time = page["end_time"]
+
+        return results, next_start_time
 
 
+    #Call Zendesk Api and get data
     def get_tickets(self, start_time=None):
-        """
-        Request Status Changes data. Returns a DataFrame of status_changes payload(s)
 
-        Supported keyword args:
-
-            - `start_time`: Filters for status changes where `event_time` occurs at or after the given time
-                            Should be a datetime object or numeric representation of UNIX seconds
-
-            - `end_time`: Filters for status changes where `event_time` occurs at or before the given time
-                          Should be a datetime object or numeric representation of UNIX seconds
-
-        """
-
-        self.log.info(f"Retrieving tickets for period {start_time} to {datetime.now()}")
         logging.info(f"Retrieving tickets for period {start_time} to {datetime.now()}")
-        
 
         # gather all the params together
         params = dict(start_time=start_time)
 
-
         # make the request(s)
-        tickets = self._request(self.connection.host.replace(":endpoint", "incremental/tickets.json"), "tickets",params)
+        tickets, next_start_time = self._request(self.connection.host.replace(":endpoint", "incremental/tickets.json"), "tickets",params)
 
-        return pd.DataFrame.from_records(tickets)
+        return pd.DataFrame.from_records(tickets), next_start_time
