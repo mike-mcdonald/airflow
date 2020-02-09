@@ -37,7 +37,6 @@ default_args = {
     'owner': 'airflow',
     'depends_on_past': True,
     'start_date':  datetime(2018, 4, 26),
-    'end_date': datetime(2018, 12, 31)
     'email': ['pbotsqldbas@portlandoregon.gov'],
     'email_on_failure': True,
     'email_on_retry': False,
@@ -51,6 +50,12 @@ default_args = {
     # 'end_date': datetime(2016, 1, 1),
 }
 
+dag = DAG(
+    dag_id='scooter_pilot_1_vehicles_to_warehouse',
+    default_args=default_args,
+    max_active_runs=3,
+)
+
 
 def process_vehicles_to_data_lake(**kwargs):
     # Create the hook
@@ -63,7 +68,7 @@ def process_vehicles_to_data_lake(**kwargs):
         select
             v.name as vehicle_id
         from
-            dim.vehicle
+            dim.vehicle as v
     ''')
 
     vehicles['device_id'] = vehicles.apply(lambda x: str(uuid.uuid4()), axis=1)
@@ -95,8 +100,8 @@ extract_data_lake_task = PythonOperator(
     },
 )
 
-stage_shst_segment_hit_task = MsSqlOperator(
-    task_id=f'stage_shst_segment_hits',
+insert_pilot_1_vehicle_task = MsSqlOperator(
+    task_id=f'insert_pilot_1_vehicles',
     dag=dag,
     mssql_conn_id='azure_sql_server_full',
     pool='scooter_azure_sql_server',
@@ -112,7 +117,7 @@ stage_shst_segment_hit_task = MsSqlOperator(
         vehicle_id,
         vehicle_type
     from
-        external_vehicle as e
+        etl.external_pilot_1_vehicle as e
     where
         not exists (
             select
@@ -124,144 +129,4 @@ stage_shst_segment_hit_task = MsSqlOperator(
         )
     ''')
 
-stage_shst_segment_hit_task = DummyOperator(
-    task_id=f'stage_shst_segment_hits',
-    dag=dag
-)
-
-stage_shst_segment_hit_task = MsSqlOperator(
-    task_id=f'stage_shst_segment_hits',
-    dag=dag,
-    mssql_conn_id='azure_sql_server_full',
-    pool='scooter_azure_sql_server',
-    sql='''
-    if exists (
-        select 1
-        from sysobjects
-        where name = 'stage_shst_segment_hit_{{ ts_nodash }}'
-    )
-    drop table etl.stage_shst_segment_hit_{{ ts_nodash }}
-
-    create table etl.stage_shst_segment_hit_{{ ts_nodash }}
-    with
-    (
-        distribution = round_robin,
-        heap
-    )
-    as
-    select
-        p.[key] as provider_key,
-        date_key,
-        shst_geometry_id,
-        shst_reference_id,
-        hash,
-        datetime,
-        vehicle_type,
-        propulsion_type,
-        seen,
-        batch
-    from
-        etl.external_shst_segment_hit as e
-    inner join
-        dim.provider as p on p.provider_name = e.provider_name
-    where
-        e.batch = '{{ ts_nodash }}'
-    '''
-)
-
-extract_data_lake_task >> [sync_vehicle_task, skip_warehouse_task]
-
-stage_shst_segment_hit_task
-
-
-delete_data_lake_extract_task = AzureDataLakeRemoveOperator(task_id=f'delete_extract',
-                                                            dag=dag,
-                                                            depends_on_past=False,
-                                                            azure_data_lake_conn_id='azure_data_lake_default',
-                                                            remote_path='/transportation/mobility/etl/shst_hits/{{ ts_nodash }}.csv')
-
-stage_shst_segment_hit_task >> delete_data_lake_extract_task
-
-
-warehouse_insert_task = MsSqlOperator(
-    task_id='warehouse_insert_shst_segment_hits',
-    dag=dag,
-    mssql_conn_id='azure_sql_server_full',
-    pool='scooter_azure_sql_server',
-    sql='''
-    insert into
-        fact.shst_segment_hit (
-            provider_key,
-            date_key,
-            shst_geometry_id,
-            shst_reference_id,
-            hash,
-            datetime,
-            vehicle_type,
-            propulsion_type,
-            first_seen,
-            last_seen
-        )
-    select
-        provider_key,
-        date_key,
-        shst_geometry_id,
-        shst_reference_id,
-        hash,
-        datetime,
-        vehicle_type,
-        propulsion_type,
-        seen,
-        seen
-    from
-        etl.stage_shst_segment_hit_{{ ts_nodash }} as source
-    where not exists (
-        select
-            1
-        from
-            fact.shst_segment_hit as target
-        where
-         target.hash = source.hash
-    )
-    '''
-)
-
-warehouse_update_task = MsSqlOperator(
-    task_id=f'warehouse_update_event',
-    dag=dag,
-    mssql_conn_id='azure_sql_server_full',
-    pool='scooter_azure_sql_server',
-    sql='''
-    update
-        fact.shst_segment_hit
-    set
-        last_seen = source.seen,
-        datetime = source.datetime,
-        vehicle_type = source.vehicle_type,
-        propulsion_type = source.propulsion_type,
-    from
-        etl.stage_shst_segment_hit_{{ ts_nodash }} as source
-    where
-        source.hash = fact.shst_segment_hit.hash
-    '''
-)
-
-stage_shst_segment_hit_task >> [warehouse_insert_task, warehouse_update_task]
-
-clean_stage_task = MsSqlOperator(
-    task_id='clean_stage_table',
-    dag=dag,
-    depends_on_past=False,
-    mssql_conn_id='azure_sql_server_full',
-    pool='scooter_azure_sql_server',
-    sql='''
-    if exists (
-        select 1
-        from sysobjects
-        where name = 'stage_shst_segment_hit_{{ ts_nodash }}'
-    )
-    drop table etl.stage_shst_segment_hit_{{ ts_nodash }}
-    '''
-)
-
-[warehouse_insert_task, warehouse_update_task] >> clean_stage_task
+extract_data_lake_task >> insert_pilot_1_vehicle_task
