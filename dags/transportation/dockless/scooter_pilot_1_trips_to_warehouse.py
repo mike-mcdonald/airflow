@@ -354,7 +354,7 @@ dag = DAG(
 
 provider = 'pilot_1'
 
-trips_remote_path = f'/transportation/mobility/etl/trip/{provider}-{provider}_{{{{ ts_nodash }}}}.csv'
+trips_remote_path = f'/transportation/mobility/etl/trip/pilot_1/{provider}_{{{{ ts_nodash }}}}.csv'
 
 api_extract_tasks = BranchPythonOperator(
     task_id=f'extract_data_lake',
