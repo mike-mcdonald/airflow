@@ -104,33 +104,33 @@ extract_data_lake_task = PythonOperator(
     },
 )
 
-# insert_pilot_1_vehicle_task = MsSqlOperator(
-#     task_id=f'insert_pilot_1_vehicles',
-#     dag=dag,
-#     mssql_conn_id='azure_sql_server_full',
-#     pool='scooter_azure_sql_server',
-#     sql='''
-#     insert into
-#         dim.vehicle (
-#             device_id,
-#             vehicle_id,
-#             vehicle_type
-#         )
-#     select distinct
-#         device_id,
-#         vehicle_id,
-#         vehicle_type
-#     from
-#         etl.external_pilot_1_vehicle as e
-#     where
-#         not exists (
-#             select
-#                 1
-#             from
-#                 dim.vehicle as v
-#             where
-#                 v.vehicle_id = e.vehicle_id
-#         )
-#     ''')
+insert_pilot_1_vehicle_task = MsSqlOperator(
+    task_id=f'insert_pilot_1_vehicles',
+    dag=dag,
+    mssql_conn_id='azure_sql_server_full',
+    pool='scooter_azure_sql_server',
+    sql='''
+    insert into
+        dim.vehicle (
+            device_id,
+            vehicle_id,
+            vehicle_type
+        )
+    select distinct
+        device_id,
+        vehicle_id,
+        vehicle_type
+    from
+        etl.external_pilot_1_vehicle as e
+    where
+        not exists (
+            select
+                1
+            from
+                dim.vehicle as v
+            where
+                v.vehicle_id = e.vehicle_id
+        )
+    ''')
 
-# extract_data_lake_task >> insert_pilot_1_vehicle_task
+extract_data_lake_task >> insert_pilot_1_vehicle_task
