@@ -28,6 +28,7 @@ from airflow.operators.python_operator import BranchPythonOperator
 from airflow.hooks.azure_plugin import AzureDataLakeHook
 from airflow.hooks.mobility_plugin import MobilityProviderHook
 from airflow.hooks.dataframe_plugin import AzureMsSqlDataFrameHook
+from airflow.hooks.dataframe_plugin import PgSqlDataFrameHook
 
 from airflow.operators.azure_plugin import AzureDataLakeRemoveOperator
 from airflow.operators.mssql_plugin import MsSqlOperator
@@ -36,7 +37,7 @@ default_args = {
     'owner': 'airflow',
     'depends_on_past': True,
     'start_date': datetime(2018, 4, 1),
-    'end_date': datetime(2018, 12, 31)
+    'end_date': datetime(2018, 12, 31),
     'email': ['pbotsqldbas@portlandoregon.gov'],
     'email_on_failure': True,
     'email_on_retry': False,
@@ -50,19 +51,22 @@ default_args = {
     # 'end_date': datetime(2016, 1, 1),
 }
 
+dag = DAG(
+    dag_id='scooter_pilot_1_trips_to_warehouse',
+    default_args=default_args,
+    catchup=True,
+    schedule_interval='@daily',
+    max_active_runs=3,
+)
 
-def process_trips_to_data_lake(**kwargs):
-    nd_time = kwargs['execution_date']
-    pace = timedelta(hours=24)
-    start_time = end_time - pace
 
-    # Create the hook
+def extract_trips_to_data_lake(**kwargs):
     hook_pgsql = PgSqlDataFrameHook(
-        pgsql_conn_id='pgsql_scooter_pilot_1'
+        pgsql_conn_id=kwargs.get('pgsql_conn_id')
     )
 
     # Get trips as a GeoDataFrame
-    trips = hook_pgsql.read_sql(f'''
+    trips = hook_pgsql.read_sql_dataframe(f'''
         select
             t.key,
             t.alternatekey,
@@ -92,7 +96,7 @@ def process_trips_to_data_lake(**kwargs):
         inner join
             dim.calendar as ed on ed.key = t.enddatekey
         where
-            sd.date between '{start_time.strftime('%Y-%m-%d')}' and '{end_time.strftime('%Y-%m-%d')}'
+            sd.date = '{kwargs.get("execution_date").strftime("%Y-%m-%d")}'
         and
             t.route is not null
         and
@@ -107,6 +111,7 @@ def process_trips_to_data_lake(**kwargs):
         return 'warehouse_skipped'
 
     trips['trip_id'] = trips.key.map(lambda x: str(uuid.uuid4()))
+    trips['vehicle_type'] = 'scooter'
     trips['propulsion_type'] = 'electric,human'
 
     trips['batch'] = kwargs.get('templates_dict').get('batch')
@@ -290,7 +295,7 @@ def process_trips_to_data_lake(**kwargs):
 
     logging.debug('Writing trips extract to data lake...')
 
-    pathlib.Path(os.path.dirname(kwargs['templates_dict']['trips_local_path'])
+    pathlib.Path(os.path.dirname(kwargs.get('templates_dict').get('local_path'))
                  ).mkdir(parents=True, exist_ok=True)
 
     trips['standard_cost'] = trips['standard_cost'] if 'standard_cost' in trips else np.nan
@@ -299,9 +304,7 @@ def process_trips_to_data_lake(**kwargs):
 
     trips[[
         'trip_id',
-        'provider_id',
         'provider_name',
-        'device_id',
         'vehicle_id',
         'vehicle_type',
         'propulsion_type',
@@ -345,26 +348,19 @@ def process_trips_to_data_lake(**kwargs):
     return 'extract_external_trips'
 
 
-dag = DAG(
-    dag_id='scooter_pilot_1_trips_to_warehouse',
-    default_args=default_args,
-    catchup=True,
-    schedule_interval='@daily',
-)
-
 provider = 'pilot_1'
 
-trips_remote_path = f'/transportation/mobility/etl/trip/pilot_1/{provider}_{{{{ ts_nodash }}}}.csv'
+trips_remote_path = f'/transportation/mobility/etl/pilot_1/trips/{provider}_{{{{ ts_nodash }}}}.csv'
 
-api_extract_tasks = BranchPythonOperator(
+pilot_1_extract_task = BranchPythonOperator(
     task_id=f'extract_data_lake',
     dag=dag,
     depends_on_past=False,
-    pool=f'api_pool',
     provide_context=True,
-    python_callable=process_trips_to_data_lake,
+    python_callable=extract_trips_to_data_lake,
     op_kwargs={
         'sql_conn_id': 'azure_sql_server_default',
+        'pgsql_conn_id': 'pgsql_scooter_pilot_1',
         'data_lake_conn_id': 'azure_data_lake_default',
     },
     templates_dict={
@@ -427,9 +423,7 @@ sql_extract_task = MsSqlOperator(
         as
         select
             trip_id,
-            provider_id,
             provider_name,
-            device_id,
             vehicle_id,
             vehicle_type,
             propulsion_type,
@@ -464,7 +458,7 @@ sql_extract_task = MsSqlOperator(
             seen,
             batch
         from
-            etl.external_trip
+            etl.external_pilot_1_trip
         where
             batch = '{provider}_{{{{ ts_nodash }}}}'
         '''
@@ -561,12 +555,9 @@ stage_task = MsSqlOperator(
         from
             etl.extract_trip_{provider}_{{{{ ts_nodash }}}} as source
         left join
-            dim.provider as p on p.provider_id = source.provider_id
+            dim.provider as p on p.provider_name = source.provider_name
         left join
-            dim.vehicle as v on (
-                v.vehicle_id = source.vehicle_id
-                and v.device_id = source.device_id
-            )
+            dim.vehicle as v on v.vehicle_id = source.vehicle_id
         '''
 )
 
@@ -696,8 +687,8 @@ warehouse_insert_task = MsSqlOperator(
 )
 
 
-api_extract_task >> [sql_extract_task,
-                     skip_warehouse_task]
+pilot_1_extract_task >> [sql_extract_task,
+                         skip_warehouse_task]
 
 sql_extract_task >> [delete_data_lake_extract_task, stage_task]
 
