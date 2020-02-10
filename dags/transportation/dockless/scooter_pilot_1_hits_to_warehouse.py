@@ -6,9 +6,11 @@ import json
 import logging
 import pathlib
 import os
+import uuid
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+from multiprocessing import cpu_count
 from tempfile import NamedTemporaryFile
 
 import geopandas as gpd
@@ -24,9 +26,9 @@ from airflow import DAG
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.operators.python_operator import BranchPythonOperator
 
-from airflow.hooks.common_plugin import PgSqlDataFrameHook
 from airflow.hooks.azure_plugin import AzureDataLakeHook
 from airflow.hooks.dataframe_plugin import AzureMsSqlDataFrameHook
+from airflow.hooks.dataframe_plugin import PgSqlDataFrameHook
 from airflow.hooks.mobility_plugin import SharedStreetsAPIHook
 
 from airflow.operators.azure_plugin import AzureDataLakeRemoveOperator
@@ -36,7 +38,7 @@ default_args = {
     'owner': 'airflow',
     'depends_on_past': True,
     'start_date':  datetime(2018, 4, 26),
-    'end_date': datetime(2018, 12, 31)
+    'end_date': datetime(2018, 12, 31),
     'email': ['pbotsqldbas@portlandoregon.gov'],
     'email_on_failure': True,
     'email_on_retry': False,
@@ -50,19 +52,23 @@ default_args = {
     # 'end_date': datetime(2016, 1, 1),
 }
 
+dag = DAG(
+    dag_id='scooter_pilot_1_hits_to_warehouse',
+    default_args=default_args,
+    catchup=True,
+    schedule_interval='@daily',
+    max_active_runs=3,
+)
 
-def process_trips_to_data_lake(**kwargs):
-    end_time = kwargs['execution_date']
-    pace = timedelta(hours=24)
-    start_time = end_time - pace
 
+def extract_shst_hits_to_data_lake(**kwargs):
     # Create the hook
     hook_pgsql = PgSqlDataFrameHook(
-        pgsql_conn_id='pgsql_scooter_pilot_1'
+        pgsql_conn_id=kwargs.get('pgsql_conn_id')
     )
 
     # Get trips as a GeoDataFrame
-    trips = hook_pgsql.read_sql(f'''
+    trips = hook_pgsql.read_sql_dataframe(f'''
         select
             t.key,
             t.alternatekey,
@@ -83,7 +89,7 @@ def process_trips_to_data_lake(**kwargs):
         inner join
             dim.calendar as ed on ed.key = t.enddatekey
         where
-            sd.date between '{start_time.strftime('%Y-%m-%d')}' and '{end_time.strftime('%Y-%m-%d')}'
+            sd.date = '{kwargs.get("execution_date").strftime("%Y-%m-%d")}'
         and
             t.route is not null
         and
@@ -94,20 +100,16 @@ def process_trips_to_data_lake(**kwargs):
 
     if len(trips) <= 0:
         logging.warning(
-            f'Received no trips for time period {start_time} to {end_time}')
+            f'Received no trips for {kwargs.get("execution_date")}')
         return f'warehouse_skipped'
 
+    trips['trip_id'] = trips.key.map(lambda x: str(uuid.uuid4()))
     trips['geometry'] = trips.route.apply(lambda x: loads(x, hex=True))
 
     del trips['route']
 
     trips = gpd.GeoDataFrame(trips).set_geometry('geometry')
     trips.crs = 'epsg:4326'
-
-    if len(trips) <= 0:
-        logging.warning(
-            f'Received no trips for time period {start_time} to {end_time}')
-        return f'warehouse_skipped'
 
     trips = trips.drop_duplicates(subset=['trip_id'])
     shst_series = trips[['trip_id', 'geometry']].apply(
@@ -139,7 +141,8 @@ def process_trips_to_data_lake(**kwargs):
     trips['propulsion_type'] = 'electric,human'
     trips['vehicle_type'] = 'scooter'
 
-    trips['datetime'] = trips.apply(lambda x: x.start_date + x.start_time)
+    trips['datetime'] = trips.apply(
+        lambda x: datetime.combine(x.start_date, datetime.min.time()) + x.start_time, axis=1)
     trips['datetime'] = trips.datetime.map(
         lambda x: datetime.replace(x, tzinfo=None))
     trips['datetime'] = trips.datetime.dt.round('H')
@@ -150,7 +153,7 @@ def process_trips_to_data_lake(**kwargs):
 
     def safe_result(x):
         try:
-            return x.result().json()
+            return x.result()
         except:
             logging.error(
                 'Error retrieving sharedstreets references, returning empty results...')
@@ -159,11 +162,13 @@ def process_trips_to_data_lake(**kwargs):
     shst_df = shst_calls.map(safe_result)
 
     shst_df = pd.DataFrame({
-        'trip_id': shst.map(lambda x: x['features'][0]['properties']['trip_id']),
-        'candidate': shst.map(lambda x: x['features'][0]['properties']['shstCandidate'])
+        'feature': np.concatenate(shst_df.map(lambda x: x['features']).values)
     })
 
-    shst_df = shst_df[~shst_df.candidate.isnull()]
+    shst_df['trip_id'] = shst_df.feature.map(
+        lambda x: x['properties']['trip_id'])
+    shst_df['candidate'] = shst_df.feature.map(
+        lambda x: x['properties']['shstCandidate'])
 
     shst_df['confidence'] = shst_df.candidate.map(lambda x: x['confidence'])
     shst_df['segments'] = shst_df.candidate.map(lambda x: x['segments'])
@@ -181,13 +186,21 @@ def process_trips_to_data_lake(**kwargs):
         lambda x: x.get('referenceId'))
 
     trips = trips.merge(
-        shst_df[['trip_id', 'geometry_id', 'reference_id', 'confidence']], on='trip_id')
+        shst_df[['trip_id', 'shst_geometry_id', 'shst_reference_id', 'confidence']], on='trip_id')
 
     del trips['geometry']
 
+    if len(trips) <= 0:
+        logging.warning(
+            f'Received no hits for time period {kwargs.get("execution_date")}')
+        return f'warehouse_skipped'
+
     trips['hash'] = trips.apply(lambda x: hashlib.md5((
-        f'{x.trip_id}{x.vehicle_id}{x.provider_name}{x.reference_id}{os.environ["HASH_SALT"]}'
+        f'{x.trip_id}{x.vehicle_id}{x.provider_name}{x.shst_reference_id}{os.environ["HASH_SALT"]}'
     ).encode('utf-8')).hexdigest(), axis=1)
+
+    pathlib.Path(os.path.dirname(kwargs.get('templates_dict').get('local_path'))
+                 ).mkdir(parents=True, exist_ok=True)
 
     trips[[
         'provider_name',
@@ -203,7 +216,11 @@ def process_trips_to_data_lake(**kwargs):
         'batch'
     ]].to_csv(kwargs.get('templates_dict').get('local_path'), index=False)
 
-    hook_datalake.upload_file(kwargs.get('templates_dict').get(
+    hook_data_lake = AzureDataLakeHook(
+        azure_data_lake_conn_id=kwargs.get('azure_datalake_conn_id')
+    )
+
+    hook_data_lake.upload_file(kwargs.get('templates_dict').get(
         'local_path'), kwargs.get('templates_dict').get('remote_path'))
 
     os.remove(kwargs.get('templates_dict').get('local_path'))
@@ -215,157 +232,160 @@ extract_data_lake_task = BranchPythonOperator(
     task_id='extract_routes_to_data_lake',
     dag=dag,
     provide_context=True,
-    python_callable=extract_shst_hits_datalake,
+    python_callable=extract_shst_hits_to_data_lake,
     templates_dict={
+        'batch': 'pilot_1_{{ ts_nodash }}',
         'local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/{{ ts_nodash }}.csv',
         'remote_path': '/transportation/mobility/etl/pilot_1/shst_hits/{{ ts_nodash }}.csv',
     },
     op_kwargs={
-        'azure_datalake_conn_id': 'azure_data_lake_default'
+        'azure_datalake_conn_id': 'azure_data_lake_default',
+        'pgsql_conn_id': 'pgsql_scooter_pilot_1'
     },
+
+
 )
 
-skip_warehouse_task = DummyOperator(
-    task_id=f'warehouse_skipped',
-    dag=dag,
-    depends_on_past=False,
-)
+# skip_warehouse_task = DummyOperator(
+#     task_id=f'warehouse_skipped',
+#     dag=dag,
+#     depends_on_past=False,
+# )
 
-stage_shst_segment_hit_task = MsSqlOperator(
-    task_id=f'stage_shst_segment_hits',
-    dag=dag,
-    mssql_conn_id='azure_sql_server_full',
-    pool='scooter_azure_sql_server',
-    sql='''
-    if exists (
-        select 1
-        from sysobjects
-        where name = 'stage_shst_segment_hit_{{ ts_nodash }}'
-    )
-    drop table etl.stage_shst_segment_hit_{{ ts_nodash }}
+# stage_shst_segment_hit_task = MsSqlOperator(
+#     task_id=f'stage_shst_segment_hits',
+#     dag=dag,
+#     mssql_conn_id='azure_sql_server_full',
+#     pool='scooter_azure_sql_server',
+#     sql='''
+#     if exists (
+#         select 1
+#         from sysobjects
+#         where name = 'stage_shst_segment_hit_{{ ts_nodash }}'
+#     )
+#     drop table etl.stage_shst_segment_hit_{{ ts_nodash }}
 
-    create table etl.stage_shst_segment_hit_{{ ts_nodash }}
-    with
-    (
-        distribution = round_robin,
-        heap
-    )
-    as
-    select
-        p.[key] as provider_key,
-        date_key,
-        shst_geometry_id,
-        shst_reference_id,
-        hash,
-        datetime,
-        vehicle_type,
-        propulsion_type,
-        seen,
-        batch
-    from
-        etl.external_shst_segment_hit as e
-    inner join
-        dim.provider as p on p.provider_name = e.provider_name
-    where
-        e.batch = '{{ ts_nodash }}'
-    '''
-)
+#     create table etl.stage_shst_segment_hit_{{ ts_nodash }}
+#     with
+#     (
+#         distribution = round_robin,
+#         heap
+#     )
+#     as
+#     select
+#         p.[key] as provider_key,
+#         date_key,
+#         shst_geometry_id,
+#         shst_reference_id,
+#         confidence,
+#         hash,
+#         datetime,
+#         vehicle_type,
+#         propulsion_type,
+#         seen,
+#         batch
+#     from
+#         etl.external_pilot_1_shst_segment_hit as e
+#     inner join
+#         dim.provider as p on p.provider_name = e.provider_name
+#     where
+#         e.batch = '{{ ts_nodash }}'
+#     '''
+# )
 
-extract_data_lake_task >> [sync_vehicle_task, skip_warehouse_task]
+# extract_data_lake_task >> [stage_shst_segment_hit_task, skip_warehouse_task]
 
-stage_shst_segment_hit_task
+# delete_data_lake_extract_task = AzureDataLakeRemoveOperator(
+#     task_id=f'delete_extract',
+#     dag=dag,
+#     depends_on_past=False,
+#     azure_data_lake_conn_id='azure_data_lake_default',
+#     remote_path='/transportation/mobility/etl/pilot_1/shst_hits/{{ ts_nodash }}.csv'
+# )
 
+# stage_shst_segment_hit_task >> delete_data_lake_extract_task
 
-delete_data_lake_extract_task = AzureDataLakeRemoveOperator(
-    task_id=f'delete_extract',
-    dag=dag,
-    depends_on_past=False,
-    azure_data_lake_conn_id='azure_data_lake_default',
-    remote_path='/transportation/mobility/etl/shst_hits/{{ ts_nodash }}.csv'
-)
+# warehouse_insert_task = MsSqlOperator(
+#     task_id='warehouse_insert_shst_segment_hits',
+#     dag=dag,
+#     mssql_conn_id='azure_sql_server_full',
+#     pool='scooter_azure_sql_server',
+#     sql='''
+#     insert into
+#         fact.shst_segment_hit (
+#             provider_key,
+#             date_key,
+#             shst_geometry_id,
+#             shst_reference_id,
+#             confidence,
+#             hash,
+#             datetime,
+#             vehicle_type,
+#             propulsion_type,
+#             first_seen,
+#             last_seen
+#         )
+#     select
+#         provider_key,
+#         date_key,
+#         shst_geometry_id,
+#         shst_reference_id,
+#         confidence,
+#         hash,
+#         datetime,
+#         vehicle_type,
+#         propulsion_type,
+#         seen,
+#         seen
+#     from
+#         etl.stage_shst_segment_hit_{{ ts_nodash }} as source
+#     where not exists (
+#         select
+#             1
+#         from
+#             fact.shst_segment_hit as target
+#         where
+#             target.hash = source.hash
+#     )
+#     '''
+# )
 
-stage_shst_segment_hit_task >> delete_data_lake_extract_task
+# warehouse_update_task = MsSqlOperator(
+#     task_id=f'warehouse_update_event',
+#     dag=dag,
+#     mssql_conn_id='azure_sql_server_full',
+#     pool='scooter_azure_sql_server',
+#     sql='''
+#     update
+#         fact.shst_segment_hit
+#     set
+#         last_seen = source.seen,
+#         datetime = source.datetime,
+#         vehicle_type = source.vehicle_type,
+#         propulsion_type = source.propulsion_type,
+#     from
+#         etl.stage_shst_segment_hit_{{ ts_nodash }} as source
+#     where
+#         source.hash = fact.shst_segment_hit.hash
+#     '''
+# )
 
+# stage_shst_segment_hit_task >> [warehouse_insert_task, warehouse_update_task]
 
-warehouse_insert_task = MsSqlOperator(
-    task_id='warehouse_insert_shst_segment_hits',
-    dag=dag,
-    mssql_conn_id='azure_sql_server_full',
-    pool='scooter_azure_sql_server',
-    sql='''
-    insert into
-        fact.shst_segment_hit (
-            provider_key,
-            date_key,
-            shst_geometry_id,
-            shst_reference_id,
-            hash,
-            datetime,
-            vehicle_type,
-            propulsion_type,
-            first_seen,
-            last_seen
-        )
-    select
-        provider_key,
-        date_key,
-        shst_geometry_id,
-        shst_reference_id,
-        hash,
-        datetime,
-        vehicle_type,
-        propulsion_type,
-        seen,
-        seen
-    from
-        etl.stage_shst_segment_hit_{{ ts_nodash }} as source
-    where not exists (
-        select
-            1
-        from
-            fact.shst_segment_hit as target
-        where
-         target.hash = source.hash
-    )
-    '''
-)
+# clean_stage_task = MsSqlOperator(
+#     task_id='clean_stage_table',
+#     dag=dag,
+#     depends_on_past=False,
+#     mssql_conn_id='azure_sql_server_full',
+#     pool='scooter_azure_sql_server',
+#     sql='''
+#     if exists (
+#         select 1
+#         from sysobjects
+#         where name = 'stage_shst_segment_hit_{{ ts_nodash }}'
+#     )
+#     drop table etl.stage_shst_segment_hit_{{ ts_nodash }}
+#     '''
+# )
 
-warehouse_update_task = MsSqlOperator(
-    task_id=f'warehouse_update_event',
-    dag=dag,
-    mssql_conn_id='azure_sql_server_full',
-    pool='scooter_azure_sql_server',
-    sql='''
-    update
-        fact.shst_segment_hit
-    set
-        last_seen = source.seen,
-        datetime = source.datetime,
-        vehicle_type = source.vehicle_type,
-        propulsion_type = source.propulsion_type,
-    from
-        etl.stage_shst_segment_hit_{{ ts_nodash }} as source
-    where
-        source.hash = fact.shst_segment_hit.hash
-    '''
-)
-
-stage_shst_segment_hit_task >> [warehouse_insert_task, warehouse_update_task]
-
-clean_stage_task = MsSqlOperator(
-    task_id='clean_stage_table',
-    dag=dag,
-    depends_on_past=False,
-    mssql_conn_id='azure_sql_server_full',
-    pool='scooter_azure_sql_server',
-    sql='''
-    if exists (
-        select 1
-        from sysobjects
-        where name = 'stage_shst_segment_hit_{{ ts_nodash }}'
-    )
-    drop table etl.stage_shst_segment_hit_{{ ts_nodash }}
-    '''
-)
-
-[warehouse_insert_task, warehouse_update_task] >> clean_stage_task
+# [warehouse_insert_task, warehouse_update_task] >> clean_stage_task
