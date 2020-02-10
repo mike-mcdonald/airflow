@@ -112,6 +112,9 @@ def extract_trips_to_data_lake(**kwargs):
         return 'warehouse_skipped'
 
     trips['trip_id'] = trips.key.map(lambda x: str(uuid.uuid4()))
+
+    del trips['key']
+
     trips['vehicle_type'] = 'scooter'
     trips['propulsion_type'] = 'electric,human'
 
