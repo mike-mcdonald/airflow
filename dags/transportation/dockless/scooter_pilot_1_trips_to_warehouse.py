@@ -18,7 +18,8 @@ import pandas as pd
 
 from pytz import timezone
 from shapely.geometry import Point
-from shapely.wkb import loads
+from shapely.wkb import loads as loadwkb
+from shapely.wkt import loads as loadwkt
 
 import airflow
 from airflow import DAG
@@ -36,7 +37,7 @@ from airflow.operators.mssql_plugin import MsSqlOperator
 default_args = {
     'owner': 'airflow',
     'depends_on_past': True,
-    'start_date': datetime(2018, 4, 1),
+    'start_date': datetime(2018, 7, 1),
     'end_date': datetime(2018, 12, 31),
     'email': ['pbotsqldbas@portlandoregon.gov'],
     'email_on_failure': True,
@@ -107,7 +108,7 @@ def extract_trips_to_data_lake(**kwargs):
 
     if len(trips) <= 0:
         logging.warning(
-            f'Received no trips for time period {start_time} to {end_time}')
+            f'Received no trips for {kwargs.get("execution_date").strftime("%Y-%m-%d")}')
         return 'warehouse_skipped'
 
     trips['trip_id'] = trips.key.map(lambda x: str(uuid.uuid4()))
@@ -121,17 +122,17 @@ def extract_trips_to_data_lake(**kwargs):
         lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
 
     trips['start_time'] = trips.apply(
-        lambda x: x.start_date + x.start_time, axis=1)
+        lambda x: datetime.combine(x.start_date, datetime.min.time()) + x.start_time, axis=1)
     trips['start_time'] = trips.start_time.map(
         lambda x: datetime.replace(x, tzinfo=None))  # Remove timezone info after shifting
     trips['start_time'] = trips.start_time.dt.round('L')
-
     trips['start_date_key'] = trips.start_time.map(
         lambda x: int(x.strftime('%Y%m%d')))
     trips['start_time'] = trips.start_time.map(
         lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
 
-    trips['end_time'] = trips.apply(lambda x: x.end_date + x.end_time, axis=1)
+    trips['end_time'] = trips.apply(
+        lambda x: datetime.combine(x.end_date, datetime.min.time()) + x.end_time, axis=1)
     trips['end_time'] = trips.end_time.map(
         lambda x: datetime.replace(x, tzinfo=None))
     trips['end_time'] = trips.end_time.dt.round('L')
@@ -140,8 +141,9 @@ def extract_trips_to_data_lake(**kwargs):
     trips['end_time'] = trips.end_time.map(
         lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
 
-    trips['origin'] = trips.origin.map(lambda x: loads(x, hex=True))
-    trips['destination'] = trips.destination.map(lambda x: loads(x, hex=True))
+    trips['origin'] = trips.origin.map(lambda x: loadwkb(x, hex=True))
+    trips['destination'] = trips.destination.map(
+        lambda x: loadwkb(x, hex=True))
 
     hook_mssql = AzureMsSqlDataFrameHook(
         azure_mssql_conn_id=kwargs['sql_conn_id']
@@ -163,7 +165,7 @@ def extract_trips_to_data_lake(**kwargs):
         df = hook_data_lake.download_file(
             local_path, remote_path)
         df = gpd.read_file(local_path)
-        df['geometry'] = df.wkt.map(loads)
+        df['geometry'] = df.wkt.map(loadwkt)
         df.crs = {'init': 'epsg:4326'}
 
         return df
@@ -194,7 +196,7 @@ def extract_trips_to_data_lake(**kwargs):
 
         cells = hook_mssql.read_table_dataframe(
             table_name='cell', schema='dim')
-        cells['geometry'] = cells.wkt.map(loads)
+        cells['geometry'] = cells.wkt.map(loadwkt)
         cells = gpd.GeoDataFrame(cells)
         cells.crs = {'init': 'epsg:4326'}
 
