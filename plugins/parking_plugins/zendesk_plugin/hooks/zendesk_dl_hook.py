@@ -15,6 +15,7 @@ class ZendeskAzureDLHook(ContribHook):
     def rm(self, path, recursive=False):
         try:
             self.connection.rm(path, recursive)
+            self.log.info(f'deleting file: {path}')
         except FileNotFoundError as err:
             self.log.debug(f"{path} not found.")
 

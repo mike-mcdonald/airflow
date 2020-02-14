@@ -24,18 +24,40 @@ import airflow
 from airflow import DAG
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.operators.python_operator import PythonOperator
+from airflow.operators.mssql_plugin import MsSqlOperator
 
 from airflow.hooks.zendesk_plugin import ZendeskAzureDLHook , ZendeskHook
 
 default_args = {
     'owner': 'airflow',
     'depends_on_past': True,
-    'start_date':  datetime(2020, 1, 20),
+    'start_date':  datetime(2020, 2, 6), #The task is triggered after start_date+interval has passed
     'email': ['pbotsqldbas@portlandoregon.gov'],
     'email_on_failure': True,
     'email_on_retry': False,
     'retries': 9,
     'retry_delay': timedelta(seconds=10),
+}
+
+custom_field_ids = {
+    236316: "Reason_For_Call_Request_Type",
+    236307: "Meter_ID_PK_Zone_APP_Zone",
+    #236308: "Meter Location",
+    292134: "Meter_Resolution",
+    25205166: "Paid_License_Plate",
+    #25240326: "Resolution/Conclusion Comments",
+    360000118026: "Citation_Date",
+    360000119063: "Refund_Type",
+    360000118046: "Officer_No",
+    360000077106: "Refund_Request",
+    360000034926: "Customer_Service_Resolution",
+    360000089246: "Transaction_Date_and_Start_Time",
+    360000089266: "Transaction_Date_and_End_Time",
+    #25191603: "Citation #",
+    360000139966: "Refund_Amount",
+    360000036566: "Transaction_Permit_No",
+    25338086: "Dismissal_Request",
+    360027931211: "Supervisor_Call_Back_Request"
 }
 
 
@@ -75,7 +97,7 @@ def set_start_time(next_start_time, azure_dl_hook):
 '''
 def get_start_time(azure_dl_hook):
     #initial start time
-    start_time = datetime(2019, 1, 1, 9, 0, 0, 0).timestamp()
+    start_time = datetime(2016, 1, 1, 0, 0, 0, 0).timestamp()
 
     #check if last end time is stored for start time
     start_time_exist = azure_dl_hook.check_for_file(start_time_file_remote_path)
@@ -83,7 +105,6 @@ def get_start_time(azure_dl_hook):
     logging.info(f'-------------------- start time remote file exist: {start_time_exist}')
 
     if start_time_exist == True:
-
         logging.info(f'-------------------- enterred the if block')
         #download the file and read its value and return it.
         azure_dl_hook.download_file(start_time_file_local_path, start_time_file_remote_path, overwrite=True)
@@ -97,6 +118,19 @@ def get_start_time(azure_dl_hook):
 
     return start_time
 
+# assigns custom field ID to its value, removing keywords id and value
+def extract_column_ids_values(a):
+    id_value_dict = {}
+    ids = [x.get('id') for x in a]
+    values = [x.get('value') for x in a]
+
+    for i in ids:
+        for x in values:
+            id_value_dict[i] = x
+            values.remove(x)
+            break
+
+    return id_value_dict
 
 def zendesk_tickets_to_datalake(**kwargs):
 
@@ -120,32 +154,85 @@ def zendesk_tickets_to_datalake(**kwargs):
         logging.warning(
             f'Received no tickets for time period {start_time} to {datetime.now()}')
         return 
-    
-    
-    # do data transformation on tickets as needed here.
 
     pathlib.Path(os.path.dirname(kwargs.get('templates_dict').get('tickets_local_path'))
                  ).mkdir(parents=True, exist_ok=True)
+
+     # do data transformation on tickets as needed here.
+    #tickets['custom_fields_id_value'] = tickets.tickets.map(
+    #lambda x: x.get('custom_fields'))
+
+    tickets['custom_fields_1'] = tickets.custom_fields.apply(
+    extract_column_ids_values)
+
+    tickets = pd.concat([tickets.drop(['custom_fields_1'], axis=1), tickets['custom_fields_1'].apply(pd.Series)], axis=1)
     
+    tickets = tickets.rename(columns=custom_field_ids)
+
+    def clean_tags(x):
+        '|'.join(x)
+        y = [i.replace('"', '') for i in x]
+        return y
+    
+    def remove_quotes(x):
+        y = x
+        if x != None:
+            y = x.replace('"', '')
+        return y
+
+    tickets['tags_joined'] = tickets.tags.apply(clean_tags)
+
+    tickets['batch'] = kwargs.get('templates_dict').get('batch')
+
+    tickets['subject_clean'] = tickets.subject.apply(remove_quotes)
+    
+    tickets['Reason_For_Call_Request_Type_clean'] = tickets.Reason_For_Call_Request_Type.apply(remove_quotes)
+
+    tickets['Meter_ID_PK_Zone_APP_Zone_clean'] = tickets.Meter_ID_PK_Zone_APP_Zone.apply(remove_quotes)
+
+    tickets['Meter_Resolution_clean'] = tickets.Meter_Resolution.apply(remove_quotes)
+    
+    tickets['Paid_License_Plate_clean'] = tickets.Paid_License_Plate.apply(remove_quotes)
+    tickets['Citation_Date_clean'] = tickets.Citation_Date.apply(remove_quotes)
+
+    tickets['Officer_No_clean'] = tickets.Officer_No.apply(remove_quotes)
+
+    tickets['Customer_Service_Resolution_clean'] = tickets.Customer_Service_Resolution.apply(remove_quotes)
+
+    tickets['Transaction_Date_and_Start_Time_clean'] = tickets.Transaction_Date_and_Start_Time.apply(remove_quotes)
+
+    tickets['Transaction_Date_and_End_Time_clean'] = tickets.Transaction_Date_and_End_Time.apply(remove_quotes)
+
+    tickets['Transaction_Permit_No_clean'] = tickets.Transaction_Permit_No.apply(remove_quotes)
+
     tickets[[
         'id',
-        'external_id',
         'created_at',
         'updated_at',
         'type',
-        'subject',
-        'raw_subject',
-        'description',
+        'subject_clean',
         'priority',
         'status',
-        'recipient',
-        'group_id',
-        'forum_topic_id',
+        'assignee_id',
         'problem_id',
         'has_incidents',
-        'is_public',
-        'due_at',
-        'tags',
+        'tags_joined',
+        "Reason_For_Call_Request_Type_clean",
+        "Meter_ID_PK_Zone_APP_Zone_clean",
+        "Meter_Resolution_clean",
+        "Paid_License_Plate_clean",
+        "Citation_Date_clean",
+        "Refund_Type",
+        "Officer_No_clean",
+        "Refund_Request",
+        "Customer_Service_Resolution_clean",
+        "Transaction_Date_and_Start_Time_clean",
+        "Transaction_Date_and_End_Time_clean",
+        "Refund_Amount",
+        "Transaction_Permit_No_clean",
+        "Dismissal_Request",
+        "Supervisor_Call_Back_Request",
+        'batch'
     ]].to_csv(kwargs.get('templates_dict').get('tickets_local_path'), index=False)
 
     az_hook.upload_file(kwargs.get('templates_dict').get(
@@ -155,14 +242,14 @@ def zendesk_tickets_to_datalake(**kwargs):
     #save start_time for next execution
     set_start_time(next_start_time=next_start_time, azure_dl_hook=az_hook)
 
-
-dag_id = "ticket_data_to_data_lake"
+# retrieves zendesk ticket data and stores it to ADLS
+dag_id = "tickets_to_ADW"
 dag = DAG(
     dag_id=dag_id,
     default_args=default_args,
     catchup=True,
     max_active_runs=1,
-    schedule_interval='@hourly'
+    schedule_interval='@weekly'
 )
 zendesk_conn_id = "Zendesk_API"
 
@@ -187,6 +274,68 @@ retrieve_zendesk_data_task = PythonOperator(
     }
 )
 
+# delete previous record of updated tickets 
+delete_updated_tickets = MsSqlOperator(
+    task_id='delete_updated_tickets',
+    dag=dag,
+    depends_on_past=False,
+    mssql_conn_id='azure_sql_server_full',
+    sql='''
+    delete
+    from
+        fact.zendesk_ticket
+    where
+        id in ( 
+            select 
+                id 
+            from
+                etl.external_zendesk_ticket
+            where 
+                batch = '{{ ts_nodash }}'
+        )
+    '''
+)
+
+retrieve_zendesk_data_task >> delete_updated_tickets
+
+# Process new batch of tickets 
+process_new_batch = MsSqlOperator(
+    task_id='process_new_batch_of_tickets',
+    dag=dag,
+    depends_on_past=False,
+    mssql_conn_id='azure_sql_server_full',
+    sql='''
+    insert into
+        fact.zendesk_ticket
+    select
+        *
+    from
+        etl.external_zendesk_ticket
+    where
+        batch = '{{ts_nodash}}'
+    '''
+)
+
+delete_updated_tickets >> process_new_batch
+
+def delete_ADLS_csv(**kwargs):
+    az_hook = ZendeskAzureDLHook(
+        zendesk_datalake_conn_id=kwargs.get('zendesk_datalake_conn_id') 
+    )
+    az_hook.rm(path=tickets_remote_path)
+
+delete_processed_batches_ADLS = PythonOperator(
+    task_id=f'delete_processed_batches_ADLS',
+    dag=dag,
+    depends_on_past=False,
+    provide_context=True,
+    python_callable=delete_ADLS_csv,
+    op_kwargs={
+        'zendesk_datalake_conn_id':'azure_data_lake_zendesk'
+    }
+)
+
+process_new_batch >> delete_processed_batches_ADLS
 
 # '''warehouse_skipped = DummyOperator(
 #     task_id=f'warehouse_skipped',
