@@ -111,9 +111,25 @@ def extract_trips_to_data_lake(**kwargs):
             f'Received no trips for {kwargs.get("execution_date").strftime("%Y-%m-%d")}')
         return 'warehouse_skipped'
 
-    trips['trip_id'] = trips.key.map(lambda x: str(uuid.uuid4()))
+    hook_data_lake = AzureDataLakeHook(
+        azure_data_lake_conn_id=kwargs['data_lake_conn_id']
+    )
+
+    pathlib.Path(os.path.dirname(kwargs.get('template_dict').get('trip_ids_local_path'))
+                 ).mkdir(parents=True, exist_ok=True)
+
+    df = hook_data_lake.download_file(
+        kwargs.get('template_dict').get('trip_ids_local_path'),
+        kwargs.get('template_dict').get('trip_ids_remote_path')
+    )
+    df = gpd.read_file(kwargs.get('template_dict').get('trip_ids_local_path'))
+
+    os.remove(kwargs.get('template_dict').get('trip_ids_local_path'))
+
+    trip['trip_id'] = trip.merge(df, on='key')['trip_id']
 
     del trips['key']
+    del df
 
     trips['vehicle_type'] = 'scooter'
     trips['propulsion_type'] = 'electric,human'
@@ -372,6 +388,8 @@ pilot_1_extract_task = BranchPythonOperator(
         'batch': f'{provider}_{{{{ ts_nodash }}}}',
         'trips_local_path': f'/usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/trips-{provider}_{{{{ ts_nodash }}}}.csv',
         'trips_remote_path': trips_remote_path,
+        'trip_ids_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/trip_ids-{{ ts_nodash }}.csv',
+        'trip_ids_remote_path': '/transportation/mobility/etl/pilot_1/trip_ids.csv',
         'cities_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/cities-{{ ts_nodash }}.csv',
         'cities_remote_path': '/transportation/mobility/dim/cities.csv',
         'parking_districts_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/parking_districts-{{ ts_nodash }}.csv',
