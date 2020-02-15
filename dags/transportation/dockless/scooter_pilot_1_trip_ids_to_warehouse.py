@@ -1,0 +1,104 @@
+'''
+DAG for ETL Processing of Dockless Mobility Provider Data
+'''
+import hashlib
+import json
+import logging
+import pathlib
+import os
+import uuid
+
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
+from tempfile import NamedTemporaryFile
+
+import geopandas as gpd
+import numpy as np
+import pandas as pd
+
+from pytz import timezone
+from shapely.geometry import Point
+from shapely.wkb import loads
+
+import airflow
+from airflow import DAG
+from airflow.operators.dummy_operator import DummyOperator
+from airflow.operators.python_operator import PythonOperator
+
+from airflow.hooks.azure_plugin import AzureDataLakeHook
+from airflow.hooks.dataframe_plugin import AzureMsSqlDataFrameHook
+from airflow.hooks.dataframe_plugin import PgSqlDataFrameHook
+
+from airflow.operators.azure_plugin import AzureDataLakeRemoveOperator
+from airflow.operators.mssql_plugin import MsSqlOperator
+
+default_args = {
+    'owner': 'airflow',
+    'depends_on_past': True,
+    'start_date':  datetime(2018, 7, 1),
+    'email': ['pbotsqldbas@portlandoregon.gov'],
+    'email_on_failure': True,
+    'email_on_retry': False,
+    'retries': 9,
+    'retry_delay': timedelta(seconds=10),
+    'concurrency': 1,
+    'max_active_runs': 1,
+    # 'queue': 'bash_queue',
+    # 'pool': 'backfill',
+    # 'priority_weight': 10,
+    # 'end_date': datetime(2016, 1, 1),
+}
+
+dag = DAG(
+    dag_id='scooter_pilot_1_vehicles_to_warehouse',
+    default_args=default_args,
+    schedule_interval=None,
+    max_active_runs=1,
+)
+
+
+def extract_trips_to_data_lake(**kwargs):
+    # Create the hook
+    hook_pgsql = PgSqlDataFrameHook(
+        pgsql_conn_id=kwargs.get('pgsql_conn_id')
+    )
+
+    # Get trips as a GeoDataFrame
+    trips = hook_pgsql.read_sql_dataframe('''
+        select
+            t.key
+        from
+            fact.trip as t
+    ''')
+
+    trips['trip_id'] = trips.apply(lambda x: str(uuid.uuid4()), axis=1)
+
+    pathlib.Path(os.path.dirname(kwargs.get('templates_dict').get('local_path'))
+                 ).mkdir(parents=True, exist_ok=True)
+
+    trips.to_csv(kwargs.get('templates_dict').get(
+        'local_path'), index=False)
+
+    hook_datalake = AzureDataLakeHook(
+        azure_data_lake_conn_id=kwargs.get('azure_datalake_conn_id'))
+
+    hook_datalake.upload_file(kwargs.get('templates_dict').get(
+        'local_path'), kwargs.get('templates_dict').get('remote_path'))
+
+    os.remove(kwargs.get('templates_dict').get('local_path'))
+
+
+extract_data_lake_task = PythonOperator(
+    task_id='extract_trip_map_to_data_lake',
+    dag=dag,
+    provide_context=True,
+    python_callable=extract_trips_to_data_lake,
+    templates_dict={
+        'local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/{{ ts_nodash }}.csv',
+        'remote_path': '/transportation/mobility/etl/pilot_1/trips.csv',
+    },
+    op_kwargs={
+        'azure_datalake_conn_id': 'azure_data_lake_default',
+        'pgsql_conn_id': 'pgsql_scooter_pilot_1'
+    },
+)
