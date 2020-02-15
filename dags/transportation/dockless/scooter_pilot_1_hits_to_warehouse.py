@@ -54,7 +54,7 @@ default_args = {
 }
 
 dag = DAG(
-    dag_id='scooter_pilot_1_hits_to_warehouse',
+    dag_id='scooter_pilot_1_segment_hits_to_warehouse',
     default_args=default_args,
     catchup=True,
     schedule_interval='@daily',
@@ -72,7 +72,6 @@ def extract_shst_hits_to_data_lake(**kwargs):
     trips = hook_pgsql.read_sql_dataframe(f'''
         select
             t.key,
-            t.alternatekey,
             c.name as provider_name,
             v.key as vehicle_key,
             v.name as vehicle_id,
@@ -106,7 +105,23 @@ def extract_shst_hits_to_data_lake(**kwargs):
             f'Received no trips for {kwargs.get("execution_date")}')
         return f'warehouse_skipped'
 
-    trips['trip_id'] = trips.key.map(lambda x: str(uuid.uuid4()))
+    hook_data_lake = AzureDataLakeHook(
+        azure_data_lake_conn_id=kwargs['data_lake_conn_id']
+    )
+
+    pathlib.Path(os.path.dirname(kwargs.get('template_dict').get('trip_ids_local_path'))
+                 ).mkdir(parents=True, exist_ok=True)
+
+    df = hook_data_lake.download_file(
+        kwargs.get('template_dict').get('trip_ids_local_path'),
+        kwargs.get('template_dict').get('trip_ids_remote_path')
+    )
+    df = gpd.read_file(kwargs.get('template_dict').get('trip_ids_local_path'))
+
+    os.remove(kwargs.get('template_dict').get('trip_ids_local_path'))
+
+    trip['trip_id'] = trip.merge(df, on='key')['trip_id']
+
     trips['geometry'] = trips.route.apply(lambda x: loads(x, hex=True))
 
     del trips['route']
@@ -240,10 +255,6 @@ def extract_shst_hits_to_data_lake(**kwargs):
         'batch'
     ]].to_csv(kwargs.get('templates_dict').get('local_path'), index=False)
 
-    hook_data_lake = AzureDataLakeHook(
-        azure_data_lake_conn_id=kwargs.get('azure_datalake_conn_id')
-    )
-
     hook_data_lake.upload_file(kwargs.get('templates_dict').get(
         'local_path'), kwargs.get('templates_dict').get('remote_path'))
 
@@ -261,6 +272,8 @@ extract_data_lake_task = BranchPythonOperator(
         'batch': 'pilot_1_{{ ts_nodash }}',
         'local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/{{ ts_nodash }}.csv',
         'remote_path': '/transportation/mobility/etl/pilot_1/shst_hits/{{ ts_nodash }}.csv',
+        'trip_ids_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/trip_ids-{{ ts_nodash }}.csv',
+        'trip_ids_remote_path': '/transportation/mobility/etl/pilot_1/trip_ids.csv',
     },
     op_kwargs={
         'azure_datalake_conn_id': 'azure_data_lake_default',
