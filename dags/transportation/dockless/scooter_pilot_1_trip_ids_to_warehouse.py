@@ -95,7 +95,7 @@ extract_data_lake_task = PythonOperator(
     python_callable=extract_trips_to_data_lake,
     templates_dict={
         'local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/{{ ts_nodash }}.csv',
-        'remote_path': '/transportation/mobility/etl/pilot_1/trips.csv',
+        'remote_path': '/transportation/mobility/etl/pilot_1/trip_ids.csv',
     },
     op_kwargs={
         'azure_datalake_conn_id': 'azure_data_lake_default',
