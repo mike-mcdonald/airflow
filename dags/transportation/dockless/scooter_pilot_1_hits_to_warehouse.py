@@ -10,6 +10,7 @@ import uuid
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+from math import atan2, fabs, pi, pow, sqrt
 from multiprocessing import cpu_count
 from tempfile import NamedTemporaryFile
 
@@ -77,6 +78,8 @@ def extract_shst_hits_to_data_lake(**kwargs):
             v.name as vehicle_id,
             sd.date as start_date,
             t.starttime as start_time,
+            ed.date as end_date,
+            t.endtime as end_time,
             t.route
         from
             fact.trip as t
@@ -111,28 +114,6 @@ def extract_shst_hits_to_data_lake(**kwargs):
     trips = gpd.GeoDataFrame(trips).set_geometry('geometry')
     trips.crs = 'epsg:4326'
 
-    trips = trips.drop_duplicates(subset=['trip_id'])
-    shst_series = trips[['trip_id', 'geometry']].apply(
-        lambda x: {
-            'type': 'FeatureCollection',
-            'features': [{
-                'type': 'Feature',
-                'properties': {
-                    'trip_id': x.trip_id
-                },
-                'geometry': {
-                    'type': x.geometry.geom_type,
-                    'coordinates': np.array(x.geometry).tolist()
-                }
-            }]
-        }, axis=1)
-
-    hook_shst = SharedStreetsAPIHook(shst_api_conn_id='shst_api_default')
-    cores = cpu_count()  # Number of CPU cores on your system
-    executor = ThreadPoolExecutor(max_workers=cores*4)
-    shst_calls = shst_series.map(lambda x: executor.submit(
-        hook_shst.match, 'line', 'bike', x))
-
     trips['batch'] = kwargs['templates_dict']['batch']
     trips['seen'] = datetime.now()
     trips['seen'] = trips.seen.dt.round('L')
@@ -141,63 +122,106 @@ def extract_shst_hits_to_data_lake(**kwargs):
     trips['propulsion_type'] = 'electric,human'
     trips['vehicle_type'] = 'scooter'
 
-    trips['datetime'] = trips.apply(
+    trips['start_time'] = trips.apply(
         lambda x: datetime.combine(x.start_date, datetime.min.time()) + x.start_time, axis=1)
-    trips['datetime'] = trips.datetime.map(
+    trips['start_time'] = trips.datetime.map(
         lambda x: datetime.replace(x, tzinfo=None))
-    trips['datetime'] = trips.datetime.dt.round('H')
-    trips['date_key'] = trips.datetime.map(
-        lambda x: int(x.strftime('%Y%m%d')))
-    trips['datetime'] = trips.datetime.map(
-        lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
 
-    def safe_result(x):
-        try:
-            return x.result()
-        except:
-            logging.error(
-                'Error retrieving sharedstreets references, returning empty results...')
-            return {'features': []}
+    trips['end_time'] = trips.apply(
+        lambda x: datetime.combine(x.end_date, datetime.min.time()) + x.end_time, axis=1)
+    trips['end_time'] = trips.datetime.map(
+        lambda x: datetime.replace(x, tzinfo=None))
 
-    shst_df = shst_calls.map(safe_result)
+    trips['timespan'] = trips.end_time - trips.start_time
 
-    shst_df = pd.DataFrame({
-        'feature': np.concatenate(shst_df.map(lambda x: x['features']).values)
+    trips['coordinates'] = trips.geometry.map(lambda x: x.xy)
+
+    trips['x'] = trips.coordinates.map(lambda x: x[0])
+    trips['y'] = trips.coordinates.map(lambda x: x[1])
+
+    trips['num_points'] = trips.geometry.map(lambda x: len(x.coords))
+    trips['time_chunk'] = trips.timespan / trips.num_points
+
+    lens = [len(item) for item in trips['x']]
+
+    route_df = pd.DataFrame({
+        'key': np.repeat(trips['key'].values, lens),
+        'alternatekey': np.repeat(trips['alternatekey'].values, lens),
+        'provider_name': np.repeat(trips['provider_name'].values, lens),
+        'vehicle_key': np.repeat(trips['vehicle_key'].values, lens),
+        'vehicle_id': np.repeat(trips['vehicle_id'].values, lens),
+        'start_time': np.repeat(trips['start_time'].values, lens),
+        'time_chunk': np.repeat(trips['time_chunk'].values, lens),
+        'x': np.concatenate(trips['x'].values),
+        'y': np.concatenate(trips['y'].values)
     })
 
-    shst_df['trip_id'] = shst_df.feature.map(
-        lambda x: x['properties']['trip_id'])
-    shst_df['candidate'] = shst_df.feature.map(
-        lambda x: x['properties']['shstCandidate'])
+    route_df['geometry'] = route_df.apply(lambda x: Point(x.x, x.y), axis=1)
 
-    shst_df['confidence'] = shst_df.candidate.map(lambda x: x['confidence'])
-    shst_df['segments'] = shst_df.candidate.map(lambda x: x['segments'])
+    route_df = gpd.GeoDataFrame(
+        route_df,
+        crs={'init': 'epsg:4326'}
+    )
 
-    lens = [len(item) for item in shst_df['segments']]
-    shst_df = pd.DataFrame({
-        'trip_id': np.repeat(shst_df['trip_id'].values, lens),
-        'confidence': np.repeat(shst_df['confidence'].values, lens),
-        'candidate': np.concatenate(shst_df['segments'].values),
-    })
+    route_df['row_num'] = route_df.groupby('key').cumcount()
+    route_df['datetime'] = route_df.start_time + \
+        (route_df.time_chunk * route_df.row_num)
 
-    shst_df['shst_geometry_id'] = shst_df['candidate'].map(
-        lambda x: x.get('geometryId'))
-    shst_df['shst_reference_id'] = shst_df['candidate'].map(
-        lambda x: x.get('referenceId'))
-
-    trips = trips.merge(
-        shst_df[['trip_id', 'shst_geometry_id', 'shst_reference_id', 'confidence']], on='trip_id')
-
-    del trips['geometry']
-
-    if len(trips) <= 0:
-        logging.warning(
-            f'Received no hits for time period {kwargs.get("execution_date")}')
-        return f'warehouse_skipped'
-
-    trips['hash'] = trips.apply(lambda x: hashlib.md5((
-        f'{x.trip_id}{x.vehicle_id}{x.provider_name}{x.shst_reference_id}{os.environ["HASH_SALT"]}'
+    route_df['hash'] = route_df.apply(lambda x: hashlib.md5((
+        x.key + x.provider_name + x.datetime.strftime('%d%m%Y%H%M%S%f')
     ).encode('utf-8')).hexdigest(), axis=1)
+
+    route_df = route_df.to_crs(epsg=3857)
+
+    route_df['x'] = route_df.geometry.map(lambda g: g.x)
+    route_df['y'] = route_df.geometry.map(lambda g: g.y)
+
+    route_by_trip = route_df.groupby(['key'])
+
+    route_df['nt'] = route_by_trip.datetime.shift(-1)
+    route_df['nx'] = route_by_trip.x.shift(-1)
+    route_df['ny'] = route_by_trip.y.shift(-1)
+
+    # drop destination
+    route_df = route_df.dropna().copy()
+
+    route_df['dx'] = route_df.nx - route_df.x
+    route_df['dy'] = route_df.ny - route_df.y
+    route_df['dt'] = (route_df.nt - route_df.datetime).map(lambda x: x.seconds)
+
+    def find_bearing(hit):
+        return atan2(hit.dx, hit.dy) / pi * 180
+
+    def find_speed(hit):
+        if hit['dt'] <= 0:
+            return 0
+
+        d = sqrt(pow((hit.dx), 2) + pow((hit.dy), 2))
+
+        return d / hit['dt']
+
+    route_df['heading'] = route_df.apply(find_bearing, axis=1)
+    route_df['speed'] = route_df.apply(find_speed, axis=1)
+
+    route_df = route_df.to_crs(epsg=4326)
+
+    hook_mssql = AzureMsSqlDataFrameHook(
+        azure_mssql_conn_id=kwargs.get('mssql_conn_id')
+    )
+
+    # Break out segment hits
+    segments = hook_mssql.read_table_dataframe(
+        table_name="segment", schema="dim")
+    segments['geometry'] = segments.wkt.map(lambda g: loads(g))
+    segments = gpd.GeoDataFrame(segments)
+    segments.crs = {'init': 'epsg:4326'}
+
+    route_df['segment_key'] = gpd.sjoin(
+        route_df, segments, how="left", op="within"
+    )[['hash_left', 'key']].drop_duplicates(subset='hash_left')['key']
+
+    route_df = route_df.drop_duplicates(
+        subset=['segment_key', 'trip_id'], keep='last')
 
     pathlib.Path(os.path.dirname(kwargs.get('templates_dict').get('local_path'))
                  ).mkdir(parents=True, exist_ok=True)
@@ -205,13 +229,13 @@ def extract_shst_hits_to_data_lake(**kwargs):
     trips[[
         'provider_name',
         'date_key',
-        'shst_geometry_id',
-        'shst_reference_id',
-        'confidence',
+        'segment_key',
         'hash',
         'datetime',
         'vehicle_type',
         'propulsion_type',
+        'heading',
+        'speed',
         'seen',
         'batch'
     ]].to_csv(kwargs.get('templates_dict').get('local_path'), index=False)
@@ -240,7 +264,8 @@ extract_data_lake_task = BranchPythonOperator(
     },
     op_kwargs={
         'azure_datalake_conn_id': 'azure_data_lake_default',
-        'pgsql_conn_id': 'pgsql_scooter_pilot_1'
+        'pgsql_conn_id': 'pgsql_scooter_pilot_1',
+        'mssql_conn_id': 'azure_sql_server_default'
     },
 
 
