@@ -134,17 +134,18 @@ def extract_shst_hits_to_data_lake(**kwargs):
     trips['seen'] = trips.seen.dt.round('L')
     trips['seen'] = trips.seen.map(
         lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
+
     trips['propulsion_type'] = 'electric,human'
     trips['vehicle_type'] = 'scooter'
 
     trips['start_time'] = trips.apply(
         lambda x: datetime.combine(x.start_date, datetime.min.time()) + x.start_time, axis=1)
-    trips['start_time'] = trips.datetime.map(
+    trips['start_time'] = trips.start_time.map(
         lambda x: datetime.replace(x, tzinfo=None))
 
     trips['end_time'] = trips.apply(
         lambda x: datetime.combine(x.end_date, datetime.min.time()) + x.end_time, axis=1)
-    trips['end_time'] = trips.datetime.map(
+    trips['end_time'] = trips.end_time.map(
         lambda x: datetime.replace(x, tzinfo=None))
 
     trips['timespan'] = trips.end_time - trips.start_time
@@ -161,7 +162,6 @@ def extract_shst_hits_to_data_lake(**kwargs):
 
     route_df = pd.DataFrame({
         'key': np.repeat(trips['key'].values, lens),
-        'alternatekey': np.repeat(trips['alternatekey'].values, lens),
         'provider_name': np.repeat(trips['provider_name'].values, lens),
         'vehicle_key': np.repeat(trips['vehicle_key'].values, lens),
         'vehicle_id': np.repeat(trips['vehicle_id'].values, lens),
@@ -183,7 +183,7 @@ def extract_shst_hits_to_data_lake(**kwargs):
         (route_df.time_chunk * route_df.row_num)
 
     route_df['hash'] = route_df.apply(lambda x: hashlib.md5((
-        x.key + x.provider_name + x.datetime.strftime('%d%m%Y%H%M%S%f')
+        f"{x.key}{x.provider_name}{x.datetime.strftime('%d%m%Y%H%M%S%f')}"
     ).encode('utf-8')).hexdigest(), axis=1)
 
     route_df = route_df.to_crs(epsg=3857)
@@ -238,10 +238,16 @@ def extract_shst_hits_to_data_lake(**kwargs):
     route_df = route_df.drop_duplicates(
         subset=['segment_key', 'trip_id'], keep='last')
 
+    route_df['datetime'] = route_df.datetime.dt.round('H')
+    route_df['date_key'] = route_df.datetime.map(
+        lambda x: int(x.strftime('%Y%m%d')))
+    route_df['datetime'] = route_df.datetime.map(
+        lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
+
     pathlib.Path(os.path.dirname(kwargs.get('templates_dict').get('local_path'))
                  ).mkdir(parents=True, exist_ok=True)
 
-    trips[[
+    route_df[[
         'provider_name',
         'date_key',
         'segment_key',
