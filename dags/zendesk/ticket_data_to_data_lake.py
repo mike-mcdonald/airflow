@@ -283,7 +283,7 @@ delete_updated_tickets = MsSqlOperator(
     sql='''
     delete
     from
-        fact.zendesk_ticket
+        zendesk.zendesk_ticket
     where
         id in ( 
             select 
@@ -306,7 +306,7 @@ process_new_batch = MsSqlOperator(
     mssql_conn_id='azure_sql_server_full',
     sql='''
     insert into
-        fact.zendesk_ticket
+        zendesk.zendesk_ticket
     select
         *
     from
