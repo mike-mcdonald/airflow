@@ -1,7 +1,7 @@
-# airflow-base
-[![CircleCI](https://circleci.com/gh/mike-mcdonald/airflow-base/tree/master.svg?style=svg&circle-token=917f4ac9fbdc1406ed376aacd175600873520bc8)](https://circleci.com/gh/mike-mcdonald/airflow-base/tree/master)
+# airflow
+[![CircleCI](https://circleci.com/gh/mike-mcdonald/airflow/tree/master.svg?style=svg&circle-token=917f4ac9fbdc1406ed376aacd175600873520bc8)](https://circleci.com/gh/mike-mcdonald/airflow-base/tree/master)
 
-This repository contains **Dockerfile** of [apache-airflow](https://github.com/apache/incubator-airflow) for [Docker](https://www.docker.com/)
+This repository contains the code for running [PBOT's](https://portland.gov/transportation) data ingestion pipeline for e-scooter and other data sets.
 
 ## Information
 
