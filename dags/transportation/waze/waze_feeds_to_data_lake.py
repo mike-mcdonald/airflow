@@ -92,7 +92,7 @@ def alerts_to_data_lake(**kwargs):
     hook.upload_file(kwargs['templates_dict']['local_path'],
                      kwargs['templates_dict']['remote_path'])
 
-    # os.remove(kwargs['templates_dict']['local_path'])
+    os.remove(kwargs['templates_dict']['local_path'])
 
 
 def jams_to_data_lake(**kwargs):
@@ -118,7 +118,7 @@ def jams_to_data_lake(**kwargs):
     hook.upload_file(kwargs['templates_dict']['local_path'],
                      kwargs['templates_dict']['remote_path'])
 
-    # os.remove(kwargs['templates_dict']['local_path'])
+    os.remove(kwargs['templates_dict']['local_path'])
 
 
 def irregularities_to_data_lake(**kwargs):
@@ -147,7 +147,8 @@ def irregularities_to_data_lake(**kwargs):
 
     hook.upload_file(kwargs['templates_dict']['local_path'],
                      kwargs['templates_dict']['remote_path'])
-    # os.remove(kwargs['templates_dict']['local_path'])
+
+    os.remove(kwargs['templates_dict']['local_path'])
 
 
 alerts_to_data_lake_task = PythonOperator(
