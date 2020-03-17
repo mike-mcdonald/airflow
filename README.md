@@ -1,12 +1,11 @@
 # airflow
-[![CircleCI](https://circleci.com/gh/mike-mcdonald/airflow-base/tree/master.svg?style=svg&circle-token=917f4ac9fbdc1406ed376aacd175600873520bc8)](https://circleci.com/gh/mike-mcdonald/airflow-base/tree/master)
+[![CircleCI](https://circleci.com/gh/mike-mcdonald/airflow/tree/master.svg?style=svg&circle-token=917f4ac9fbdc1406ed376aacd175600873520bc8)](https://circleci.com/gh/mike-mcdonald/airflow-base/tree/master)
 
-This repository contains a **Dockerfile** of [apache-airflow](https://github.com/apache/airflow) for [Docker](https://www.docker.com/)
+This repository contains the code for running [PBOT's](https://portland.gov/transportation) data ingestion pipeline for e-scooter and other data sets.
 
 ## Information
 
-* Based on Python official Image [python:3.7-slim-stretch](https://hub.docker.com/_/python/) and uses the official [Postgres](https://hub.docker.com/_/postgres/) as backend and [Redis](https://hub.docker.com/_/redis/) as queue
-* Uses a set of Kubernetes configuration files to manage deployment to production environments
+* Based on Python (3.7-slim) [official Image](https://hub.docker.com/_/python/) and uses the official [Postgres](https://hub.docker.com/_/postgres/) as backend and [Redis](https://hub.docker.com/_/redis/) as queue
 
 ## Development workflow
 
