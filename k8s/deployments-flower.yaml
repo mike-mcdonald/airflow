@@ -59,6 +59,26 @@ spec:
                             secretKeyRef:
                                 name: airflow-hash
                                 key: salt
+                      - name: AIRFLOW__SMTP__SMTP_HOST
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-smtp
+                                key: host
+                      - name: AIRFLOW__SMTP__SMTP_USER
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-smtp
+                                key: user
+                      - name: AIRFLOW__SMTP__SMTP_PASSWORD
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-smtp
+                                key: password
+                      - name: AIRFLOW__SMTP__SMTP_MAIL_FROM
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-smtp
+                                key: from
                   ports:
                       - name: flower
                         containerPort: 5555
