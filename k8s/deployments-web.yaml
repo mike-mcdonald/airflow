@@ -30,7 +30,7 @@ spec:
             containers:
                 - name: airflow-web
                   image: pudlmds.azurecr.io/airflow:1.10.6.1
-                  imagePullPolicy: Always
+                  imagePullPolicy: IfNotPresent
                   ports:
                       - name: web
                         containerPort: 8080

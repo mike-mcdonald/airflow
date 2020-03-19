@@ -31,7 +31,7 @@ spec:
             containers:
                 - name: airflow-scheduler
                   image: pudlmds.azurecr.io/airflow:1.10.6.1
-                  imagePullPolicy: Always
+                  imagePullPolicy: IfNotPresent
                   envFrom:
                       - configMapRef:
                             name: 'airflow-env'

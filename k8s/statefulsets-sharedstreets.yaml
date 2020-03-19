@@ -34,6 +34,6 @@ spec:
             serviceAccountName: airflow
             containers:
                 - name: airflow-sharedstreets
-                  imagePullPolicy: Always
+                  imagePullPolicy: IfNotPresent
                   image: pudlmds.azurecr.io/sharedstreets-api:1.0.0
 

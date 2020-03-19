@@ -34,7 +34,7 @@ spec:
             serviceAccountName: airflow
             containers:
                 - name: airflow-worker
-                  imagePullPolicy: Always
+                  imagePullPolicy: IfNotPresent
                   image: pudlmds.azurecr.io/airflow:1.10.6.1
                   envFrom:
                       - configMapRef:
