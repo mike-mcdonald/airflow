@@ -40,7 +40,7 @@ from airflow.operators.mssql_plugin import MsSqlOperator
 default_args = {
     'owner': 'airflow',
     'start_date':  datetime(2019, 4, 26),
-    'email': ['pbotsqldbas@portlandoregon.gov'],
+    'email': ['michael.mcdonald@portlandoregon.gov'],
     'email_on_failure': True,
     'email_on_retry': False,
     'retries': 9,
@@ -195,8 +195,9 @@ def extract_shst_hits_datalake(**kwargs):
         try:
             return x.result()
         except:
-            logging.error('Error retrieving sharedstreets references, returning empty results...')
-            return { 'features': [] }
+            logging.error(
+                'Error retrieving sharedstreets references, returning empty results...')
+            return {'features': []}
 
     shst_df = shst.map(safe_result)
 
