@@ -59,26 +59,16 @@ spec:
                             secretKeyRef:
                                 name: airflow-hash
                                 key: salt
-                      - name: AIRFLOW__SMTP__SMTP_HOST
+                      - name: SENDGRID_MAIL_FROM
                         valueFrom:
                             secretKeyRef:
-                                name: airflow-smtp
-                                key: host
-                      - name: AIRFLOW__SMTP__SMTP_USER
-                        valueFrom:
-                            secretKeyRef:
-                                name: airflow-smtp
-                                key: user
-                      - name: AIRFLOW__SMTP__SMTP_PASSWORD
-                        valueFrom:
-                            secretKeyRef:
-                                name: airflow-smtp
-                                key: password
-                      - name: AIRFLOW__SMTP__SMTP_MAIL_FROM
-                        valueFrom:
-                            secretKeyRef:
-                                name: airflow-smtp
+                                name: airflow-sendgrid
                                 key: from
+                      - name: SENDGRID_API_KEY
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-sendgrid
+                                key: api-key
                   ports:
                       - name: flower
                         containerPort: 5555
