@@ -1,6 +1,6 @@
-"""
+'''
 DAG for ETL Processing of Dockless Mobility Provider Data
-"""
+'''
 from datetime import datetime, timedelta
 
 import airflow
@@ -9,34 +9,34 @@ from airflow import DAG
 from airflow.operators.mssql_plugin import MsSqlOperator
 
 default_args = {
-    "owner": "airflow",
-    "depends_on_past": True,
-    "start_date":  datetime(2019, 5, 1),
-    "email": ["pbotsqldbas@portlandoregon.gov"],
-    "email_on_failure": True,
-    "email_on_retry": False,
-    "retries": 9,
-    "retry_delay": timedelta(minutes=2),
-    "concurrency": 1,
-    "max_active_runs": 1,
-    # "queue": "bash_queue",
-    # "pool": "backfill",
-    # "priority_weight": 10,
-    # "end_date": datetime(2016, 1, 1),
+    'owner': 'airflow',
+    'depends_on_past': True,
+    'start_date':  datetime(2019, 5, 1),
+    'email': ['michael.mcdonald@portlandoregon.gov'],
+    'email_on_failure': True,
+    'email_on_retry': False,
+    'retries': 9,
+    'retry_delay': timedelta(minutes=2),
+    'concurrency': 1,
+    'max_active_runs': 1,
+    # 'queue': 'bash_queue',
+    # 'pool': 'backfill',
+    # 'priority_weight': 10,
+    # 'end_date': datetime(2016, 1, 1),
 }
 
 dag = DAG(
-    dag_id="scooter_state_maintenance",
+    dag_id='scooter_state_maintenance',
     default_args=default_args,
     catchup=False,
-    schedule_interval="@daily"
+    schedule_interval='@daily'
 )
 
 extract_null_states_task = MsSqlOperator(
-    task_id="extract_null_end_states",
+    task_id='extract_null_end_states',
     dag=dag,
-    mssql_conn_id="azure_sql_server_full",
-    sql="""
+    mssql_conn_id='azure_sql_server_full',
+    sql='''
     insert into
         etl.extract_maintenance_states
     select
@@ -66,27 +66,27 @@ extract_null_states_task = MsSqlOperator(
         fact.state as source
     where
         end_hash is null
-    """
+    '''
 )
 
 delete_extract_task = MsSqlOperator(
-    task_id="delete_extract",
+    task_id='delete_extract',
     dag=dag,
-    mssql_conn_id="azure_sql_server_full",
-    sql="""
+    mssql_conn_id='azure_sql_server_full',
+    sql='''
     delete
     from
         etl.extract_maintenance_states
     where
         batch = '{{ ts_nodash }}'
-    """
+    '''
 )
 
 stage_states_task = MsSqlOperator(
-    task_id="stage_state_maintenance",
+    task_id='stage_state_maintenance',
     dag=dag,
-    mssql_conn_id="azure_sql_server_full",
-    sql="""
+    mssql_conn_id='azure_sql_server_full',
+    sql='''
     insert into
         etl.stage_maintenance_states (
             [provider_key],
@@ -202,27 +202,27 @@ stage_states_task = MsSqlOperator(
     ) as next_state
     where
         batch = '{{ ts_nodash }}'
-    """
+    '''
 )
 
 delete_stage_task = MsSqlOperator(
-    task_id="delete_stage",
+    task_id='delete_stage',
     dag=dag,
-    mssql_conn_id="azure_sql_server_full",
-    sql="""
+    mssql_conn_id='azure_sql_server_full',
+    sql='''
     delete
     from
         etl.stage_maintenance_states
     where
         batch = '{{ ts_nodash }}'
-    """
+    '''
 )
 
 warehouse_update_task = MsSqlOperator(
-    task_id="update_warehouse_states",
+    task_id='update_warehouse_states',
     dag=dag,
-    mssql_conn_id="azure_sql_server_full",
-    sql="""
+    mssql_conn_id='azure_sql_server_full',
+    sql='''
     update
         fact.state
     set
@@ -249,7 +249,7 @@ warehouse_update_task = MsSqlOperator(
     where
         source.batch = '{{ ts_nodash }}'
         and source.start_hash = fact.state.start_hash
-    """
+    '''
 )
 
 extract_null_states_task >> stage_states_task >> delete_extract_task

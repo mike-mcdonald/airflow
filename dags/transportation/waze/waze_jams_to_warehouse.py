@@ -29,7 +29,7 @@ SHAREDSTREETS_API_URL = 'http://sharedstreets:3000/api/v1/match/line/car'
 default_args = {
     'owner': 'airflow',
     'start_date':  datetime(2019, 8, 7),
-    'email': ['pbotsqldbas@portlandoregon.gov'],
+    'email': ['michael.mcdonald@portlandoregon.gov'],
     'email_on_failure': True,
     'email_on_retry': False,
     'retries': 9,
@@ -148,9 +148,9 @@ def process_datalake_files(**kwargs):
     # Pivot on segments
     lens = [len(item) for item in shst_df['segments']]
     shst_df = pd.DataFrame({
-        "hash": np.repeat(shst_df['hash'].values, lens),
-        "batch": np.repeat(shst_df['batch'].values, lens),
-        "segment": np.concatenate(shst_df['segments'].values),
+        'hash': np.repeat(shst_df['hash'].values, lens),
+        'batch': np.repeat(shst_df['batch'].values, lens),
+        'segment': np.concatenate(shst_df['segments'].values),
     })
     shst_df['shst_geometry_id'] = shst_df.segment.map(
         lambda x: x.get('geometryId'))
@@ -267,8 +267,8 @@ def process_datalake_files(**kwargs):
     hook.upload_file(local_path, remote_path)
     os.remove(local_path)
 
-    # for file in files:
-    # hook.rm(file)
+    for file in files:
+        hook.rm(file)
 
 
 parse_datalake_files_task = PythonOperator(

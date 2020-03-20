@@ -29,8 +29,8 @@ spec:
             restartPolicy: Always
             containers:
                 - name: airflow-web
-                  image: pudlmds.azurecr.io/airflow:1.10.6.1
-                  imagePullPolicy: Always
+                  image: pudlmds.azurecr.io/airflow:1.10.6.2
+                  imagePullPolicy: IfNotPresent
                   ports:
                       - name: web
                         containerPort: 8080
@@ -61,6 +61,16 @@ spec:
                             secretKeyRef:
                                 name: airflow-hash
                                 key: salt
+                      - name: SENDGRID_MAIL_FROM
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-sendgrid
+                                key: from
+                      - name: SENDGRID_API_KEY
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-sendgrid
+                                key: api-key
                   resources: {}
                   args: ['webserver']
                   livenessProbe:

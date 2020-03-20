@@ -23,7 +23,7 @@ from airflow.operators.mssql_plugin import MsSqlOperator
 default_args = {
     'owner': 'airflow',
     'start_date': datetime(2019, 8, 7),
-    'email': ['pbotsqldbas@portlandoregon.gov'],
+    'email': ['michael.mcdonald@portlandoregon.gov'],
     'email_on_failure': True,
     'email_on_retry': False,
     'retry_delay': timedelta(minutes=1),
