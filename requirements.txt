@@ -12,3 +12,4 @@ rtree
 shapely
 six
 sklearn
+werkzeug==0.16.*

@@ -22,8 +22,8 @@ from airflow.hooks.waze_plugin import WazeHook
 default_args = {
     'owner': 'airflow',
     'start_date': datetime(2019, 8, 7),
-    'email': ['pbotsqldbas@portlandoregon.gov'],
-    'email_on_failure': True,
+    'email': ['michael.mcdonald@portlandoregon.gov'],
+    'email_on_failure': False,
     'email_on_retry': False,
     'retry_delay': timedelta(minutes=1),
     'retries': 0,

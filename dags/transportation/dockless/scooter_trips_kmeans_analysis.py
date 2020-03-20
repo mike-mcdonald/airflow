@@ -28,7 +28,7 @@ SHAREDSTREETS_API_URL = 'http://sharedstreets:3000/api/v1/match/point/bike'
 default_args = {
     'owner': 'airflow',
     'start_date':  datetime(2019, 4, 26),
-    'email': ['pbotsqldbas@portlandoregon.gov'],
+    'email': ['michael.mcdonald@portlandoregon.gov'],
     'email_on_failure': True,
     'email_on_retry': False,
     'retries': 9,

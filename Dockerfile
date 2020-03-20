@@ -8,7 +8,7 @@ ENV TERM linux
 ENV AIRFLOW_VERSION=1.10.7
 ENV AIRFLOW_HOME=/usr/local/airflow
 # github_enterprise is a workaround to including flask-oauthlib
-ENV AIRFLOW_DEPS="crypto,azure_data_lake,celery,devel_azure,github_enterprise,password,postgres,redis,webhdfs"
+ENV AIRFLOW_DEPS="crypto,azure_data_lake,celery,devel_azure,github_enterprise,password,postgres,redis,sendgrid,webhdfs"
 
 # Define en_US.
 ENV LANGUAGE en_US.UTF-8

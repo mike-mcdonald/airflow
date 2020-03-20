@@ -31,7 +31,7 @@ spec:
             containers:
                 - name: airflow-scheduler
                   image: pudlmds.azurecr.io/airflow:1.10.6.1
-                  imagePullPolicy: Always
+                  imagePullPolicy: IfNotPresent
                   envFrom:
                       - configMapRef:
                             name: 'airflow-env'
@@ -58,5 +58,15 @@ spec:
                             secretKeyRef:
                                 name: airflow-hash
                                 key: salt
+                      - name: SENDGRID_MAIL_FROM
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-sendgrid
+                                key: from
+                      - name: SENDGRID_API_KEY
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-sendgrid
+                                key: api-key
                   resources: {}
                   args: ['scheduler']
