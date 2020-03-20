@@ -29,7 +29,7 @@ spec:
             restartPolicy: Always
             containers:
                 - name: airflow-web
-                  image: pudlmds.azurecr.io/airflow:1.10.6.2
+                  image: pudlapps.azurecr.io/airflow:1.10.7.1
                   imagePullPolicy: IfNotPresent
                   ports:
                       - name: web
@@ -71,6 +71,21 @@ spec:
                             secretKeyRef:
                                 name: airflow-sendgrid
                                 key: api-key
+                      - name: AZURE_TENANT_ID
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-oauth
+                                key: tenant-id
+                      - name: AZURE_APPLICATION_ID
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-oauth
+                                key: application-id
+                      - name: AZURE_CLIENT_SECRET
+                        valueFrom:
+                            secretKeyRef:
+                                name: airflow-oauth
+                                key: client-secret
                   resources: {}
                   args: ['webserver']
                   livenessProbe:
