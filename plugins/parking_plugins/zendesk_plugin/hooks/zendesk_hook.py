@@ -86,10 +86,10 @@ class ZendeskHook(BaseHook):
             if "rate_limit" in self.connection.extra_dejson:
                 time.sleep(int(self.connection.extra_dejson["rate_limit"]))
             
-            #if len(results) < 20000:
-            results, next_start_time = self._request(url=next_page, payload_key=payload_key, results=results)
-            #else:
-                #next_start_time = page["end_time"]
+            if len(results) < 20000:
+                results, next_start_time = self._request(url=next_page, payload_key=payload_key, results=results)
+            else:
+                next_start_time = page["end_time"]
         else:
             next_start_time = page["end_time"]
 
@@ -102,7 +102,7 @@ class ZendeskHook(BaseHook):
         logging.info(f"Retrieving tickets for period {start_time} to {datetime.now()}")
 
         # gather all the params together
-        params = dict(start_time=start_time)
+        params = dict(start_time=start_time, include="dates")
 
         # make the request(s)
         tickets, next_start_time = self._request(self.connection.host.replace(":endpoint", "incremental/tickets.json"), "tickets",params)

@@ -31,11 +31,11 @@ from airflow.hooks.zendesk_plugin import ZendeskAzureDLHook , ZendeskHook
 default_args = {
     'owner': 'airflow',
     'depends_on_past': True,
-    'start_date':  datetime(2020, 2, 6), #The task is triggered after start_date+interval has passed
+    'start_date':  datetime(2020, 3, 24), #The task is triggered after start_date+interval has passed
     'email': ['pbotsqldbas@portlandoregon.gov'],
     'email_on_failure': True,
     'email_on_retry': False,
-    'retries': 9,
+    'retries': 10,
     'retry_delay': timedelta(seconds=10),
 }
 
@@ -204,6 +204,8 @@ def zendesk_tickets_to_datalake(**kwargs):
     tickets['Transaction_Date_and_End_Time_clean'] = tickets.Transaction_Date_and_End_Time.apply(remove_quotes)
 
     tickets['Transaction_Permit_No_clean'] = tickets.Transaction_Permit_No.apply(remove_quotes)
+    tickets['initially_assigned_at_date'] = tickets.dates.map(lambda x : x.get('initially_assigned_at'))
+    tickets['solved_at_date'] = tickets.dates.map(lambda x : x.get('solved_at'))
 
     tickets[[
         'id',
@@ -232,6 +234,8 @@ def zendesk_tickets_to_datalake(**kwargs):
         "Transaction_Permit_No_clean",
         "Dismissal_Request",
         "Supervisor_Call_Back_Request",
+        "initially_assigned_at_date",
+        "solved_at_date",
         'batch'
     ]].to_csv(kwargs.get('templates_dict').get('tickets_local_path'), index=False)
 
@@ -265,7 +269,7 @@ retrieve_zendesk_data_task = PythonOperator(
     python_callable=zendesk_tickets_to_datalake,
     op_kwargs={
         'zendesk_api_conn_id': zendesk_conn_id,
-        'zendesk_datalake_conn_id':'azure_data_lake_zendesk'
+        'zendesk_datalake_conn_id':'azure_data_lake_default'
     },
     templates_dict={
         'batch': f'{{{{ ts_nodash }}}}',
@@ -331,7 +335,7 @@ delete_processed_batches_ADLS = PythonOperator(
     provide_context=True,
     python_callable=delete_ADLS_csv,
     op_kwargs={
-        'zendesk_datalake_conn_id':'azure_data_lake_zendesk'
+        'zendesk_datalake_conn_id':'azure_data_lake_default'
     }
 )
 

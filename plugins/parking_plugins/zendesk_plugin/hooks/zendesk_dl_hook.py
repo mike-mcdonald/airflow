@@ -6,7 +6,7 @@ class ZendeskAzureDLHook(ContribHook):
     Additional Azure Data Lake functionality exposed as a hook
     """
 
-    def __init__(self, zendesk_datalake_conn_id='azure_data_lake_zendesk'):
+    def __init__(self, zendesk_datalake_conn_id='azure_data_lake_default'):
         super().__init__(azure_data_lake_conn_id=zendesk_datalake_conn_id)
 
     def set_expiry(self, path, expiry_option, expire_time=None):
