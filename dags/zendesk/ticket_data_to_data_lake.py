@@ -31,7 +31,7 @@ from airflow.hooks.zendesk_plugin import ZendeskAzureDLHook , ZendeskHook
 default_args = {
     'owner': 'airflow',
     'depends_on_past': True,
-    'start_date':  datetime(2020, 3, 24), #The task is triggered after start_date+interval has passed
+    'start_date':  datetime(2020, 4, 4), #The task is triggered after start_date+interval has passed
     'email': ['pbotsqldbas@portlandoregon.gov'],
     'email_on_failure': True,
     'email_on_retry': False,
