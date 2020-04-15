@@ -33,7 +33,7 @@ from airflow.operators.azure_plugin import AzureDataLakeRemoveOperator
 default_args = {
     'owner': 'airflow',
     'depends_on_past': True,
-    'start_date':  datetime(2020, 4, 4), #The task is triggered after start_date+interval has passed
+    'start_date':  datetime(2020, 4, 25), #The task is triggered after start_date+interval has passed
     'email': ['abdullah.malikyar@portlandoregon.gov','Michael.McDonald@portlandoregon.gov'],
     'email_on_failure': True,
     'email_on_retry': False,
@@ -42,22 +42,19 @@ default_args = {
 }
 
 custom_field_ids = {
-    236316: 'Reason_For_Call_Request_Type',
-    236307: 'Meter_ID_PK_Zone_APP_Zone',
-    #236308: 'Meter Location',
-    292134: 'Meter_Resolution',
-    25205166: 'Paid_License_Plate',
-    #25240326: 'Resolution/Conclusion Comments',
-    360000118026: 'Citation_Date',
+    236316: 'reason_for_call_request_type',
+    236307: 'meter_id_pk_app_zone',
+    292134: 'meter_resolution',
+    25205166: 'paid_license_plate',
+    360000118026: 'citation_date',
     360000119063: 'refund_type',
     360000118046: 'officer_no',
     360000077106: 'refund_request',
-    360000034926: 'Customer_Service_Resolution',
-    360000089246: 'Transaction_Date_and_Start_Time',
-    360000089266: 'Transaction_Date_and_End_Time',
-    #25191603: 'Citation #',
+    360000034926: 'customer_service_resolution',
+    360000089246: 'transaction_start_date',
+    360000089266: 'transaction_end_date',
     360000139966: 'refund_amount',
-    360000036566: 'Transaction_Permit_No',
+    360000036566: 'transaction_permit_no',
     25338086: 'dismissal_request',
     360027931211: 'supervisor_call_back_request'
 }
@@ -181,19 +178,17 @@ def zendesk_tickets_to_datalake(**kwargs):
             y = x.replace('"', '')
         return y
 
-    tickets['tags_joined'] = tickets.tags.apply(clean_tags)
+    tickets['tags'] = tickets.tags.apply(clean_tags)
     tickets['batch'] = kwargs.get('templates_dict').get('batch')
-    tickets['subject_clean'] = tickets.subject.apply(remove_quotes)
-    tickets['reason_for_call_request_type_clean'] = tickets.Reason_For_Call_Request_Type.apply(remove_quotes)
-    tickets['meter_id_pk_zone_app_zone_clean'] = tickets.Meter_ID_PK_Zone_APP_Zone.apply(remove_quotes)
-    tickets['meter_resolution_clean'] = tickets.Meter_Resolution.apply(remove_quotes)
-    tickets['paid_license_plate_clean'] = tickets.Paid_License_Plate.apply(remove_quotes)
-    tickets['citation_date_clean'] = tickets.Citation_Date.apply(remove_quotes)
-    tickets['officer_no_clean'] = tickets.officer_no.apply(remove_quotes)
-    tickets['customer_service_resolution_clean'] = tickets.Customer_Service_Resolution.apply(remove_quotes)
-    tickets['transaction_date_and_start_time_clean'] = tickets.Transaction_Date_and_Start_Time.apply(remove_quotes)
-    tickets['transaction_date_and_end_time_clean'] = tickets.Transaction_Date_and_End_Time.apply(remove_quotes)
-    tickets['transaction_permit_no_clean'] = tickets.Transaction_Permit_No.apply(remove_quotes)
+    tickets['subject'] = tickets.subject.apply(remove_quotes)
+    tickets['reason_for_call_request_type'] = tickets.reason_for_call_request_type.apply(remove_quotes)
+    tickets['meter_id_pk_app_zone'] = tickets.meter_id_pk_app_zone.apply(remove_quotes)
+    tickets['meter_resolution'] = tickets.meter_resolution.apply(remove_quotes)
+    tickets['paid_license_plate'] = tickets.paid_license_plate.apply(remove_quotes)
+    tickets['citation_date'] = tickets.citation_date.apply(remove_quotes)
+    tickets['officer_no'] = tickets.officer_no.apply(remove_quotes)
+    tickets['customer_service_resolution'] = tickets.customer_service_resolution.apply(remove_quotes)
+    tickets['transaction_permit_no'] = tickets.transaction_permit_no.apply(remove_quotes)
     tickets['initially_assigned_at_date'] = tickets.dates.map(lambda x: x.get('initially_assigned_at'))
     tickets['solved_at_date'] = tickets.dates.map(lambda x: x.get('solved_at'))
 
@@ -202,26 +197,23 @@ def zendesk_tickets_to_datalake(**kwargs):
         'created_at',
         'updated_at',
         'type',
-        'subject_clean',
+        'subject',
         'priority',
         'status',
         'assignee_id',
-        'problem_id',
         'has_incidents',
-        'tags_joined',
-        'reason_for_call_request_type_clean',
-        'meter_id_pk_zone_app_zone_clean',
-        'meter_resolution_clean',
-        'paid_license_plate_clean',
-        'citation_date_clean',
+        'tags',
+        'reason_for_call_request_type',
+        'meter_id_pk_app_zone',
+        'meter_resolution',
+        'paid_license_plate',
+        'citation_date',
         'refund_type',
-        'officer_no_clean',
+        'officer_no',
         'refund_request',
-        'customer_service_resolution_clean',
-        'transaction_date_and_start_time_clean',
-        'transaction_date_and_end_time_clean',
+        'customer_service_resolution',
         'refund_amount',
-        'transaction_permit_no_clean',
+        'transaction_permit_no',
         'dismissal_request',
         'supervisor_call_back_request',
         'initially_assigned_at_date',
@@ -277,13 +269,13 @@ delete_updated_tickets = MsSqlOperator(
     sql='''
     delete
     from
-        zendesk.zendesk_ticket
+        zendesk.parking_meter_ticket
     where
         id in ( 
             select 
                 id 
             from
-                etl.external_zendesk_ticket
+                etl.external_parking_meter_ticket
             where 
                 batch = '{{ ts_nodash }}'
         )
@@ -299,12 +291,94 @@ insert_new_batch = MsSqlOperator(
     depends_on_past=False,
     mssql_conn_id='azure_sql_server_full',
     sql='''
-    insert into
-        zendesk.zendesk_ticket
-    select
-        *
-    from
-        etl.external_zendesk_ticket
+    insert into [zendesk].[parking_meter_ticket]
+           ([id]
+           ,[created_at]
+           ,[updated_at]
+           ,[type]
+           ,[subject]
+           ,[priority]
+           ,[status]
+           ,[assignee_id]
+           ,[has_incidents]
+           ,[tags]
+           ,[reason_for_call_request_type]
+           ,[meter_id_pk_app_zone]
+           ,[meter_resolution]
+           ,[paid_license_plate]
+           ,[citation_date]
+           ,[refund_type]
+           ,[officer_no]
+           ,[refund_request]
+           ,[customer_service_resolution]
+           ,[refund_amount]
+           ,[transaction_permit_no]
+           ,[dismissal_request]
+           ,[supervisor_call_back_request]
+           ,[initially_assigned_at_date]
+           ,[solved_at_date]
+           ,[batch])
+     select
+           (CAST(id as int)) as 'id'
+		  ,CONVERT(datetime2, created_at, 126) as 'created_at'
+		  ,(
+			CASE WHEN 
+				updated_at IS NULL 
+			THEN 
+				 NULL
+			ELSE 
+				CONVERT(datetime2, updated_at, 126)
+			END
+				) as 'updated_at'
+		  ,[type]
+		  ,[subject]
+		  ,[priority]
+		  ,[status]
+		  ,(
+			CASE WHEN 
+				assignee_id is null 
+			THEN 
+				NULL
+			ELSE 
+				CONVERT(numeric, assignee_id) 
+			END
+				) as 'assignee_id'
+		  ,[has_incidents]
+		  ,[tags]
+		  ,[reason_for_call_request_type]
+		  ,[meter_id_pk_app_zone]
+		  ,[meter_resolution]
+		  ,[paid_license_plate]
+		  ,[citation_date]
+		  ,[refund_type]
+		  ,[officer_no]
+		  ,[refund_request]
+		  ,[customer_service_resolution]
+		  ,[refund_amount]
+		  ,[transaction_permit_no]
+		  ,[dismissal_request]
+		  ,[supervisor_call_back_request]
+		  ,(
+			CASE WHEN 
+				[initially_assigned_at_date] IS NULL 
+			THEN 
+				NULL
+			ELSE 
+				CONVERT(datetime2, [initially_assigned_at_date], 126)  
+			END
+				) as 'initially_assigned_at_date'
+		  ,(
+			CASE WHEN 
+				[solved_at_date] IS NULL 
+			THEN 
+				NULL
+			ELSE 
+				CONVERT(datetime2, [solved_at_date], 126) 
+			END
+				) as 'solved_at_date'
+		  ,[batch]
+	from [etl].[external_parking_meter_ticket]
+           
     where
         batch = '{{ts_nodash}}'
     '''

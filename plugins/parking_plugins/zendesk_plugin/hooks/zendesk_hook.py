@@ -10,11 +10,12 @@ from airflow.hooks.base_hook import BaseHook
 from airflow.exceptions import AirflowException
 
 class ZendeskHook(BaseHook):
-    MAX_ResultSet_Size = 20000
+    
     def __init__(self,
                  max_retries=3,
                  zendesk_conn_id='Zendesk_API'):
         self.max_retries = max_retries
+        self.max_result_size=20000
 
         try:
             self.connection = self.get_connection(zendesk_conn_id)
@@ -84,7 +85,7 @@ class ZendeskHook(BaseHook):
             if 'rate_limit' in self.connection.extra_dejson:
                 time.sleep(int(self.connection.extra_dejson['rate_limit']))
             
-            if len(results) < MAX_ResultSet_Size:
+            if len(results) < self.max_result_size:
                 results, next_start_time = self._request(url=next_page, payload_key=payload_key, results=results)
             else:
                 next_start_time = page['end_time']
