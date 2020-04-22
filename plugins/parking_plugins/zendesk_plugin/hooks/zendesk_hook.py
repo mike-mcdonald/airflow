@@ -9,13 +9,14 @@ import requests
 from airflow.hooks.base_hook import BaseHook
 from airflow.exceptions import AirflowException
 
+
 class ZendeskHook(BaseHook):
-    
+
     def __init__(self,
                  max_retries=3,
                  zendesk_conn_id='Zendesk_API'):
         self.max_retries = max_retries
-        self.max_result_size=20000
+        self.max_result_size = 20000
 
         try:
             self.connection = self.get_connection(zendesk_conn_id)
@@ -32,18 +33,18 @@ class ZendeskHook(BaseHook):
             'Authorization': f'Basic {auth_info}'
         })
 
-
     def _request(self, url, payload_key, params=None, results=[]):
-        '''
+        """
         Internal helper for sending requests.
 
         Returns payload(s).
-        '''
+        """
         retries = 0
         res = None
 
         self.log.debug(f'Making request to: {url}')
-        self.log.debug(f'payload key: {payload_key} params {params} url {url}  session {self.session.headers}')
+        self.log.debug(
+            f'payload key: {payload_key} params {params} url {url}  session {self.session.headers}')
 
         while res is None:
             try:
@@ -58,7 +59,7 @@ class ZendeskHook(BaseHook):
                 retries = retries + 1
                 if retries > self.max_retries:
                     raise AirflowException(
-                        f'Unable to retrieve response from {url} after {self.max_retries}.  Aborting...')
+                        f'Unable to retrieve response from {url} after {self.max_retries}. Aborting...')
 
                 self.log.warning(
                     f'Error while retrieving {url}: {err}.  Retrying in {10 * retries} seconds... (retry {retries}/{self.max_retries})')
@@ -70,8 +71,7 @@ class ZendeskHook(BaseHook):
         page = res.json()
 
         next_start_time = 'null'
-       
-        
+
         if page.get(payload_key) is not None:
             results.extend(page[payload_key])
 
@@ -82,26 +82,31 @@ class ZendeskHook(BaseHook):
 
             if 'rate_limit' in self.connection.extra_dejson:
                 time.sleep(int(self.connection.extra_dejson['rate_limit']))
-            
+
             if len(results) < self.max_result_size:
-                results, next_start_time = self._request(url=next_page, payload_key=payload_key, results=results)
+                results, next_start_time = self._request(
+                    url=next_page, payload_key=payload_key, results=results)
             else:
                 next_start_time = page['end_time']
         else:
             next_start_time = page['end_time']
 
         return results, next_start_time
-
-
-    #Call Zendesk Api and get data
+    # Call Zendesk Api and get data
     def get_tickets(self, start_time=None):
 
-        self.log.info(f'Retrieving tickets for period {start_time} to {datetime.now()}')
+        self.log.info(
+            f'Retrieving tickets for period {start_time} to {datetime.now()}')
 
         # gather all the params together
         params = dict(start_time=start_time, include='dates')
 
         # make the request(s)
-        tickets, next_start_time = self._request(self.connection.host.replace(':endpoint', 'incremental/tickets.json'), 'tickets',params)
+        tickets, next_start_time = self._request(
+            self.connection.host.replace(
+                ':endpoint', 'incremental/tickets.json'),
+            'tickets',
+            params
+        )
 
         return pd.DataFrame.from_records(tickets), next_start_time
