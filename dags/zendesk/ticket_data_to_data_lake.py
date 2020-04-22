@@ -243,7 +243,7 @@ dag = DAG(
     default_args=default_args,
     catchup=True,
     max_active_runs=1,
-    schedule_interval='@weekly'
+    schedule_interval='@daily'
 )
 
 retrieve_zendesk_data_task = PythonOperator(
