@@ -294,94 +294,64 @@ insert_new_batch = MsSqlOperator(
     depends_on_past=False,
     mssql_conn_id='azure_sql_server_full',
     sql='''
-    insert into [zendesk].[parking_meter_ticket]
-           ([id]
-           ,[created_at]
-           ,[updated_at]
-           ,[type]
-           ,[subject]
-           ,[priority]
-           ,[status]
-           ,[assignee_id]
-           ,[has_incidents]
-           ,[tags]
-           ,[reason_for_call_request_type]
-           ,[meter_id_pk_app_zone]
-           ,[meter_resolution]
-           ,[paid_license_plate]
-           ,[citation_date]
-           ,[refund_type]
-           ,[officer_no]
-           ,[refund_request]
-           ,[customer_service_resolution]
-           ,[refund_amount]
-           ,[transaction_permit_no]
-           ,[dismissal_request]
-           ,[supervisor_call_back_request]
-           ,[initially_assigned_at_date]
-           ,[solved_at_date]
-           ,[batch])
+    insert into
+        zendesk.parking_meter_ticket (
+            id,
+            created_at,
+            updated_at,
+            type,
+            subject,
+            priority,
+            status,
+            assignee_id,
+            has_incidents,
+            tags,
+            reason_for_call_request_type,
+            meter_id_pk_app_zone,
+            meter_resolution,
+            paid_license_plate,
+            citation_date,
+            refund_type,
+            officer_no,
+            refund_request,
+            customer_service_resolution,
+            refund_amount,
+            transaction_permit_no,
+            dismissal_request,
+            supervisor_call_back_request,
+            initially_assigned_at_date,
+            solved_at_date,
+            batch
+        )
      select
-           (CAST(id as int)) as 'id'
-		  ,CONVERT(datetime2, created_at, 126) as 'created_at'
-		  ,(
-			CASE WHEN 
-				updated_at IS NULL 
-			THEN 
-				 NULL
-			ELSE 
-				CONVERT(datetime2, updated_at, 126)
-			END
-				) as 'updated_at'
-		  ,[type]
-		  ,[subject]
-		  ,[priority]
-		  ,[status]
-		  ,(
-			CASE WHEN 
-				assignee_id is null 
-			THEN 
-				NULL
-			ELSE 
-				CONVERT(numeric, assignee_id) 
-			END
-				) as 'assignee_id'
-		  ,[has_incidents]
-		  ,[tags]
-		  ,[reason_for_call_request_type]
-		  ,[meter_id_pk_app_zone]
-		  ,[meter_resolution]
-		  ,[paid_license_plate]
-		  ,[citation_date]
-		  ,[refund_type]
-		  ,[officer_no]
-		  ,[refund_request]
-		  ,[customer_service_resolution]
-		  ,[refund_amount]
-		  ,[transaction_permit_no]
-		  ,[dismissal_request]
-		  ,[supervisor_call_back_request]
-		  ,(
-			CASE WHEN 
-				[initially_assigned_at_date] IS NULL 
-			THEN 
-				NULL
-			ELSE 
-				CONVERT(datetime2, [initially_assigned_at_date], 126)  
-			END
-				) as 'initially_assigned_at_date'
-		  ,(
-			CASE WHEN 
-				[solved_at_date] IS NULL 
-			THEN 
-				NULL
-			ELSE 
-				CONVERT(datetime2, [solved_at_date], 126) 
-			END
-				) as 'solved_at_date'
-		  ,[batch]
-	from [etl].[external_parking_meter_ticket]
-           
+        cast(id as int) as 'id',
+        try_convert(datetime2, created_at, 126) as 'created_at',
+        try_convert(datetime2, updated_at, 126) as 'updated_at',
+        type,
+        subject,
+        priority,
+        status,
+        try_convert(numeric, assignee_id) as 'assignee_id',
+        has_incidents,
+        tags,
+        reason_for_call_request_type,
+        meter_id_pk_app_zone,
+        meter_resolution,
+        paid_license_plate,
+        citation_date,
+        refund_type,
+        officer_no,
+        refund_request,
+        customer_service_resolution,
+        refund_amount,
+        transaction_permit_no,
+        dismissal_request,
+        supervisor_call_back_request,
+        try_convert(datetime2, initially_assigned_at_date, 126) as 'initially_assigned_at_date',
+        try_convert(datetime2, solved_at_date, 126) as solved_at_date,
+        batch
+    from
+        etl.external_parking_meter_ticket
     where
         batch = '{{ts_nodash}}'
     '''
@@ -398,4 +368,3 @@ delete_processed_batches_ADLS = AzureDataLakeRemoveOperator(
     remote_path=tickets_remote_path)
 
 insert_new_batch >> delete_processed_batches_ADLS
-
