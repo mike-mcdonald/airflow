@@ -63,8 +63,9 @@ custom_field_ids = {
 
 # setting remote and local paths
 start_time_file_remote_path = '/zendesk/meta/next_start_time.csv'
-start_time_file_local_path = 'usr/local/airflow/tmp/zendesk_meta/next_start_time.csv'
-start_time_file_local_dir = 'usr/local/airflow/tmp/zendesk_meta'
+start_time_file_local_path = '/usr/local/airflow/tmp/zendesk_meta/next_start_time.csv'
+start_time_file_local_dir = '/usr/local/airflow/tmp/zendesk_meta'
+tickets_remote_path = '/zendesk/tickets/zendesk-tickets-{{ ts_nodash }}.csv'
 
 
 def set_start_time(next_start_time, azure_dl_hook):
@@ -75,9 +76,7 @@ def set_start_time(next_start_time, azure_dl_hook):
     field = ['next_start_time']
     row = [next_start_time]
 
-   #check if dirs exists if not create them.
-    if not os.path.isdir(start_time_file_local_dir) :
-       os.makedirs(start_time_file_local_dir, exist_ok=True)
+    # check if dirs exists if not create them.
 
     if os.path.exists(start_time_file_local_path):
         os.remove(start_time_file_local_path)
@@ -106,11 +105,7 @@ def get_start_time(azure_dl_hook):
 
     logging.debug(f'start time remote file exist: {start_time_exists}')
 
-    if start_time_exists :
-        logging.debug(f'enterred the if block')
-        #download the file and read its value and return it.
-        azure_dl_hook.download_file(start_time_file_local_path, start_time_file_remote_path, overwrite=True)
-        
+    if start_time_exists:
         #check if file was downloaded
         if(os.path.exists(start_time_file_local_path)):
             with open(start_time_file_local_path) as start_time_csv:
@@ -173,10 +168,9 @@ def zendesk_tickets_to_datalake(**kwargs):
     tickets = tickets.rename(columns=custom_field_ids)
 
     def clean_tags(x):
-        '|'.join(x)
         y = [i.replace('"', '') for i in x]
         return y
-    
+
     def remove_quotes(x):
         y = x
         if x != None:
@@ -184,7 +178,7 @@ def zendesk_tickets_to_datalake(**kwargs):
         return y
 
     tickets['tags'] = tickets.tags.apply(clean_tags)
-    tickets['batch'] = kwargs.get('templates_dict').get('batch')
+    tickets['batch'] = kwargs.get('ts_nodash')
     tickets['subject'] = tickets.subject.apply(remove_quotes)
     tickets['reason_for_call_request_type'] = tickets.reason_for_call_request_type.apply(
         remove_quotes)
@@ -202,6 +196,9 @@ def zendesk_tickets_to_datalake(**kwargs):
     tickets['initially_assigned_at_date'] = tickets.dates.map(
         lambda x: x.get('initially_assigned_at'))
     tickets['solved_at_date'] = tickets.dates.map(lambda x: x.get('solved_at'))
+
+    pathlib.Path(os.path.dirname(kwargs.get('templates_dict').get('tickets_local_path'))
+                 ).mkdir(parents=True, exist_ok=True)
 
     tickets[[
         'id',
@@ -242,16 +239,12 @@ def zendesk_tickets_to_datalake(**kwargs):
 
 # retrieves zendesk ticket data and stores it to ADLS
 dag = DAG(
-    dag_id=dag_id,
+    dag_id='zendesk_parking_meter_tickets_to_azure',
     default_args=default_args,
     catchup=True,
     max_active_runs=1,
     schedule_interval='@weekly'
 )
-zendesk_conn_id = 'Zendesk_API'
-
-tickets_remote_path = f'/zendesk/tickets/zendesk-tickets-{{{{ ts_nodash }}}}.csv'
-
 
 retrieve_zendesk_data_task = PythonOperator(
     task_id='retrieve_zendesk_data',
@@ -261,12 +254,11 @@ retrieve_zendesk_data_task = PythonOperator(
     provide_context=True,
     python_callable=zendesk_tickets_to_datalake,
     op_kwargs={
-        'zendesk_api_conn_id': zendesk_conn_id,
-        'zendesk_datalake_conn_id':'azure_data_lake_default'
+        'zendesk_api_conn_id': 'Zendesk_API',
+        'zendesk_datalake_conn_id': 'azure_data_lake_default'
     },
     templates_dict={
-        'batch': f'{{{{ ts_nodash }}}}',
-        'tickets_local_path': f'usr/local/airflow/tmp/{{{{ ti.dag_id }}}}/{{{{ ti.task_id }}}}/zendesk-tickets-{{{{ ts_nodash }}}}.csv',
+        'tickets_local_path': '/usr/local/airflow/tmp/{{ ti.dag_id }}/{{ ti.task_id }}/zendesk-tickets-{{ ts_nodash }}.csv',
         'tickets_remote_path': tickets_remote_path,
     }
 )
