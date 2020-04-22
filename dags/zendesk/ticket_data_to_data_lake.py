@@ -399,17 +399,3 @@ delete_processed_batches_ADLS = AzureDataLakeRemoveOperator(
 
 insert_new_batch >> delete_processed_batches_ADLS
 
-# '''warehouse_skipped = DummyOperator(
-#     task_id=f'warehouse_skipped',
-#     dag=dag,
-#     depends_on_past=False,
-# )'''
-
-# start = DummyOperator(
-#     task_id=f'start',
-#     dag=dag,
-#     depends_on_past=False,
-# )
-
-
-# start >> retrieve_zendesk_data_task 
