@@ -77,18 +77,19 @@ def set_start_time(next_start_time, azure_dl_hook):
     row = [next_start_time]
 
     # check if dirs exists if not create them.
+    if not os.path.isdir(start_time_file_local_dir):
+        os.makedirs(start_time_file_local_dir, exist_ok=True)
 
     if os.path.exists(start_time_file_local_path):
         os.remove(start_time_file_local_path)
 
-    if os.path.isdir(start_time_file_local_dir):
-        with open(start_time_file_local_path, 'a') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(field)
-            writer.writerow(row)
+    with open(start_time_file_local_path, 'a') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(field)
+        writer.writerow(row)
 
-    if os.path.exists(start_time_file_local_path):
-        azure_dl_hook.upload_file(start_time_file_local_path, start_time_file_remote_path, overwrite=True)
+    azure_dl_hook.upload_file(
+        start_time_file_local_path, start_time_file_remote_path, overwrite=True)
 
 
 def get_start_time(azure_dl_hook):
@@ -106,12 +107,14 @@ def get_start_time(azure_dl_hook):
     logging.debug(f'start time remote file exist: {start_time_exists}')
 
     if start_time_exists:
-        #check if file was downloaded
-        if(os.path.exists(start_time_file_local_path)):
-            with open(start_time_file_local_path) as start_time_csv:
-                csv_reader = csv.reader(start_time_csv, delimiter=',')
-                for row in csv_reader:
-                    start_time = str(row[0])
+        # download the file and read its value and return it.
+        azure_dl_hook.download_file(
+            start_time_file_local_path, start_time_file_remote_path, overwrite=True)
+
+        with open(start_time_file_local_path) as start_time_csv:
+            csv_reader = csv.reader(start_time_csv, delimiter=',')
+            for row in csv_reader:
+                start_time = str(row[0])
 
     return start_time
 
@@ -172,10 +175,7 @@ def zendesk_tickets_to_datalake(**kwargs):
         return y
 
     def remove_quotes(x):
-        y = x
-        if x != None:
-            y = x.replace('"', '')
-        return y
+        return x.replace('"', '') if x is not None else None
 
     tickets['tags'] = tickets.tags.apply(clean_tags)
     tickets['batch'] = kwargs.get('ts_nodash')
