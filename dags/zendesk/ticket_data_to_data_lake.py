@@ -241,7 +241,7 @@ def zendesk_tickets_to_datalake(**kwargs):
 dag = DAG(
     dag_id='zendesk_parking_meter_tickets_to_azure',
     default_args=default_args,
-    catchup=True,
+    catchup=False,
     max_active_runs=1,
     schedule_interval='@daily'
 )
