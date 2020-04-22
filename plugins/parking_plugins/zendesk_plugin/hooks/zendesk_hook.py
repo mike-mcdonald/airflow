@@ -23,12 +23,10 @@ class ZendeskHook(BaseHook):
             self.log.error(
                 f'Failed to find connection for Zendesk, Error: {err}')
             raise
-        
-        auth_info = f'{str(self.connection.login)}/token:{str(self.connection.password)}'
-        auth_info_b = base64.b64encode(auth_info.encode('utf-8'))
-        auth_info = str(auth_info_b, 'utf-8')
 
         self.session = requests.Session()
+        self.session.auth = (
+            f'{self.connection.login}/token', self.connection.password)
         self.session.headers.update({
             'Accept': f'application/json',
             'Authorization': f'Basic {auth_info}'
