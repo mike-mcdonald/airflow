@@ -34,7 +34,7 @@ default_args = {
     'owner': 'airflow',
     'depends_on_past': True,
     # The task is triggered after start_date+interval has passed
-    'start_date':  datetime(2020, 4, 25),
+    'start_date':  datetime(2020, 4, 27),
     'email': ['abdullah.malikyar@portlandoregon.gov', 'Michael.McDonald@portlandoregon.gov'],
     'email_on_failure': True,
     'email_on_retry': False,

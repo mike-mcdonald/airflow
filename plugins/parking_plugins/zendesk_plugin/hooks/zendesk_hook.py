@@ -29,8 +29,7 @@ class ZendeskHook(BaseHook):
         self.session.auth = (
             f'{self.connection.login}/token', self.connection.password)
         self.session.headers.update({
-            'Accept': f'application/json',
-            'Authorization': f'Basic {auth_info}'
+            'Accept': f'application/json'
         })
 
     def _request(self, url, payload_key, params=None, results=[]):
