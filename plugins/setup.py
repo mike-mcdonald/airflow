@@ -12,7 +12,8 @@ setup(
             'dataframe_plugin = common_plugins.dataframe_plugin:DataFramePlugin',
             'mssql_plugin = common_plugins.mssql_plugin:MsSqlPlugin',
             'azure_plugin = common_plugins.azure_plugin:AzurePlugin',
-            'waze_plugin = transportation_plugins.waze_plugin:WazePlugin'
+            'waze_plugin = transportation_plugins.waze_plugin:WazePlugin',
+            'zendesk_plugin = parking_plugins.zendesk_plugin:ZendeskPlugin'
         ]
     }
 )
