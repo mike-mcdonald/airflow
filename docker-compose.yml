@@ -14,6 +14,8 @@ services:
         volumes:
             - pgdata:/var/lib/postgresql/data/pgdata
             - ./artifacts:/docker-entrypoint-initdb.d
+        ports:
+            - "5432:5432"
 
     webserver:
         image: pbotapps.azurecr.io/airflow
