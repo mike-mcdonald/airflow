@@ -1,4 +1,5 @@
 fiona
+Flask-AppBuilder==2.3.2
 geopandas
 numpy
 pandas
