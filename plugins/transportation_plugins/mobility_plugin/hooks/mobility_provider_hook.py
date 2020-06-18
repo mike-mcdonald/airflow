@@ -73,60 +73,61 @@ class MobilityProviderHook(BaseHook):
 
         Returns payload(s).
         """
-        retries = 0
-        res = None
+        while url is not None:
+            retries = 0
+            res = None
 
-        self.log.debug(f"Making request to: {url}")
+            self.log.debug(f"Making request to: {url}")
 
-        while res is None:
-            try:
-                res = self.session.get(url, params=params)
-                res.raise_for_status()
-            except Exception as err:
-                if res.status_code == 404:
-                    # This is supposed to mean there are no objects for the requested time period
-                    # TODO: Hides an actual change of address for the API or other more serious issues
-                    return results
+            while res is None:
+                try:
+                    res = self.session.get(url, params=params)
+                    res.raise_for_status()
+                except requests.HTTPError as err:
+                    if res.status_code == 404:
+                        # This is supposed to mean there are no objects for the requested time period
+                        # TODO: Hides an actual change of address for the API or other more serious issues
+                        return results
 
-                retries = retries + 1
-                if retries > self.max_retries:
-                    raise AirflowException(
-                        f"Unable to retrieve response from {url} after {self.max_retries}.  Aborting...")
+                    retries = retries + 1
+                    if retries > self.max_retries:
+                        raise AirflowException(
+                            f"Unable to retrieve response from {url} after {self.max_retries}.  Aborting...")
 
-                self.log.warning(
-                    f"Error while retrieving {url}: {err}.  Retrying in {10 * retries} seconds... (retry {retries}/{self.max_retries})")
-                res = None
-                time.sleep(10 * retries)
+                    self.log.warning(
+                        f"Error while retrieving {url}: {err}.  Retrying in {10 * retries} seconds... (retry {retries}/{self.max_retries})")
+                    res = None
+                    time.sleep(10 * retries)
 
-        self.log.debug(f"Received response from {url}")
+            self.log.debug(f"Received response from {url}")
 
-        if "Content-Type" in res.headers:
-            cts = res.headers["Content-Type"].split(";")
-            if "application/vnd.mds.provider+json" not in cts:
-                self.log.warning(
-                    f"Incorrect content-type returned: {res.headers['Content-Type']}")
-            cts = cts[1:]
-            for ct in cts:
-                if ct.strip().startswith("charset"):
-                    pass
-                if not ct.strip().startswith(f"version={self.version}"):
+            if "Content-Type" in res.headers:
+                cts = res.headers["Content-Type"].split(";")
+                if "application/vnd.mds.provider+json" not in cts:
                     self.log.warning(
                         f"Incorrect content-type returned: {res.headers['Content-Type']}")
-        else:
-            self.log.error(f"Missing {self.version} content-type header.")
+                cts = cts[1:]
+                for ct in cts:
+                    if ct.strip().startswith("charset"):
+                        pass
+                    if not ct.strip().startswith(f"version={self.version}"):
+                        self.log.warning(
+                            f"Incorrect content-type returned: {res.headers['Content-Type']}")
+            else:
+                self.log.error(f"Missing {self.version} content-type header.")
 
-        page = res.json()
+            page = res.json()
 
-        if page["data"] is not None:
-            results.extend(page["data"][payload_key])
+            if page["data"] is not None:
+                results.extend(page["data"][payload_key])
 
-        if "links" in page:
-            next_page = page["links"].get("next")
-            if "rate_limit" in self.connection.extra_dejson:
-                time.sleep(int(self.connection.extra_dejson["rate_limit"]))
-            if next_page is not None:
-                results = self._request(url=next_page, payload_key=payload_key,
-                                        results=results)
+            if "links" in page:
+                next_page = page["links"].get("next")
+                if "rate_limit" in self.connection.extra_dejson:
+                    time.sleep(int(self.connection.extra_dejson["rate_limit"]))
+                url = next_page
+            else:
+                url = None
 
         return results
 
