@@ -73,18 +73,17 @@ class MobilityProviderHook(BaseHook):
 
         Returns payload(s).
         """
+
         while url is not None:
             retries = 0
             res = None
 
-            # extract the URL and query parameters
+            # for subsequent pages, update query params
             parsed = urlparse(url)
-            query = parse_qs(parsed.query)
+            params.update(parse_qs(parsed.query))
 
+            # clear params from url query string
             url = parsed._replace(query=None).geturl()
-
-            # overwrite same params with new URL's params in case of conflict
-            params.update(query)
 
             while res is None:
                 try:
