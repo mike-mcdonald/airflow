@@ -1,7 +1,7 @@
 import time
 
 from datetime import datetime
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import pandas as pd
 import requests
@@ -73,11 +73,17 @@ class MobilityProviderHook(BaseHook):
 
         Returns payload(s).
         """
+
         while url is not None:
             retries = 0
             res = None
 
-            self.log.debug(f"Making request to: {url}")
+            # for subsequent pages, update query params
+            parsed = urlparse(url)
+            params.update(parse_qs(parsed.query))
+
+            # clear params from url query string
+            url = parsed._replace(query=None).geturl()
 
             while res is None:
                 try:
