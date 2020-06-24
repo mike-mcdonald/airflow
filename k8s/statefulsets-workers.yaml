@@ -35,7 +35,7 @@ spec:
             containers:
                 - name: airflow-worker
                   imagePullPolicy: IfNotPresent
-                  image: pudlapps.azurecr.io/airflow:1.10.7.4
+                  image: pudlapps.azurecr.io/airflow:1.10.7.5
                   envFrom:
                       - configMapRef:
                             name: 'airflow-env'
