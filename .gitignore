@@ -39,6 +39,7 @@ __pycache__
 
 ### Private ###
 .env
+.venv/
 /.certs/**/*.crt
 /.certs/**/*.pem
 /k8s/.secrets/
