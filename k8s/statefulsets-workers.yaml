@@ -6,75 +6,75 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-    name: airflow-worker
-    labels:
+  name: airflow-worker
+  labels:
+    app: airflow
+    component: worker
+spec:
+  serviceName: "airflow-worker"
+  updateStrategy:
+    ## Kill the workers as soon as possible, the scheduler will restart the failed job later
+    type: RollingUpdate
+  ## Use experimental burst mode for faster StatefulSet scaling
+  ##   https://github.com/kubernetes/kubernetes/commit/c2c5051adf096ffd48bf1dcf5b11cb47e464ecdd
+  podManagementPolicy: Parallel
+  replicas: 3
+  selector:
+    matchLabels:
+      app: airflow
+      component: worker
+  template:
+    metadata:
+      labels:
         app: airflow
         component: worker
-spec:
-    serviceName: 'airflow-worker'
-    updateStrategy:
-        ## Kill the workers as soon as possible, the scheduler will restart the failed job later
-        type: RollingUpdate
-    ## Use experimental burst mode for faster StatefulSet scaling
-    ##   https://github.com/kubernetes/kubernetes/commit/c2c5051adf096ffd48bf1dcf5b11cb47e464ecdd
-    podManagementPolicy: Parallel
-    replicas: 3
-    selector:
-        matchLabels:
-            app: airflow
-            component: worker
-    template:
-        metadata:
-            labels:
-                app: airflow
-                component: worker
-        spec:
-            restartPolicy: Always
-            terminationGracePeriodSeconds: 30
-            serviceAccountName: airflow
-            containers:
-                - name: airflow-worker
-                  imagePullPolicy: IfNotPresent
-                  image: pudlapps.azurecr.io/airflow:1.10.7.5
-                  envFrom:
-                      - configMapRef:
-                            name: 'airflow-env'
-                  env:
-                      - name: FERNET_KEY
-                        valueFrom:
-                            secretKeyRef:
-                                name: airflow-fernet
-                                key: fernet-key
-                      - name: POSTGRES_USER
-                        value: airflowadmin
-                      - name: POSTGRES_PASSWORD
-                        valueFrom:
-                            secretKeyRef:
-                                name: airflow-postgresql
-                                key: postgres-password
-                      - name: REDIS_PASSWORD
-                        valueFrom:
-                            secretKeyRef:
-                                name: airflow-redis
-                                key: redis-password
-                      - name: HASH_SALT
-                        valueFrom:
-                            secretKeyRef:
-                                name: airflow-hash
-                                key: salt
-                      - name: SENDGRID_MAIL_FROM
-                        valueFrom:
-                            secretKeyRef:
-                                name: airflow-sendgrid
-                                key: from
-                      - name: SENDGRID_API_KEY
-                        valueFrom:
-                            secretKeyRef:
-                                name: airflow-sendgrid
-                                key: api-key
-                  args: ['worker']
-                  ports:
-                      - name: wlog
-                        containerPort: 8793
-                        protocol: TCP
-                  resources: {}
+    spec:
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      serviceAccountName: airflow
+      containers:
+        - name: airflow-worker
+          imagePullPolicy: IfNotPresent
+          image: pudlapps.azurecr.io/airflow:1.10.7.6
+          envFrom:
+            - configMapRef:
+                name: "airflow-env"
+          env:
+            - name: FERNET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-fernet
+                  key: fernet-key
+            - name: POSTGRES_USER
+              value: airflowadmin
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-postgresql
+                  key: postgres-password
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-redis
+                  key: redis-password
+            - name: HASH_SALT
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-hash
+                  key: salt
+            - name: SENDGRID_MAIL_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-sendgrid
+                  key: from
+            - name: SENDGRID_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-sendgrid
+                  key: api-key
+          args: ["worker"]
+          ports:
+            - name: wlog
+              containerPort: 8793
+              protocol: TCP
+          resources: {}

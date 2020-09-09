@@ -30,11 +30,11 @@ spec:
             serviceAccountName: airflow
             containers:
                 - name: airflow-scheduler
-                  image: pudlapps.azurecr.io/airflow:1.10.7.5
+                  image: pudlapps.azurecr.io/airflow:1.10.7.6
                   imagePullPolicy: IfNotPresent
                   envFrom:
                       - configMapRef:
-                            name: 'airflow-env'
+                            name: "airflow-env"
                   env:
                       - name: FERNET_KEY
                         valueFrom:
@@ -69,4 +69,4 @@ spec:
                                 name: airflow-sendgrid
                                 key: api-key
                   resources: {}
-                  args: ['scheduler']
+                  args: ["scheduler"]
