@@ -115,9 +115,8 @@ def process_segment_hits_to_data_lake(**kwargs):
     route_df.crs = 'epsg:4326'
     route_df['datetime'] = route_df.timestamp.map(
         lambda x: datetime.fromtimestamp(x / 1000, tz=timezone('UTC')).astimezone(timezone('US/Pacific')))
-    route_df['datetime'] = route_df.datetime.dt.round('H')
     route_df['datetime'] = route_df.datetime.map(
-        lambda x: datetime.replace(x, tzinfo=None))
+        lambda x: datetime.replace(x, minute=0, second=0, microsecond=0, tzinfo=None))
     route_df['date_key'] = route_df.datetime.map(
         lambda x: int(x.strftime('%Y%m%d')))
     # Generate a hash to aid in merge operations
