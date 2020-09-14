@@ -121,7 +121,7 @@ def extract_shst_hits_datalake(**kwargs):
     ).reset_index(drop=True).copy())
     route_df.crs = {'init': 'epsg:4326'}
     route_df['datetime'] = route_df.timestamp.map(
-        lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
+        lambda x: datetime.fromtimestamp(x / 1000, tz=timezone('UTC')).astimezone(timezone('US/Pacific')))
     route_df['datetime'] = route_df.datetime.dt.round('H')
     route_df['datetime'] = route_df.datetime.map(
         lambda x: datetime.replace(x, tzinfo=None))

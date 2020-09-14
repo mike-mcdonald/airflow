@@ -60,7 +60,7 @@ def add_default_columns(context, dataframe, time_columns, hash_columns):
 
     for time_col in time_columns:
         dataframe[time_col] = dataframe[time_col].map(
-            lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
+            lambda x: datetime.fromtimestamp(x / 1000, tz=timezone('UTC')).astimezone(timezone('US/Pacific')))
         dataframe[time_col] = dataframe[time_col].dt.round('L')
         dataframe[time_col] = dataframe[time_col].map(
             lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f'))

@@ -99,7 +99,7 @@ def scooter_events_to_datalake(**kwargs):
         ).hexdigest(), axis=1)
 
     events['event_time'] = events.event_time.map(
-        lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
+        lambda x: datetime.fromtimestamp(x / 1000, tz=timezone('UTC')).astimezone(timezone('US/Pacific')))
     events['event_time'] = events.event_time.map(lambda x: x.replace(
         tzinfo=None))  # Remove timezone info after shifting
     events['event_time'] = events.event_time.dt.round('L')

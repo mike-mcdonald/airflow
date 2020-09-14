@@ -85,7 +85,7 @@ def process_trips_to_data_lake(**kwargs):
     trips['propulsion_type'] = trips.propulsion_type.map(
         lambda x: ','.join(sorted(x)))
     trips['start_time'] = trips.start_time.map(
-        lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
+        lambda x: datetime.fromtimestamp(x / 1000, tz=timezone('UTC')).astimezone(timezone('US/Pacific')))
     trips['start_time'] = trips.start_time.map(
         lambda x: datetime.replace(x, tzinfo=None))  # Remove timezone info after shifting
     trips['start_time'] = trips.start_time.dt.round('L')
@@ -95,7 +95,7 @@ def process_trips_to_data_lake(**kwargs):
     trips['start_time'] = trips.start_time.map(
         lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
     trips['end_time'] = trips.end_time.map(
-        lambda x: datetime.fromtimestamp(x / 1000).astimezone(timezone('US/Pacific')))
+        lambda x: datetime.fromtimestamp(x / 1000, tz=timezone('UTC')).astimezone(timezone('US/Pacific')))
     trips['end_time'] = trips.end_time.map(
         lambda x: datetime.replace(x, tzinfo=None))
     trips['end_time'] = trips.end_time.dt.round('L')
